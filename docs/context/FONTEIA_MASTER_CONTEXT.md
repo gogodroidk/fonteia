@@ -469,3 +469,5 @@ O Fonte.ia vence se o usuario sente que:
 - Primeiro pacote de dominio criado em `packages/domain`, incluindo modulos, entidades, fontes, evidencias e dossies.
 - Build e testes iniciais passaram com `corepack pnpm build` e `corepack pnpm test`.
 - Foi criado um runner local em `scripts/run-workspaces.mjs` porque o ambiente Windows nao permite criar shims globais do Corepack em `C:\Program Files\nodejs`.
+- Schema Postgres inicial criado em `infra/migrations/0001_core_schema.sql`, com PostGIS, pgvector, tabelas centrais, evidencias, entidades, alertas e billing.
+- Catalogo inicial de fontes criado em `packages/sources/src/catalog.ts` e documentado em `docs/sources/source-catalog.md`.

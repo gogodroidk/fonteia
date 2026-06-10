@@ -165,13 +165,13 @@ Excluded:
 - Create: `apps/api/src/db/schema.ts`
 - Test: `apps/api/src/db/schema.test.ts`
 
-- [ ] Step 1: Create Postgres schema for `sources`, `source_runs`, `raw_records`, `documents`, `entities`, `entity_links`, `evidence`, `claims`, `dossiers`, `modules`, `entitlements`, `usage_events`, `alerts`, `alert_events`.
-- [ ] Step 2: Enable PostGIS and pgvector extensions.
-- [ ] Step 3: Add indexes for entity kind/name, CNPJ, municipality code, source status, collected_at, and geospatial geometry.
-- [ ] Step 4: Add a migration runner script.
-- [ ] Step 5: Add a schema smoke test that inserts one source, one raw record, one entity and one evidence record.
-- [ ] Step 6: Run migration locally.
-- [ ] Step 7: Commit with `feat(db): add core intelligence schema`.
+- [x] Step 1: Create Postgres schema for `sources`, `source_runs`, `raw_records`, `documents`, `entities`, `entity_links`, `evidence`, `claims`, `dossiers`, `modules`, `entitlements`, `usage_events`, `alerts`, `alert_events`.
+- [x] Step 2: Enable PostGIS and pgvector extensions.
+- [x] Step 3: Add indexes for entity kind/name, CNPJ, municipality code, source status, collected_at, and geospatial geometry.
+- [x] Step 4: Add a migration runner script.
+- [x] Step 5: Add a schema smoke test that inserts one source, one raw record, one entity and one evidence record.
+- [ ] Step 6: Run migration locally. Deferred until a local Postgres/Supabase/Neon database URL is configured; schema contract tests pass without live DB.
+- [x] Step 7: Commit with `feat(data): add core schema and source catalog`.
 
 ## Task 4: Source Catalog
 
@@ -182,11 +182,11 @@ Excluded:
 - Create: `docs/sources/source-catalog.md`
 - Test: `packages/sources/src/catalog.test.ts`
 
-- [ ] Step 1: Register initial sources: Receita Leiloes, PNCP, Compras.gov.br, Portal da Transparencia, Camara, Senado, TSE, DataJud, INPI, IBAMA, INPE TerraBrasilis, MapBiomas, ANA, Siconfi, Transferegov, BNDES, DOU/INLABS.
-- [ ] Step 2: For each source include owner, official URL, docs URL, access kind, status, refresh cadence, module coverage and commercial risk.
-- [ ] Step 3: Add tests requiring every source to have status, source URL, owner and at least one module.
-- [ ] Step 4: Generate `docs/sources/source-catalog.md` from catalog data.
-- [ ] Step 5: Commit with `feat(sources): add initial public data catalog`.
+- [x] Step 1: Register initial sources: Receita Leiloes, PNCP, Compras.gov.br, Portal da Transparencia, Camara, Senado, TSE, DataJud, INPI, IBAMA, INPE TerraBrasilis, MapBiomas, ANA, Siconfi, Transferegov, BNDES, DOU/INLABS.
+- [x] Step 2: For each source include owner, official URL, docs URL, access kind, status, refresh cadence, module coverage and commercial risk.
+- [x] Step 3: Add tests requiring every source to have status, source URL, owner and at least one module.
+- [x] Step 4: Generate `docs/sources/source-catalog.md` from catalog data.
+- [x] Step 5: Commit with `feat(data): add core schema and source catalog`.
 
 ## Task 5: API Gateway Skeleton
 

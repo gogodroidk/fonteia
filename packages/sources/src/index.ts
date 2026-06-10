@@ -1,2 +1,2 @@
-export const sourcePackageName = "Fonte.ia Sources";
-
+export * from "./catalog";
+export * from "./registry";

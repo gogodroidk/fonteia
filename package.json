@@ -10,6 +10,7 @@
     "test": "node scripts/run-workspaces.mjs test",
     "lint": "node scripts/run-workspaces.mjs lint",
     "typecheck": "node scripts/run-workspaces.mjs typecheck",
+    "docs:sources": "tsx scripts/generate-source-docs.mjs",
     "turbo:build": "turbo build",
     "turbo:test": "turbo test",
     "format": "prettier --write ."
@@ -18,6 +19,7 @@
     "@types/node": "^22.10.7",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^2.1.8"
   }
