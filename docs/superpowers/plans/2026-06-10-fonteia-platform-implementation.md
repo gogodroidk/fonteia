@@ -200,13 +200,13 @@ Excluded:
 - Create: `apps/api/src/routes/dossiers.ts`
 - Test: `apps/api/src/routes/*.test.ts`
 
-- [ ] Step 1: Add HTTP server with health endpoint.
-- [ ] Step 2: Add `/modules` returning module cards and locked/unlocked state.
-- [ ] Step 3: Add `/sources` returning source catalog with status filters.
-- [ ] Step 4: Add `/search` placeholder that searches only seeded sample entities.
-- [ ] Step 5: Add `/dossiers/:entityId` placeholder assembled from sample claims and evidence.
-- [ ] Step 6: Add route tests for health, modules, sources and sample dossier.
-- [ ] Step 7: Commit with `feat(api): add gateway skeleton`.
+- [x] Step 1: Add HTTP server with health endpoint.
+- [x] Step 2: Add `/modules` returning module cards and locked/unlocked state.
+- [x] Step 3: Add `/sources` returning source catalog with status filters.
+- [x] Step 4: Add `/search` placeholder that searches only seeded sample entities.
+- [x] Step 5: Add `/dossiers/:entityId` placeholder assembled from sample claims and evidence.
+- [x] Step 6: Add route tests for health, modules, sources and sample dossier.
+- [x] Step 7: Commit with `feat(api): add gateway skeleton`.
 
 ## Task 6: Web Product Shell
 
