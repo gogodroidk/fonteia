@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_MODULES } from "@fonteia/domain";
 import { DashboardPage } from "./page";
+import { BillingPage } from "./billing/page";
 import { ModulesPage } from "./modules/page";
 import { SourceStatusBadge } from "../components/source-status-badge";
 
@@ -28,5 +29,14 @@ describe("Fonte.ia web shell", () => {
     const html = renderToStaticMarkup(<SourceStatusBadge status="fragile_operational" />);
 
     expect(html).toContain("operacional fragil");
+  });
+
+  it("renders billing as the commercial cascade across modules", () => {
+    const html = renderToStaticMarkup(<BillingPage />);
+
+    expect(html).toContain("Planos para vender");
+    expect(html).toContain("Individual");
+    expect(html).toContain("Business");
+    expect(html).toContain("upsells visiveis");
   });
 });

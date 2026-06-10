@@ -1,5 +1,6 @@
 import { askFonteia } from "./ask";
 import { getAlerts } from "./alerts";
+import { getBillingEntitlements, getBillingPlans } from "./billing";
 import { getDossier } from "./dossiers";
 import { getHealth } from "./health";
 import { getLeilaoLot, getLeilaoLots, getLeilaoLotScore } from "./leiloes";
@@ -36,7 +37,7 @@ export async function handleRoute(request: RouteRequest, dependencies: RouteDepe
   }
 
   if (request.path === "/modules") {
-    return getModules();
+    return getModules(request);
   }
 
   if (request.path === "/sources") {
@@ -53,6 +54,14 @@ export async function handleRoute(request: RouteRequest, dependencies: RouteDepe
 
   if (request.path === "/alerts") {
     return getAlerts(request);
+  }
+
+  if (request.path === "/billing/plans") {
+    return getBillingPlans();
+  }
+
+  if (request.path === "/billing/entitlements") {
+    return getBillingEntitlements(request);
   }
 
   if (request.path === "/leiloes/lotes") {

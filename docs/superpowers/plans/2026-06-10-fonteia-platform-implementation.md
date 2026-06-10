@@ -245,12 +245,12 @@ Excluded:
 - Create: `apps/mobile/src/components/AnswerCard.tsx`
 - Create: `apps/mobile/src/components/ModuleTile.tsx`
 
-- [ ] Step 1: Build mobile home with module tiles, recent dossiers and alert preview.
-- [ ] Step 2: Build ask screen with text and voice-ready UI, returning card-based answers.
-- [ ] Step 3: Build modules screen showing active and locked modules.
-- [ ] Step 4: Build alerts screen with example deadline and monitoring alerts.
-- [ ] Step 5: Keep the mobile app focused on quick decisions and push-style usage.
-- [ ] Step 6: Commit with `feat(mobile): add mobile-first app shell`.
+- [x] Step 1: Build mobile home with module tiles, recent dossiers and alert preview.
+- [x] Step 2: Build ask screen with text and voice-ready UI, returning card-based answers.
+- [x] Step 3: Build modules screen showing active and locked modules.
+- [x] Step 4: Build alerts screen with example deadline and monitoring alerts.
+- [x] Step 5: Keep the mobile app focused on quick decisions and push-style usage.
+- [x] Step 6: Commit with `feat(mobile): add mobile-first app shell`.
 
 ## Task 8: Leiloes Connector MVP
 
@@ -317,12 +317,12 @@ Note: backend alerting and API route are implemented. The web alerts page is int
 - Create: `apps/web/src/app/billing/page.tsx`
 - Test: `services/billing/src/entitlements.test.ts`
 
-- [ ] Step 1: Define plans: Free, Individual, Pro, Business, Enterprise, API.
-- [ ] Step 2: Map each plan to modules, query quotas, AI quotas, exports and alerts.
-- [ ] Step 3: Add entitlement checks to module routes.
-- [ ] Step 4: Keep locked modules visible with upgrade CTA.
-- [ ] Step 5: Add usage metering for AI answers, reports, API calls and exports.
-- [ ] Step 6: Commit with `feat(billing): add module entitlements`.
+- [x] Step 1: Define plans: Free, Individual, Pro, Business, Enterprise, API.
+- [x] Step 2: Map each plan to modules, query quotas, AI quotas, exports and alerts.
+- [x] Step 3: Add entitlement checks to module routes.
+- [x] Step 4: Keep locked modules visible with upgrade CTA.
+- [x] Step 5: Add usage metering for AI answers, reports, API calls and exports.
+- [x] Step 6: Commit with `feat(billing): add module entitlements`.
 
 ## Task 12: Next Modules After MVP
 
@@ -343,9 +343,9 @@ Priority order:
 
 - [ ] Every source has status and source URL.
 - [ ] Every answer has evidence or says it cannot verify.
-- [ ] Locked modules are visible but not misleading.
-- [ ] Mobile supports quick decisions without requiring desktop.
-- [ ] Web supports deep dashboard analysis.
+- [x] Locked modules are visible but not misleading.
+- [x] Mobile supports quick decisions without requiring desktop.
+- [x] Web supports deep dashboard analysis.
 - [x] Raw records are stored before normalized claims.
 - [ ] LGPD risks are reviewed before exposing personal data.
 - [ ] Receita leilao MVP does not automate e-CAC or bidding.

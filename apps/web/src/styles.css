@@ -456,6 +456,60 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.billing-card {
+  display: grid;
+  gap: 12px;
+  align-content: space-between;
+  border: 1px solid #dfe7e2;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+  min-height: 272px;
+}
+
+.billing-card.featured {
+  border-color: #72c7a7;
+  background: #f7fbf9;
+  box-shadow: 0 14px 35px rgba(18, 87, 67, 0.09);
+}
+
+.billing-card h3 {
+  margin: 5px 0;
+  font-size: 1.2rem;
+}
+
+.billing-card strong {
+  color: #0e5c47;
+  font-size: 1.45rem;
+}
+
+.billing-card p {
+  margin: 0;
+  color: #42534d;
+  line-height: 1.45;
+}
+
+.billing-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.billing-meta span {
+  border-radius: 999px;
+  background: #eef5f1;
+  color: #345148;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .module-card {
   border: 1px solid #dfe7e2;
   border-radius: 8px;

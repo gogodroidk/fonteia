@@ -35,6 +35,9 @@ importers:
       '@fonteia/alerting':
         specifier: workspace:*
         version: link:../../services/alerting
+      '@fonteia/billing':
+        specifier: workspace:*
+        version: link:../../services/billing
       '@fonteia/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -76,6 +79,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@fonteia/billing':
+        specifier: workspace:*
+        version: link:../../services/billing
       '@fonteia/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -184,7 +190,18 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.20)(jsdom@29.1.1)(lightningcss@1.32.0)
 
-  services/billing: {}
+  services/billing:
+    dependencies:
+      '@fonteia/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)(jsdom@29.1.1)(lightningcss@1.32.0)
 
   services/ingest:
     dependencies:

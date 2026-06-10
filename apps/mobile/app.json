@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Fonte.ia",
+    "slug": "fonteia",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "fonteia",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "br.com.olli.fonteia"
+    },
+    "android": {
+      "package": "br.com.olli.fonteia"
+    }
+  }
+}

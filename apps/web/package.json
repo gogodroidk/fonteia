@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fonteia/billing": "workspace:*",
     "@fonteia/domain": "workspace:*",
     "@fonteia/sources": "workspace:^",
     "lucide-react": "^1.17.0",

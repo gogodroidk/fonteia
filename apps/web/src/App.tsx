@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Bell, BookOpenText, Database, LayoutDashboard, Search, ShieldCheck } from "lucide-react";
 import { PRODUCT_MODULES, type ModuleId } from "@fonteia/domain";
 import { DashboardPage } from "./app/page";
+import { BillingPage } from "./app/billing/page";
 import { ModulesPage } from "./app/modules/page";
 import { SearchPage } from "./app/search/page";
 import { SourcesPage } from "./app/sources/page";
 
-type RouteKey = "dashboard" | "modules" | "sources" | "search";
+type RouteKey = "dashboard" | "modules" | "sources" | "search" | "billing";
 
 const routes: Array<{
   id: RouteKey;
@@ -17,6 +18,7 @@ const routes: Array<{
   { id: "search", label: "Perguntar", icon: Search },
   { id: "sources", label: "Fontes", icon: Database },
   { id: "modules", label: "Modulos", icon: BookOpenText },
+  { id: "billing", label: "Planos", icon: ShieldCheck },
 ];
 
 export function App() {
@@ -88,6 +90,7 @@ export function App() {
         {route === "search" ? <SearchPage /> : null}
         {route === "sources" ? <SourcesPage /> : null}
         {route === "modules" ? <ModulesPage selectedModuleId={"leiloes" satisfies ModuleId} /> : null}
+        {route === "billing" ? <BillingPage /> : null}
       </main>
     </div>
   );

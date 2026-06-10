@@ -18,6 +18,14 @@ describe("API gateway routes", () => {
     expect(JSON.stringify(response.body)).toContain("locked");
   });
 
+  it("annotates modules with plan entitlements when requested", async () => {
+    const response = await handleRoute(createRouteRequest("GET", "/modules?plan=free"));
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain("entitlement");
+    expect(JSON.stringify(response.body)).toContain("recommendedPlanId");
+  });
+
   it("filters sources by module", async () => {
     const response = await handleRoute(createRouteRequest("GET", "/sources?module=ambiental"));
 
@@ -70,5 +78,22 @@ describe("API gateway routes", () => {
     expect(JSON.stringify(response.body)).toContain("crossSell");
     expect(JSON.stringify(response.body)).toContain("empresas");
     expect(JSON.stringify(response.body)).toContain("locked");
+  });
+
+  it("returns billing plans and module entitlements", async () => {
+    const plansResponse = await handleRoute(createRouteRequest("GET", "/billing/plans"));
+
+    expect(plansResponse.status).toBe(200);
+    expect(JSON.stringify(plansResponse.body)).toContain("Individual");
+    expect(JSON.stringify(plansResponse.body)).toContain("Enterprise");
+
+    const entitlementsResponse = await handleRoute(
+      createRouteRequest("GET", "/billing/entitlements?plan=free&aiAnswers=5&alerts=2"),
+    );
+
+    expect(entitlementsResponse.status).toBe(200);
+    expect(JSON.stringify(entitlementsResponse.body)).toContain("empresas");
+    expect(JSON.stringify(entitlementsResponse.body)).toContain("upgrade");
+    expect(JSON.stringify(entitlementsResponse.body)).toContain("blocked");
   });
 });
