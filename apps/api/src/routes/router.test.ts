@@ -61,4 +61,14 @@ describe("API gateway routes", () => {
     expect(JSON.stringify(response.body)).toContain("citations");
     expect(JSON.stringify(response.body)).toContain("receita-leiloes-sle");
   });
+
+  it("returns alert events and locked cross-sell suggestions for leiloes", async () => {
+    const response = await handleRoute(createRouteRequest("GET", "/alerts?module=leiloes&entityId=200100-1-2026-136"));
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain("events");
+    expect(JSON.stringify(response.body)).toContain("crossSell");
+    expect(JSON.stringify(response.body)).toContain("empresas");
+    expect(JSON.stringify(response.body)).toContain("locked");
+  });
 });

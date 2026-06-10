@@ -32,6 +32,9 @@ importers:
       '@fonteia/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@fonteia/alerting':
+        specifier: workspace:*
+        version: link:../../services/alerting
       '@fonteia/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -138,7 +141,18 @@ importers:
 
   packages/ui: {}
 
-  services/alerting: {}
+  services/alerting:
+    dependencies:
+      '@fonteia/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)
 
   services/billing: {}
 

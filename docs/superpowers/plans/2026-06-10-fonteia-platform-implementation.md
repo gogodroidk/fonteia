@@ -297,11 +297,13 @@ Excluded:
 - Create: `apps/web/src/app/alerts/page.tsx`
 - Test: `services/alerting/src/rules.test.ts`
 
-- [ ] Step 1: Add alert types: deadline, source update, entity change, new match, risk increase.
-- [ ] Step 2: Add Leiloes alerts for proposal deadline, session, payment and withdrawal.
-- [ ] Step 3: Add locked cross-sell suggestions: "Analyze this seller as company", "Check related sanctions", "Monitor municipality", "Search DOU".
-- [ ] Step 4: Add notification preferences.
-- [ ] Step 5: Commit with `feat(alerts): add monitoring and cross-sell hooks`.
+- [x] Step 1: Add alert types: deadline, source update, entity change, new match, risk increase.
+- [x] Step 2: Add Leiloes alerts for proposal deadline, session, payment and withdrawal.
+- [x] Step 3: Add locked cross-sell suggestions: "Analyze this seller as company", "Check related sanctions", "Monitor municipality", "Search DOU".
+- [x] Step 4: Add notification preferences.
+- [x] Step 5: Commit with `feat(alerts): add monitoring and cross-sell hooks`.
+
+Note: backend alerting and API route are implemented. The web alerts page is intentionally deferred until the web dashboard visual direction is designed and approved.
 
 ## Task 11: Billing And Module Entitlements
 

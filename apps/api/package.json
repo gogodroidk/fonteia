@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fonteia/ai": "workspace:*",
+    "@fonteia/alerting": "workspace:*",
     "@fonteia/domain": "workspace:*",
     "@fonteia/scoring": "workspace:*",
     "@fonteia/sources": "workspace:*",
