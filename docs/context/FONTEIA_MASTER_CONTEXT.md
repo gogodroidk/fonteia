@@ -476,3 +476,7 @@ O Fonte.ia vence se o usuario sente que:
 - API passou a expor rotas iniciais de leiloes: `/leiloes/lotes`, `/leiloes/lotes/:id` e `/leiloes/lotes/:id/score`.
 - Repositorio de leiloes criado em `apps/api/src/repositories/leiloes-repository.ts`, com fallback em memoria e adaptador Postgres preparado para persistir lotes em `entities`.
 - Plugin Supabase consultado em 2026-06-10; nao havia projetos Supabase listados na conta conectada, entao a persistencia real ficou preparada mas nao aplicada.
+- MCP Supabase adicionado ao Codex em 2026-06-10 com project ref `pwiuiihsyazghdsrpshg`, nome do projeto `FONTE.IA`, regiao `us-west-2`, Postgres `17.6.1.127`, status `ACTIVE_HEALTHY`.
+- MCP Supabase autenticado via OAuth e configurado com `read_only=true`; pode listar projetos, extensoes, migrations e funcoes, mas nao deve aplicar migrations ate o MCP ser reconfigurado sem read-only ou usarmos uma conexao SQL apropriada.
+- Consulta Supabase em 2026-06-10 mostrou `migrations=[]`, `edge_functions=[]`; extensoes `postgis` e `vector` estao disponiveis, mas ainda nao instaladas.
+- Agent Skills oficiais do Supabase instaladas em `.agents/skills/supabase` e `.agents/skills/supabase-postgres-best-practices`.
