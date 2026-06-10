@@ -1,3 +1,4 @@
+import { askFonteia } from "./ask";
 import { getDossier } from "./dossiers";
 import { getHealth } from "./health";
 import { getLeilaoLot, getLeilaoLots, getLeilaoLotScore } from "./leiloes";
@@ -38,6 +39,10 @@ export async function handleRoute(request: RouteRequest): Promise<ApiResponse> {
 
   if (request.path === "/search") {
     return searchEntities(request);
+  }
+
+  if (request.path === "/ask") {
+    return askFonteia(request);
   }
 
   if (request.path === "/leiloes/lotes") {

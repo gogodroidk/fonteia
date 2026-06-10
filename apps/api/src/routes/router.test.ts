@@ -53,4 +53,12 @@ describe("API gateway routes", () => {
     expect(scoreResponse.status).toBe(200);
     expect(JSON.stringify(scoreResponse.body)).toContain("maxSuggestedBidCents");
   });
+
+  it("answers questions with evidence citations", async () => {
+    const response = await handleRoute(createRouteRequest("GET", "/ask?entityId=200100-1-2026-136&q=esse%20lote%20permite%20PF"));
+
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(response.body)).toContain("citations");
+    expect(JSON.stringify(response.body)).toContain("receita-leiloes-sle");
+  });
 });

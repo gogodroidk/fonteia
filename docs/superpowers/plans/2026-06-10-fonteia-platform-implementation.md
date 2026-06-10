@@ -279,13 +279,13 @@ Excluded:
 - Create: `apps/api/src/routes/ask.ts`
 - Test: `packages/ai/src/answer-engine.test.ts`
 
-- [ ] Step 1: Define answer format: summary, key facts, risk/opportunity, next actions, evidence.
-- [ ] Step 2: Require every factual answer to include evidence references.
-- [ ] Step 3: Add guardrails: no legal advice, no official-government impersonation, no automated bidding.
-- [ ] Step 4: Implement retrieval from entities, claims and evidence.
-- [ ] Step 5: Add `/ask` endpoint that accepts question and optional module/entity context.
-- [ ] Step 6: Test that unsupported claims are rejected or marked as unknown.
-- [ ] Step 7: Commit with `feat(ai): add sourced answer engine`.
+- [x] Step 1: Define answer format: summary, key facts, risk/opportunity, next actions, evidence.
+- [x] Step 2: Require every factual answer to include evidence references.
+- [x] Step 3: Add guardrails: no legal advice, no official-government impersonation, no automated bidding.
+- [x] Step 4: Implement retrieval from entities, claims and evidence.
+- [x] Step 5: Add `/ask` endpoint that accepts question and optional module/entity context.
+- [x] Step 6: Test that unsupported claims are rejected or marked as unknown.
+- [x] Step 7: Commit with `feat(ai): add sourced answer engine`.
 
 ## Task 10: Alerts And Cross-Sell
 
