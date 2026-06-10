@@ -474,3 +474,5 @@ O Fonte.ia vence se o usuario sente que:
 - Conector inicial de Leiloes da Receita criado em `packages/sources/src/connectors/receita-leiloes.ts`, usando o endpoint publico operacional `https://www25.receita.fazenda.gov.br/sle-sociedade/api/portal/destaques` como fonte fragil/sem SLA.
 - Score inicial de oportunidade de leilao criado em `packages/scoring/src/leiloes.ts`.
 - API passou a expor rotas iniciais de leiloes: `/leiloes/lotes`, `/leiloes/lotes/:id` e `/leiloes/lotes/:id/score`.
+- Repositorio de leiloes criado em `apps/api/src/repositories/leiloes-repository.ts`, com fallback em memoria e adaptador Postgres preparado para persistir lotes em `entities`.
+- Plugin Supabase consultado em 2026-06-10; nao havia projetos Supabase listados na conta conectada, entao a persistencia real ficou preparada mas nao aplicada.

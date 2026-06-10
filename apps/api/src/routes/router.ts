@@ -16,7 +16,7 @@ export function createRouteRequest(method: string, rawUrl: string): RouteRequest
   };
 }
 
-export function handleRoute(request: RouteRequest): ApiResponse {
+export async function handleRoute(request: RouteRequest): Promise<ApiResponse> {
   if (request.method !== "GET") {
     return {
       status: 405,

@@ -4,9 +4,9 @@ import { createRouteRequest, handleRoute } from "./routes/router";
 export const apiAppName = "Fonte.ia API";
 
 export function createApiServer() {
-  return createServer((request, response) => {
+  return createServer(async (request, response) => {
     const routeRequest = createRouteRequest(request.method ?? "GET", request.url ?? "/health");
-    const routeResponse = handleRoute(routeRequest);
+    const routeResponse = await handleRoute(routeRequest);
 
     response.writeHead(routeResponse.status, {
       "content-type": "application/json; charset=utf-8",

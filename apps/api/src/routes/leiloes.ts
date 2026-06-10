@@ -1,5 +1,6 @@
-import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
+import type { LeilaoOpportunityScore } from "@fonteia/scoring";
 import { normalizeReceitaDestaquesPayload, type ReceitaLeilaoLot, type ReceitaLeiloesDestaquesPayload } from "@fonteia/sources";
+import { createMemoryLeiloesRepository, type LeiloesRepository } from "../repositories/leiloes-repository";
 import { jsonResponse, notFound, type ApiResponse } from "./types";
 
 const samplePayload: ReceitaLeiloesDestaquesPayload = {
@@ -35,16 +36,22 @@ const samplePayload: ReceitaLeiloesDestaquesPayload = {
 };
 
 export const SAMPLE_LEILAO_LOTS: ReceitaLeilaoLot[] = normalizeReceitaDestaquesPayload(samplePayload);
+const defaultRepository = createMemoryLeiloesRepository(SAMPLE_LEILAO_LOTS);
 
-export function getLeilaoLots(): ApiResponse<{ sourceStatus: "fragile_operational"; lots: ReceitaLeilaoLot[] }> {
+export async function getLeilaoLots(
+  repository: LeiloesRepository = defaultRepository,
+): Promise<ApiResponse<{ sourceStatus: "fragile_operational"; lots: ReceitaLeilaoLot[] }>> {
   return jsonResponse({
     sourceStatus: "fragile_operational",
-    lots: SAMPLE_LEILAO_LOTS,
+    lots: await repository.listLots(),
   });
 }
 
-export function getLeilaoLot(lotId: string): ApiResponse<ReceitaLeilaoLot | { error: string; path: string }> {
-  const lot = SAMPLE_LEILAO_LOTS.find((item) => item.id === lotId);
+export async function getLeilaoLot(
+  lotId: string,
+  repository: LeiloesRepository = defaultRepository,
+): Promise<ApiResponse<ReceitaLeilaoLot | { error: string; path: string }>> {
+  const lot = await repository.getLot(lotId);
 
   if (!lot) {
     return notFound(`/leiloes/lotes/${lotId}`);
@@ -53,13 +60,15 @@ export function getLeilaoLot(lotId: string): ApiResponse<ReceitaLeilaoLot | { er
   return jsonResponse(lot);
 }
 
-export function getLeilaoLotScore(lotId: string): ApiResponse<ReturnType<typeof scoreReceitaLeilaoLot> | { error: string; path: string }> {
-  const lot = SAMPLE_LEILAO_LOTS.find((item) => item.id === lotId);
+export async function getLeilaoLotScore(
+  lotId: string,
+  repository: LeiloesRepository = defaultRepository,
+): Promise<ApiResponse<LeilaoOpportunityScore | { error: string; path: string }>> {
+  const score = await repository.getLotScore(lotId);
 
-  if (!lot) {
+  if (!score) {
     return notFound(`/leiloes/lotes/${lotId}/score`);
   }
 
-  return jsonResponse(scoreReceitaLeilaoLot(lot, new Date("2026-06-10T12:00:00-03:00")));
+  return jsonResponse(score);
 }
-
