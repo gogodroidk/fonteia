@@ -222,13 +222,13 @@ Excluded:
 - Create: `apps/web/src/components/evidence-panel.tsx`
 - Test: `apps/web/src/app/page.test.tsx`
 
-- [ ] Step 1: Build a clean dashboard-first home, not a marketing-only page.
-- [ ] Step 2: Show module cards: Leiloes active, all other modules visible and locked.
-- [ ] Step 3: Add source catalog page with status filters.
-- [ ] Step 4: Add universal search page with a question input and structured answer card placeholder.
-- [ ] Step 5: Add evidence panel component used by all answers.
-- [ ] Step 6: Test module cards and source status badges.
-- [ ] Step 7: Commit with `feat(web): add fonteia dashboard shell`.
+- [x] Step 1: Build a clean dashboard-first home, not a marketing-only page.
+- [x] Step 2: Show module cards: Leiloes active, all other modules visible and locked.
+- [x] Step 3: Add source catalog page with status filters.
+- [x] Step 4: Add universal search page with a question input and structured answer card placeholder.
+- [x] Step 5: Add evidence panel component used by all answers.
+- [x] Step 6: Test module cards and source status badges.
+- [x] Step 7: Commit with `feat(web): add fonteia dashboard shell`.
 
 ## Task 7: Mobile Product Shell
 

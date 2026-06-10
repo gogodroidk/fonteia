@@ -4,17 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "echo \"web app UI will be scaffolded after design approval\"",
-    "build": "tsc -p tsconfig.json",
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run --passWithNoTests",
     "lint": "echo \"lint pending\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fonteia/domain": "workspace:*"
+    "@fonteia/domain": "workspace:*",
+    "@fonteia/sources": "workspace:^",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "jsdom": "^27.3.0",
+    "playwright": "^1.60.0",
     "typescript": "^5.7.3",
+    "vite": "^7.2.7",
     "vitest": "^2.1.8"
   }
 }
