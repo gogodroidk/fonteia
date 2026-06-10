@@ -170,7 +170,7 @@ Excluded:
 - [x] Step 3: Add indexes for entity kind/name, CNPJ, municipality code, source status, collected_at, and geospatial geometry.
 - [x] Step 4: Add a migration runner script.
 - [x] Step 5: Add a schema smoke test that inserts one source, one raw record, one entity and one evidence record.
-- [ ] Step 6: Run migration locally. Deferred until a local Postgres/Supabase/Neon database URL is configured; schema contract tests pass without live DB.
+- [x] Step 6: Run migration on Supabase project `pwiuiihsyazghdsrpshg`; local runner remains available when a local `DATABASE_URL` is configured.
 - [x] Step 7: Commit with `feat(data): add core schema and source catalog`.
 
 ## Task 4: Source Catalog
@@ -263,7 +263,7 @@ Excluded:
 
 - [x] Step 1: Implement connector for public Receita leilao data using official public pages/endpoints where available.
 - [x] Step 2: Mark undocumented endpoints as `fragile_operational` and cache responses.
-- [ ] Step 3: Store raw payloads before normalization. Deferred until the raw-record repository is connected to the database schema.
+- [x] Step 3: Store raw payloads before normalization in `raw_records`, normalize lots into `entities`, and write evidence rows tied to raw records.
 - [x] Step 4: Normalize edital, lot number, city, UF, minimum bid, proposal deadline, session date, PF/PJ eligibility, image URL and source link.
 - [x] Step 5: Add score function using margin potential, liquidity, logistics distance, restrictions, deadline urgency and edital risk.
 - [x] Step 6: Expose `/leiloes/lotes`, `/leiloes/lotes/:id`, `/leiloes/lotes/:id/score`.

@@ -7,6 +7,11 @@ import { getModules } from "./modules";
 import { getSources } from "./sources";
 import { searchEntities } from "./search";
 import { notFound, type ApiResponse, type RouteRequest } from "./types";
+import type { LeiloesRepository } from "../repositories/leiloes-repository";
+
+export interface RouteDependencies {
+  leiloesRepository?: LeiloesRepository;
+}
 
 export function createRouteRequest(method: string, rawUrl: string): RouteRequest {
   const url = new URL(rawUrl, "http://localhost");
@@ -18,7 +23,7 @@ export function createRouteRequest(method: string, rawUrl: string): RouteRequest
   };
 }
 
-export async function handleRoute(request: RouteRequest): Promise<ApiResponse> {
+export async function handleRoute(request: RouteRequest, dependencies: RouteDependencies = {}): Promise<ApiResponse> {
   if (request.method !== "GET") {
     return {
       status: 405,
@@ -51,17 +56,17 @@ export async function handleRoute(request: RouteRequest): Promise<ApiResponse> {
   }
 
   if (request.path === "/leiloes/lotes") {
-    return getLeilaoLots();
+    return getLeilaoLots(dependencies.leiloesRepository);
   }
 
   const leilaoScoreMatch = request.path.match(/^\/leiloes\/lotes\/([^/]+)\/score$/);
   if (leilaoScoreMatch?.[1]) {
-    return getLeilaoLotScore(decodeURIComponent(leilaoScoreMatch[1]));
+    return getLeilaoLotScore(decodeURIComponent(leilaoScoreMatch[1]), dependencies.leiloesRepository);
   }
 
   const leilaoLotMatch = request.path.match(/^\/leiloes\/lotes\/([^/]+)$/);
   if (leilaoLotMatch?.[1]) {
-    return getLeilaoLot(decodeURIComponent(leilaoLotMatch[1]));
+    return getLeilaoLot(decodeURIComponent(leilaoLotMatch[1]), dependencies.leiloesRepository);
   }
 
   const dossierMatch = request.path.match(/^\/dossiers\/([^/]+)$/);

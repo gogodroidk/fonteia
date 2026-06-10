@@ -10,7 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fonteia/sources": "workspace:*"
+    "@fonteia/scoring": "workspace:^",
+    "@fonteia/sources": "workspace:*",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

@@ -20,7 +20,7 @@ describe("core database schema", () => {
 
   it("creates the indexes needed for entity, source and geospatial lookup", () => {
     for (const index of REQUIRED_INDEXES) {
-      expect(migrationSql).toContain(`CREATE INDEX IF NOT EXISTS ${index}`);
+      expect(migrationSql).toMatch(new RegExp(`CREATE (UNIQUE )?INDEX IF NOT EXISTS ${index}`));
     }
   });
 
@@ -30,5 +30,14 @@ describe("core database schema", () => {
     expect(migrationSql).toContain("content_hash TEXT");
     expect(migrationSql).toContain("evidence_ids UUID[]");
   });
-});
 
+  it("enables Supabase RLS and keeps public catalogs read-only", () => {
+    for (const table of CORE_TABLES) {
+      expect(migrationSql).toContain(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    }
+
+    expect(migrationSql).toContain('CREATE POLICY "Public source catalog is readable"');
+    expect(migrationSql).toContain('CREATE POLICY "Public module catalog is readable"');
+    expect(migrationSql).toContain("REVOKE EXECUTE ON FUNCTION public.rls_auto_enable()");
+  });
+});

@@ -486,3 +486,7 @@ O Fonte.ia vence se o usuario sente que:
 - Shell web inicial criado em `apps/web` com React + Vite: cockpit de Leiloes, busca/pergunta, catalogo de fontes, modulos visiveis/travados e painel lateral de evidencia. Conceito e screenshots salvos em `docs/context/screenshots/`.
 - Decisao de UX registrada em `docs/context/UX_RESEARCH_2026-06-10.md`: usar divulgacao progressiva, navegacao lateral no desktop, destinos compactos no mobile, filtros/status em listas e evidencia sempre visivel.
 - Validacao visual em 2026-06-10 via Vite local em `http://127.0.0.1:5173` e Playwright usando Microsoft Edge instalado: desktop 1440x1000 e mobile 390x844 sem overflow horizontal.
+- Schema inicial aplicado no Supabase remoto `pwiuiihsyazghdsrpshg` em 2026-06-10 via conector Supabase com role `postgres`; o MCP principal ainda lista como `supabase_read_only_user`.
+- Supabase remoto agora tem tabelas centrais, RLS habilitado nas tabelas do Fonte.ia, policies publicas somente para `sources` e `modules`, PostGIS/pgvector instalados, 10 fontes seedadas e 9 modulos seedados.
+- Ingestao inicial real da Receita Leiloes gravou 5 lotes em `raw_records`, `entities` e `evidence`, com `source_runs.records_seen=5`, `records_inserted=5`, `status=success`.
+- Advisors Supabase apos a migration: tabelas do Fonte.ia com RLS; avisos pendentes em `public.spatial_ref_sys` e extensoes `postgis`/`vector` no schema `public`, documentados em `docs/context/SUPABASE_STATUS_2026-06-10.md`.
