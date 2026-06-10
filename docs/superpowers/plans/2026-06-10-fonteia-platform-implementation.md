@@ -134,7 +134,7 @@ Excluded:
 - [x] Step 3: Add `.env.example` with database, storage, search, Redis, AI, billing and source-token placeholders.
 - [x] Step 4: Run `pnpm install`.
 - [x] Step 5: Run `pnpm build` and confirm all empty apps/packages build or no-op cleanly.
-- [ ] Step 6: Commit with `chore: bootstrap fonteia monorepo`.
+- [x] Step 6: Commit with `chore: bootstrap fonteia monorepo`.
 
 ## Task 2: Shared Domain Model
 
@@ -154,7 +154,7 @@ Excluded:
 - [x] Step 4: Define evidence shape with `sourceId`, `sourceUrl`, `collectedAt`, `rawRecordId`, `quote`, `page`, `hash`, `confidence`.
 - [x] Step 5: Write tests that validate each module has a label, route, icon name, locked state and target persona.
 - [x] Step 6: Run domain tests.
-- [ ] Step 7: Commit with `feat(domain): define fonteia shared model`.
+- [x] Step 7: Commit with `chore: bootstrap fonteia monorepo`.
 
 ## Task 3: Database And Migrations
 
