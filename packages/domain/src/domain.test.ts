@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import { MODULE_IDS, PRODUCT_MODULES, SOURCE_STATUSES } from "./index";
+
+describe("Fonte.ia domain model", () => {
+  it("defines one product module for every module id", () => {
+    expect(PRODUCT_MODULES.map((module) => module.id).sort()).toEqual([...MODULE_IDS].sort());
+  });
+
+  it("keeps every module ready for navigation and commercial positioning", () => {
+    for (const module of PRODUCT_MODULES) {
+      expect(module.label.length).toBeGreaterThan(2);
+      expect(module.route).toMatch(/^\/[a-z]/);
+      expect(module.icon.length).toBeGreaterThan(2);
+      expect(module.targetPersona.length).toBeGreaterThan(10);
+      expect(module.promise.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("starts with leiloes active and every other module locked", () => {
+    expect(PRODUCT_MODULES.find((module) => module.id === "leiloes")?.status).toBe("active");
+
+    for (const module of PRODUCT_MODULES.filter((item) => item.id !== "leiloes")) {
+      expect(module.status).toBe("locked");
+    }
+  });
+
+  it("tracks the source status taxonomy needed for public-data reliability", () => {
+    expect(SOURCE_STATUSES).toContain("connected");
+    expect(SOURCE_STATUSES).toContain("fragile_operational");
+    expect(SOURCE_STATUSES).toContain("restricted_government");
+    expect(SOURCE_STATUSES).toContain("complementary_non_government");
+  });
+});
+
