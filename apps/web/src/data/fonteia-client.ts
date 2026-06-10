@@ -26,8 +26,16 @@ function trimTrailingSlash(value: string): string {
 }
 
 async function fetchApiLots(fetcher: typeof fetch): Promise<ReceitaLeilaoLot[]> {
-  const apiUrl = trimTrailingSlash(getEnv("VITE_API_URL") ?? DEFAULT_API_URL);
-  const response = await fetcher(`${apiUrl}/leiloes/lotes`, {
+  const configuredApiUrl = getEnv("VITE_API_URL");
+  const fallbackApiUrl = import.meta.env.DEV ? DEFAULT_API_URL : undefined;
+  const apiUrl = configuredApiUrl ?? fallbackApiUrl;
+
+  if (!apiUrl) {
+    throw new Error("API URL is not configured");
+  }
+
+  const trimmedApiUrl = trimTrailingSlash(apiUrl);
+  const response = await fetcher(`${trimmedApiUrl}/leiloes/lotes`, {
     headers: { accept: "application/json" },
   });
 
