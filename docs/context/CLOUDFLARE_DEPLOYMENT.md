@@ -3,6 +3,7 @@
 Data: 2026-06-10
 Alvo: Cloudflare Pages
 Projeto sugerido: `fonteia`
+Status atual: publicado em Cloudflare Pages
 
 ## Decisao
 
@@ -89,9 +90,45 @@ Comando equivalente:
 corepack pnpm wrangler pages deploy apps/web/dist --project-name=fonteia --branch=main
 ```
 
+## Deploy Realizado
+
+Em 2026-06-10, a autenticacao por OAuth do Wrangler funcionou e substituiu o uso do token R2/S3 que estava falhando.
+
+Projeto Pages criado:
+
+```powershell
+corepack pnpm exec wrangler pages project create fonteia --production-branch main
+```
+
+Primeiro deploy publicado:
+
+- URL principal: https://fonteia.pages.dev
+- URL do deploy: https://1937dfb9.fonteia.pages.dev
+- Branch: `main`
+- Fonte do deploy: commit `b376911`
+- Validacao HTTP: `curl.exe -4 --http1.1 -I https://fonteia.pages.dev` retornou `200 OK`.
+- Validacao HTML: pagina retornou `<title>Fonte.ia by Olli</title>`, bundle JS e CSS em `/assets/`, e `<div id="root"></div>`.
+
+O build usado no deploy foi gerado localmente com:
+
+- `VITE_SUPABASE_URL=https://pwiuiihsyazghdsrpshg.supabase.co`
+- `VITE_SUPABASE_PUBLISHABLE_KEY` obtida pelo conector Supabase, sem registrar a chave no documento.
+- `VITE_API_URL=""`
+
+## Diagnostico Chrome/Codex
+
+Em 2026-06-10, a extensao Codex Chrome estava instalada e habilitada no perfil `Default`, mas o Windows nao tinha a chave de registro do Native Messaging Host:
+
+```text
+HKCU\Software\Google\Chrome\NativeMessagingHosts\com.openai.codexextension
+```
+
+Por isso, o Codex nao conseguiu assumir a aba aberta do Cloudflare. A correcao recomendada e reinstalar/reparar o plugin Chrome pelo painel de Plugins do Codex ou reinstalar a Codex Chrome Extension, para recriar o registro do Native Messaging Host.
+
 ## Proximo Passo Depois Do Primeiro Deploy
 
 1. Apontar dominio proprio no Cloudflare quando definido.
 2. Configurar Git integration ou CI para build automatico.
-3. Hospedar API em Worker/Pages Functions ou outro backend quando o MVP precisar de API server-side.
-4. Mover segredos server-side para Workers Secrets/Cloudflare Secrets Store; nunca embutir segredos no Vite.
+3. Salvar variaveis de build no fluxo de CI quando ele existir; no Direct Upload atual, elas sao embutidas no build local.
+4. Hospedar API em Worker/Pages Functions ou outro backend quando o MVP precisar de API server-side.
+5. Mover segredos server-side para Workers Secrets/Cloudflare Secrets Store; nunca embutir segredos no Vite.
