@@ -490,3 +490,5 @@ O Fonte.ia vence se o usuario sente que:
 - Supabase remoto agora tem tabelas centrais, RLS habilitado nas tabelas do Fonte.ia, policies publicas somente para `sources` e `modules`, PostGIS/pgvector instalados, 10 fontes seedadas e 9 modulos seedados.
 - Ingestao inicial real da Receita Leiloes gravou 5 lotes em `raw_records`, `entities` e `evidence`, com `source_runs.records_seen=5`, `records_inserted=5`, `status=success`.
 - Advisors Supabase apos a migration: tabelas do Fonte.ia com RLS; avisos pendentes em `public.spatial_ref_sys` e extensoes `postgis`/`vector` no schema `public`, documentados em `docs/context/SUPABASE_STATUS_2026-06-10.md`.
+- Leitura publica alpha liberada no Supabase somente para `entities.kind = 'auction_lot'` e para evidencias publicas da Receita (`evidence.source_id = 'receita-leiloes-sle'` e `kind = 'api_payload'`); `raw_records` continua privado sem policy publica.
+- Dashboard web passou a consumir dados reais na ordem `VITE_API_URL` -> Supabase REST -> amostras locais. Validacao em 2026-06-10 confirmou `Supabase publico` com lotes reais `CURITIBA` e `BELEM` no desktop e mobile via Playwright/Edge.

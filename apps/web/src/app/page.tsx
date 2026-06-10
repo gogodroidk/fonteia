@@ -1,16 +1,57 @@
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Search, TrendingUp } from "lucide-react";
 import { PRODUCT_MODULES } from "@fonteia/domain";
 import { SOURCE_CATALOG } from "@fonteia/sources";
 import { EvidencePanel } from "../components/evidence-panel";
 import { ModuleCard } from "../components/module-card";
 import { SourceStatusBadge } from "../components/source-status-badge";
-import { AUCTION_OPPORTUNITIES } from "../data/leiloes";
+import { loadLeiloesLots, type LeiloesDataSource } from "../data/fonteia-client";
+import { AUCTION_OPPORTUNITIES, mapReceitaLotToOpportunity } from "../data/leiloes";
 
-const selectedOpportunity = AUCTION_OPPORTUNITIES[0]!;
+const dataSourceLabel: Record<LeiloesDataSource, string> = {
+  api: "API Fonte.ia",
+  supabase: "Supabase publico",
+  sample: "Amostra local",
+};
 
 export function DashboardPage() {
+  const [opportunities, setOpportunities] = useState(AUCTION_OPPORTUNITIES);
+  const [dataSource, setDataSource] = useState<LeiloesDataSource>("sample");
+  const [dataMessage, setDataMessage] = useState("Carregando dados vivos...");
+  const [isLoadingLiveData, setIsLoadingLiveData] = useState(true);
   const connectedSources = SOURCE_CATALOG.filter((source) => source.status === "connected").length;
   const officialSources = SOURCE_CATALOG.filter((source) => source.reliability.startsWith("official")).length;
+  const selectedOpportunity = opportunities[0] ?? AUCTION_OPPORTUNITIES[0]!;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void loadLeiloesLots().then((result) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (result.lots.length > 0) {
+        setOpportunities(result.lots.map(mapReceitaLotToOpportunity));
+      }
+
+      setDataSource(result.source);
+      setDataMessage(result.message ?? "Dados com fonte oficial, data de coleta e evidencia rastreavel.");
+      setIsLoadingLiveData(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const liveMetric = useMemo(() => {
+    if (dataSource === "sample") {
+      return "demo";
+    }
+
+    return String(opportunities.length);
+  }, [dataSource, opportunities.length]);
 
   return (
     <div className="dashboard-grid">
@@ -40,6 +81,11 @@ export function DashboardPage() {
             <strong>Leiloes</strong>
             <small>radar, score, edital e alertas</small>
           </div>
+          <div>
+            <span className="section-label">Dados vivos</span>
+            <strong>{liveMetric}</strong>
+            <small>{dataSourceLabel[dataSource]}</small>
+          </div>
         </div>
       </section>
 
@@ -54,8 +100,13 @@ export function DashboardPage() {
           </button>
         </div>
 
+        <div className={`data-source-banner data-source-${dataSource}`}>
+          <span>{isLoadingLiveData ? "Sincronizando" : dataSourceLabel[dataSource]}</span>
+          <p>{dataMessage}</p>
+        </div>
+
         <div className="opportunity-list">
-          {AUCTION_OPPORTUNITIES.map((lot) => (
+          {opportunities.map((lot) => (
             <article className="opportunity-row" key={lot.id}>
               <div className="score-ring" aria-label={`Score ${lot.opportunityScore}`}>
                 {lot.opportunityScore}
@@ -63,7 +114,7 @@ export function DashboardPage() {
               <div className="opportunity-main">
                 <h3>{lot.title}</h3>
                 <p>
-                  {lot.city} · {lot.eligibility} · prazo {lot.deadline}
+                  {lot.city} - {lot.eligibility} - prazo {lot.deadline}
                 </p>
                 <div className="row-tags">
                   <span>{lot.sourceLabel}</span>

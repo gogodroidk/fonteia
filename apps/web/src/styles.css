@@ -243,7 +243,7 @@ button {
 
 .metric-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
 }
@@ -273,6 +273,40 @@ button {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+.data-source-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  border: 1px solid #d8e3de;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f7faf8;
+}
+
+.data-source-banner span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #e5f7ef;
+  color: #0f6048;
+  padding: 5px 9px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.data-source-banner p {
+  margin: 0;
+  color: #42534d;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.data-source-sample span {
+  background: #fff4d8;
+  color: #755800;
 }
 
 .opportunity-row {
@@ -651,6 +685,15 @@ button {
   .opportunity-row,
   .source-table-row {
     grid-template-columns: 1fr;
+  }
+
+  .data-source-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .data-source-banner p {
+    text-align: left;
   }
 
   .value-stack {

@@ -228,7 +228,9 @@ Excluded:
 - [x] Step 4: Add universal search page with a question input and structured answer card placeholder.
 - [x] Step 5: Add evidence panel component used by all answers.
 - [x] Step 6: Test module cards and source status badges.
-- [x] Step 7: Commit with `feat(web): add fonteia dashboard shell`.
+- [x] Step 7: Connect the dashboard to live Leiloes data with fallback order `API -> Supabase REST -> local samples`.
+- [x] Step 8: Validate desktop and mobile rendering against real Supabase lots.
+- [x] Step 9: Commit with `feat(web): add fonteia dashboard shell`.
 
 ## Task 7: Mobile Product Shell
 
@@ -344,7 +346,7 @@ Priority order:
 - [ ] Locked modules are visible but not misleading.
 - [ ] Mobile supports quick decisions without requiring desktop.
 - [ ] Web supports deep dashboard analysis.
-- [ ] Raw records are stored before normalized claims.
+- [x] Raw records are stored before normalized claims.
 - [ ] LGPD risks are reviewed before exposing personal data.
 - [ ] Receita leilao MVP does not automate e-CAC or bidding.
 - [ ] Undocumented endpoints are marked fragile and cached.

@@ -238,6 +238,8 @@ ALTER TABLE alert_events ENABLE ROW LEVEL SECURITY;
 
 GRANT SELECT ON sources TO anon, authenticated;
 GRANT SELECT ON modules TO anon, authenticated;
+GRANT SELECT ON entities TO anon, authenticated;
+GRANT SELECT ON evidence TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO service_role;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
 
@@ -254,6 +256,20 @@ CREATE POLICY "Public module catalog is readable"
   FOR SELECT
   TO anon, authenticated
   USING (true);
+
+DROP POLICY IF EXISTS "Public auction lots are readable" ON entities;
+CREATE POLICY "Public auction lots are readable"
+  ON entities
+  FOR SELECT
+  TO anon, authenticated
+  USING (kind = 'auction_lot');
+
+DROP POLICY IF EXISTS "Public Receita leiloes evidence is readable" ON evidence;
+CREATE POLICY "Public Receita leiloes evidence is readable"
+  ON evidence
+  FOR SELECT
+  TO anon, authenticated
+  USING (source_id = 'receita-leiloes-sle' AND kind = 'api_payload');
 
 INSERT INTO modules (id, label, route, status, target_persona, promise)
 VALUES
