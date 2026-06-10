@@ -267,7 +267,7 @@ Excluded:
 - [x] Step 4: Normalize edital, lot number, city, UF, minimum bid, proposal deadline, session date, PF/PJ eligibility, image URL and source link.
 - [x] Step 5: Add score function using margin potential, liquidity, logistics distance, restrictions, deadline urgency and edital risk.
 - [x] Step 6: Expose `/leiloes/lotes`, `/leiloes/lotes/:id`, `/leiloes/lotes/:id/score`.
-- [ ] Step 7: Commit with `feat(leiloes): ingest and score receita lots`.
+- [x] Step 7: Commit with `feat(leiloes): add receita connector and scoring`.
 
 ## Task 9: AI Answer Engine
 
