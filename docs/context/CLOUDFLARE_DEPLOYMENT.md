@@ -64,6 +64,13 @@ Permissao minima indicada pela documentacao do Cloudflare Pages para Direct Uplo
 
 - Account -> Cloudflare Pages -> Edit
 
+No teste de 2026-06-10, o token informado autenticou a conta, mas falhou ao criar o projeto Pages com `Authentication error [code: 10000]` e o Wrangler tambem avisou falta de permissao para ler memberships. Para evitar novo bloqueio, criar/ajustar o token com:
+
+- Account -> Cloudflare Pages -> Edit
+- User -> Memberships -> Read
+
+Se a organizacao exigir escopo mais fechado, limitar o recurso ao account id mostrado pelo Wrangler.
+
 Se o Wrangler tambem pedir account id:
 
 ```powershell
