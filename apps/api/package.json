@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fonteia/domain": "workspace:*",
+    "@fonteia/scoring": "workspace:*",
     "@fonteia/sources": "workspace:*",
     "pg": "^8.13.1"
   },

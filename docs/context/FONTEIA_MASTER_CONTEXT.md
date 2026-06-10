@@ -471,3 +471,6 @@ O Fonte.ia vence se o usuario sente que:
 - Foi criado um runner local em `scripts/run-workspaces.mjs` porque o ambiente Windows nao permite criar shims globais do Corepack em `C:\Program Files\nodejs`.
 - Schema Postgres inicial criado em `infra/migrations/0001_core_schema.sql`, com PostGIS, pgvector, tabelas centrais, evidencias, entidades, alertas e billing.
 - Catalogo inicial de fontes criado em `packages/sources/src/catalog.ts` e documentado em `docs/sources/source-catalog.md`.
+- Conector inicial de Leiloes da Receita criado em `packages/sources/src/connectors/receita-leiloes.ts`, usando o endpoint publico operacional `https://www25.receita.fazenda.gov.br/sle-sociedade/api/portal/destaques` como fonte fragil/sem SLA.
+- Score inicial de oportunidade de leilao criado em `packages/scoring/src/leiloes.ts`.
+- API passou a expor rotas iniciais de leiloes: `/leiloes/lotes`, `/leiloes/lotes/:id` e `/leiloes/lotes/:id/score`.

@@ -1,5 +1,6 @@
 import { getDossier } from "./dossiers";
 import { getHealth } from "./health";
+import { getLeilaoLot, getLeilaoLots, getLeilaoLotScore } from "./leiloes";
 import { getModules } from "./modules";
 import { getSources } from "./sources";
 import { searchEntities } from "./search";
@@ -39,6 +40,20 @@ export function handleRoute(request: RouteRequest): ApiResponse {
     return searchEntities(request);
   }
 
+  if (request.path === "/leiloes/lotes") {
+    return getLeilaoLots();
+  }
+
+  const leilaoScoreMatch = request.path.match(/^\/leiloes\/lotes\/([^/]+)\/score$/);
+  if (leilaoScoreMatch?.[1]) {
+    return getLeilaoLotScore(decodeURIComponent(leilaoScoreMatch[1]));
+  }
+
+  const leilaoLotMatch = request.path.match(/^\/leiloes\/lotes\/([^/]+)$/);
+  if (leilaoLotMatch?.[1]) {
+    return getLeilaoLot(decodeURIComponent(leilaoLotMatch[1]));
+  }
+
   const dossierMatch = request.path.match(/^\/dossiers\/([^/]+)$/);
   if (dossierMatch?.[1]) {
     return getDossier(decodeURIComponent(dossierMatch[1]));
@@ -46,4 +61,3 @@ export function handleRoute(request: RouteRequest): ApiResponse {
 
   return notFound(request.path);
 }
-

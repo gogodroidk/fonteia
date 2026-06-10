@@ -40,5 +40,17 @@ describe("API gateway routes", () => {
     expect(JSON.stringify(response.body)).toContain("sample-evidence-001");
     expect(JSON.stringify(response.body)).toContain("receita-leiloes-sle");
   });
-});
 
+  it("returns leilao lots and opportunity score", () => {
+    const lotsResponse = handleRoute(createRouteRequest("GET", "/leiloes/lotes"));
+
+    expect(lotsResponse.status).toBe(200);
+    expect(JSON.stringify(lotsResponse.body)).toContain("fragile_operational");
+    expect(JSON.stringify(lotsResponse.body)).toContain("200100-1-2026-136");
+
+    const scoreResponse = handleRoute(createRouteRequest("GET", "/leiloes/lotes/200100-1-2026-136/score"));
+
+    expect(scoreResponse.status).toBe(200);
+    expect(JSON.stringify(scoreResponse.body)).toContain("maxSuggestedBidCents");
+  });
+});

@@ -32,6 +32,9 @@ importers:
       '@fonteia/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@fonteia/scoring':
+        specifier: workspace:*
+        version: link:../../packages/scoring
       '@fonteia/sources':
         specifier: workspace:*
         version: link:../../packages/sources
@@ -93,7 +96,18 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.20)
 
-  packages/scoring: {}
+  packages/scoring:
+    dependencies:
+      '@fonteia/sources':
+        specifier: workspace:*
+        version: link:../sources
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)
 
   packages/sources:
     dependencies:
@@ -114,7 +128,18 @@ importers:
 
   services/billing: {}
 
-  services/ingest: {}
+  services/ingest:
+    dependencies:
+      '@fonteia/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.20)
 
   services/search-indexer: {}
 

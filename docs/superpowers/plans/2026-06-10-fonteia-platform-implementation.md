@@ -261,12 +261,12 @@ Excluded:
 - Test: `packages/sources/src/connectors/receita-leiloes.test.ts`
 - Test: `packages/scoring/src/leiloes.test.ts`
 
-- [ ] Step 1: Implement connector for public Receita leilao data using official public pages/endpoints where available.
-- [ ] Step 2: Mark undocumented endpoints as `fragile_operational` and cache responses.
-- [ ] Step 3: Store raw payloads before normalization.
-- [ ] Step 4: Normalize edital, lot number, city, UF, minimum bid, proposal deadline, session date, PF/PJ eligibility, image URL and source link.
-- [ ] Step 5: Add score function using margin potential, liquidity, logistics distance, restrictions, deadline urgency and edital risk.
-- [ ] Step 6: Expose `/leiloes/lotes`, `/leiloes/lotes/:id`, `/leiloes/lotes/:id/score`.
+- [x] Step 1: Implement connector for public Receita leilao data using official public pages/endpoints where available.
+- [x] Step 2: Mark undocumented endpoints as `fragile_operational` and cache responses.
+- [ ] Step 3: Store raw payloads before normalization. Deferred until the raw-record repository is connected to the database schema.
+- [x] Step 4: Normalize edital, lot number, city, UF, minimum bid, proposal deadline, session date, PF/PJ eligibility, image URL and source link.
+- [x] Step 5: Add score function using margin potential, liquidity, logistics distance, restrictions, deadline urgency and edital risk.
+- [x] Step 6: Expose `/leiloes/lotes`, `/leiloes/lotes/:id`, `/leiloes/lotes/:id/score`.
 - [ ] Step 7: Commit with `feat(leiloes): ingest and score receita lots`.
 
 ## Task 9: AI Answer Engine
