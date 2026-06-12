@@ -1893,12 +1893,6 @@ p { margin: 0; }
   color: var(--n-700);
   font-size: 14px;
 }
-700;
-  color: rgba(255,255,255,0.75);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .mockup-row-sub { font-size: 0.58rem; color: rgba(255,255,255,0.35); }
 .mockup-row-val { font-size: 0.65rem; font-weight: 800; flex-shrink: 0; }
 
