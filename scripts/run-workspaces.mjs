@@ -43,7 +43,8 @@ for (const dir of workspaceDirs) {
   }
 
   console.log(`\n> ${manifest.name} ${scriptName}`);
-  const result = spawnSync("npm.cmd", ["run", scriptName], {
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const result = spawnSync(npmCommand, ["run", scriptName], {
     cwd: join(process.cwd(), dir),
     stdio: "inherit",
     shell: true,
