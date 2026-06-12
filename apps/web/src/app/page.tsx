@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Search, TrendingUp } from "lucide-react";
 import { PRODUCT_MODULES } from "@fonteia/domain";
+import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { SOURCE_CATALOG } from "@fonteia/sources";
 import { EvidencePanel } from "../components/evidence-panel";
 import { ModuleCard } from "../components/module-card";
+import { ScoreRing } from "../components/score-ring";
 import { SourceStatusBadge } from "../components/source-status-badge";
 import { loadLeiloesLots, type LeiloesDataSource } from "../data/fonteia-client";
 import { AUCTION_OPPORTUNITIES, mapReceitaLotToOpportunity } from "../data/leiloes";
@@ -14,8 +16,17 @@ const dataSourceLabel: Record<LeiloesDataSource, string> = {
   sample: "Amostra local",
 };
 
-export function DashboardPage() {
+interface DashboardPageProps {
+  onSelectLot?: (lot: ReceitaLeilaoLot) => void;
+  onAsk?: (question: string) => void;
+}
+
+export function DashboardPage({ onSelectLot, onAsk }: DashboardPageProps) {
+  const [question, setQuestion] = useState(
+    "Quais lotes da Receita parecem ter melhor margem esta semana?",
+  );
   const [opportunities, setOpportunities] = useState(AUCTION_OPPORTUNITIES);
+  const [rawLots, setRawLots] = useState<ReceitaLeilaoLot[]>([]);
   const [dataSource, setDataSource] = useState<LeiloesDataSource>("sample");
   const [dataMessage, setDataMessage] = useState("Carregando dados vivos...");
   const [isLoadingLiveData, setIsLoadingLiveData] = useState(true);
@@ -33,6 +44,7 @@ export function DashboardPage() {
 
       if (result.lots.length > 0) {
         setOpportunities(result.lots.map(mapReceitaLotToOpportunity));
+        setRawLots(result.lots);
       }
 
       setDataSource(result.source);
@@ -60,9 +72,18 @@ export function DashboardPage() {
           <Search aria-hidden="true" size={22} />
           <input
             aria-label="Pergunte ao Fonte.ia"
-            defaultValue="Quais lotes da Receita parecem ter melhor margem esta semana?"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && question.trim()) {
+                onAsk?.(question);
+              }
+            }}
+            placeholder="Pergunte qualquer coisa sobre os dados públicos..."
           />
-          <button type="button">Analisar</button>
+          <button type="button" onClick={() => onAsk?.(question)} disabled={!question.trim()}>
+            Analisar
+          </button>
         </div>
 
         <div className="metric-strip">
@@ -95,7 +116,7 @@ export function DashboardPage() {
             <span className="section-label">Radar de oportunidades</span>
             <h2>Melhores lotes para investigar hoje</h2>
           </div>
-          <button className="ghost-button" type="button">
+          <button className="ghost-button" type="button" onClick={() => onAsk?.("")}>
             Ver todos <ArrowRight aria-hidden="true" size={16} />
           </button>
         </div>
@@ -106,29 +127,46 @@ export function DashboardPage() {
         </div>
 
         <div className="opportunity-list">
-          {opportunities.map((lot) => (
-            <article className="opportunity-row" key={lot.id}>
-              <div className="score-ring" aria-label={`Score ${lot.opportunityScore}`}>
-                {lot.opportunityScore}
-              </div>
-              <div className="opportunity-main">
-                <h3>{lot.title}</h3>
-                <p>
-                  {lot.city} - {lot.eligibility} - prazo {lot.deadline}
-                </p>
-                <div className="row-tags">
-                  <span>{lot.sourceLabel}</span>
-                  <span>risco {lot.risk}</span>
-                  <span>{lot.nextAction}</span>
+          {opportunities.map((lot) => {
+            const rawLot = rawLots.find((r) => r.id === lot.id);
+
+            return (
+              <article
+                className={`opportunity-row${onSelectLot ? " opportunity-row-clickable" : ""}`}
+                key={lot.id}
+                onClick={() => {
+                  if (onSelectLot && rawLot) {
+                    onSelectLot(rawLot);
+                  }
+                }}
+                role={onSelectLot && rawLot ? "button" : undefined}
+                tabIndex={onSelectLot && rawLot ? 0 : undefined}
+                onKeyDown={(e) => {
+                  if ((e.key === "Enter" || e.key === " ") && onSelectLot && rawLot) {
+                    onSelectLot(rawLot);
+                  }
+                }}
+              >
+                <ScoreRing score={lot.opportunityScore} />
+                <div className="opportunity-main">
+                  <h3>{lot.title}</h3>
+                  <p>
+                    {lot.city} - {lot.eligibility} - prazo {lot.deadline}
+                  </p>
+                  <div className="row-tags">
+                    <span>{lot.sourceLabel}</span>
+                    <span>risco {lot.risk}</span>
+                    <span>{lot.nextAction}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="value-stack">
-                <small>entrada</small>
-                <strong>{lot.entryValue}</strong>
-                <span>valor ref. {lot.estimatedValue}</span>
-              </div>
-            </article>
-          ))}
+                <div className="value-stack">
+                  <small>entrada</small>
+                  <strong>{lot.entryValue}</strong>
+                  <span>valor ref. {lot.estimatedValue}</span>
+                </div>
+              </article>
+            );
+          })}
         </div>
       </section>
 

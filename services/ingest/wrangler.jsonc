@@ -1,0 +1,20 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "fonteia-ingest",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-06-10",
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  },
+  "kv_namespaces": [
+    {
+      // Criar com: wrangler kv namespace create RECEITA_CACHE
+      // Depois substituir pelo id retornado pelo comando acima.
+      "binding": "RECEITA_CACHE",
+      "id": "PLACEHOLDER_KV_ID"
+    }
+  ]
+  // Secrets (configurar via dashboard ou wrangler secret put):
+  //   SUPABASE_URL
+  //   SUPABASE_SERVICE_ROLE_KEY
+}

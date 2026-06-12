@@ -12,9 +12,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@fonteia/ai": "workspace:*",
     "@fonteia/billing": "workspace:*",
     "@fonteia/domain": "workspace:*",
+    "@fonteia/scoring": "workspace:*",
     "@fonteia/sources": "workspace:^",
+    "@supabase/supabase-js": "^2.49.4",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

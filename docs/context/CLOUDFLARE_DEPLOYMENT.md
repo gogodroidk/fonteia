@@ -125,6 +125,74 @@ HKCU\Software\Google\Chrome\NativeMessagingHosts\com.openai.codexextension
 
 Por isso, o Codex nao conseguiu assumir a aba aberta do Cloudflare. A correcao recomendada e reinstalar/reparar o plugin Chrome pelo painel de Plugins do Codex ou reinstalar a Codex Chrome Extension, para recriar o registro do Native Messaging Host.
 
+## Ingest Worker (fonteia-ingest)
+
+O worker de ingest roda como Cloudflare Worker com Cron Trigger a cada 6 horas (`0 */6 * * *`). Ele busca os destaques da Receita Federal, faz cache no KV por 15 minutos e persiste via Supabase REST API (sem driver Node).
+
+### Criar KV namespace
+
+```powershell
+corepack pnpm exec wrangler kv namespace create RECEITA_CACHE
+```
+
+O comando retorna um `id`. Substituir `PLACEHOLDER_KV_ID` em `services/ingest/wrangler.jsonc` pelo id retornado.
+
+Para ambiente de preview (desenvolvimento local com `wrangler dev`):
+
+```powershell
+corepack pnpm exec wrangler kv namespace create RECEITA_CACHE --preview
+```
+
+Adicionar o `preview_id` correspondente no `wrangler.jsonc`.
+
+### Configurar secrets
+
+Os secrets nao vao no `wrangler.jsonc` — entram pelo dashboard ou CLI:
+
+```powershell
+corepack pnpm exec wrangler secret put SUPABASE_URL --name fonteia-ingest
+corepack pnpm exec wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name fonteia-ingest
+```
+
+Valores:
+- `SUPABASE_URL`: URL do projeto Supabase (ex: `https://pwiuiihsyazghdsrpshg.supabase.co`)
+- `SUPABASE_SERVICE_ROLE_KEY`: service role key do Supabase (nunca a anon key — o worker precisa de acesso irrestrito para INSERT/UPSERT)
+
+### Deploy do worker
+
+```powershell
+cd services/ingest
+corepack pnpm deploy
+```
+
+Ou pelo root do monorepo com filtro turbo, se configurado.
+
+### Permissoes necessarias no token Cloudflare
+
+Para `wrangler deploy` do worker:
+- Account -> Workers Scripts -> Edit
+- Account -> Workers KV Storage -> Edit
+
+### Observabilidade
+
+O worker loga via `console.log` — visivel em Workers -> Logs no dashboard do Cloudflare, ou via `wrangler tail fonteia-ingest` em tempo real.
+
+Campos logados:
+- Timestamp do cron trigger
+- Numero de lotes e se veio do cache (`fromCache=true/false`)
+- ID do `source_run` criado
+- Total de records upsertados
+- Erros com stack trace completo
+
+### Coluna external_id em entities
+
+O UPSERT de entities usa `?on_conflict=external_id` na Supabase REST API. A tabela `entities` precisa ter a coluna `external_id` com unique constraint para que o merge funcione. Se a coluna nao existir ainda, adicionar migration:
+
+```sql
+ALTER TABLE entities ADD COLUMN IF NOT EXISTS external_id text;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entities_external_id ON entities (external_id) WHERE external_id IS NOT NULL;
+```
+
 ## Proximo Passo Depois Do Primeiro Deploy
 
 1. Apontar dominio proprio no Cloudflare quando definido.

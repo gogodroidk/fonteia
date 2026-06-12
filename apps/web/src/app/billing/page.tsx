@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BILLING_PLANS, getPlanEntitlements } from "@fonteia/billing";
 
 const featuredPlanIds = new Set(["individual", "pro", "business"]);
@@ -7,8 +8,22 @@ function formatQuota(value: number | "custom"): string {
 }
 
 export function BillingPage() {
+  const [chosenPlan, setChosenPlan] = useState<string | null>(null);
+
   return (
     <section className="page-panel">
+      {chosenPlan && (
+        <div className="billing-confirm" role="status">
+          <strong>Plano {chosenPlan} selecionado.</strong>
+          <span>
+            Para concluir, escreva para <a href="mailto:contato@olli.com.br">contato@olli.com.br</a> — o
+            checkout automático entra no ar em breve.
+          </span>
+          <button className="ghost-button" type="button" onClick={() => setChosenPlan(null)}>
+            Fechar
+          </button>
+        </div>
+      )}
       <div className="section-header">
         <div>
           <span className="section-label">Receita recorrente</span>
@@ -35,7 +50,11 @@ export function BillingPage() {
                 <span>{locked.length} upsells visiveis</span>
                 <span>{formatQuota(plan.quotas.aiAnswersPerMonth)} respostas IA/mes</span>
               </div>
-              <button className={featuredPlanIds.has(plan.id) ? "primary-button" : "ghost-button"} type="button">
+              <button
+                className={featuredPlanIds.has(plan.id) ? "primary-button" : "ghost-button"}
+                type="button"
+                onClick={() => setChosenPlan(plan.name)}
+              >
                 {plan.cta}
               </button>
             </article>

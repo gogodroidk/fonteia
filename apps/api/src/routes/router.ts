@@ -1,7 +1,7 @@
 import { askFonteia } from "./ask";
 import { getAlerts } from "./alerts";
 import { getBillingEntitlements, getBillingPlans } from "./billing";
-import { getDossier } from "./dossiers";
+import { getDossier, exportDossier } from "./dossiers";
 import { getHealth } from "./health";
 import { getLeilaoLot, getLeilaoLots, getLeilaoLotScore } from "./leiloes";
 import { getModules } from "./modules";
@@ -76,6 +76,11 @@ export async function handleRoute(request: RouteRequest, dependencies: RouteDepe
   const leilaoLotMatch = request.path.match(/^\/leiloes\/lotes\/([^/]+)$/);
   if (leilaoLotMatch?.[1]) {
     return getLeilaoLot(decodeURIComponent(leilaoLotMatch[1]), dependencies.leiloesRepository);
+  }
+
+  const dossierExportMatch = request.path.match(/^\/dossiers\/([^/]+)\/export$/);
+  if (dossierExportMatch?.[1]) {
+    return exportDossier(decodeURIComponent(dossierExportMatch[1]));
   }
 
   const dossierMatch = request.path.match(/^\/dossiers\/([^/]+)$/);

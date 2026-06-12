@@ -20,6 +20,11 @@ export interface ReceitaLeiloesDestaquesPayload {
   destaques: ReceitaLeiloesDestaqueRaw[];
 }
 
+export interface ReceitaCache {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+}
+
 export interface ReceitaLeilaoLot {
   id: string;
   sourceId: "receita-leiloes-sle";
@@ -96,4 +101,30 @@ export async function fetchReceitaLeiloesDestaques(fetcher: typeof fetch = fetch
 
   const payload = (await response.json()) as ReceitaLeiloesDestaquesPayload;
   return normalizeReceitaDestaquesPayload(payload);
+}
+
+export async function fetchReceitaLeiloesDestaquesWithCache(
+  cache: ReceitaCache,
+  fetcher: typeof fetch = fetch,
+): Promise<{ lots: ReceitaLeilaoLot[]; fromCache: boolean }> {
+  const CACHE_KEY = "receita-leiloes:destaques";
+  const TTL_SECONDS = 900; // 15 min
+
+  const cached = await cache.get(CACHE_KEY);
+  if (cached) {
+    try {
+      const payload = JSON.parse(cached) as ReceitaLeiloesDestaquesPayload;
+      return { lots: normalizeReceitaDestaquesPayload(payload), fromCache: true };
+    } catch {
+      // cache corrompido, buscar de novo
+    }
+  }
+
+  const response = await fetcher(RECEITA_LEILOES_DESTAQUES_URL, { headers: { accept: "application/json" } });
+  if (!response.ok) {
+    throw new Error(`Receita Leiloes request failed with status ${response.status}`);
+  }
+  const payload = (await response.json()) as ReceitaLeiloesDestaquesPayload;
+  await cache.put(CACHE_KEY, JSON.stringify(payload), { expirationTtl: TTL_SECONDS });
+  return { lots: normalizeReceitaDestaquesPayload(payload), fromCache: false };
 }
