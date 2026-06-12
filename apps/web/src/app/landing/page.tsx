@@ -326,6 +326,43 @@ export function LandingPage({ onLogin }: LandingPageProps) {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="landing-section" id="faq">
+        <div className="landing-section-inner landing-faq">
+          <span className="section-eyebrow">Dúvidas frequentes</span>
+          <h2 className="section-heading">Perguntas que todo mundo faz</h2>
+          <div className="faq-list">
+            {[
+              {
+                q: "Preciso entender de tecnologia ou de IA para usar?",
+                a: "Não. O Fonte.ia foi feito para quem quer praticidade: você pergunta em português e recebe a resposta com a fonte. Sem termos técnicos.",
+              },
+              {
+                q: "De onde vêm os dados?",
+                a: "De fontes oficiais brasileiras — Receita Federal, PNCP, CNPJ, tribunais e mais. Cada dado mostra a fonte, a data e um hash de verificação.",
+              },
+              {
+                q: "Posso cancelar quando quiser?",
+                a: "Sim. Sem contrato e sem multa. Você cancela quando quiser e mantém o acesso até o fim do período já pago.",
+              },
+              {
+                q: "A IA pode errar ou inventar dados?",
+                a: "Ela só responde com base em evidência rastreável. Se não houver fonte para algo, ela avisa que a evidência é insuficiente em vez de inventar.",
+              },
+              {
+                q: "Tem plano grátis?",
+                a: "Tem. Você começa grátis para explorar o radar de leilões e fazer suas primeiras perguntas, sem cartão de crédito.",
+              },
+            ].map((item) => (
+              <details className="faq-item" key={item.q}>
+                <summary>{item.q}</summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="landing-cta">
         <div className="landing-cta-inner">
@@ -348,6 +385,11 @@ export function LandingPage({ onLogin }: LandingPageProps) {
               <span style={{ color: "#556560" }}>by Olli</span>
             </div>
           </div>
+          <nav className="landing-footer-links">
+            <a href="/privacidade">Privacidade</a>
+            <a href="/cookies">Cookies</a>
+            <a href="/termos">Termos</a>
+          </nav>
           <p style={{ color: "#556560", fontSize: "0.8rem" }}>
             © {new Date().getFullYear()} Olli. Dados públicos com evidência rastreável.
           </p>

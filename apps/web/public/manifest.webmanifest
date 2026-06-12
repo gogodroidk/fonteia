@@ -1,0 +1,20 @@
+{
+  "name": "Fonte.ia by Olli",
+  "short_name": "Fonte.ia",
+  "description": "Inteligência de dados públicos brasileiros com IA e evidência rastreável.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#041510",
+  "theme_color": "#0f5f4a",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

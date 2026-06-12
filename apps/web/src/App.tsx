@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BarChart2, Bell, BookOpenText, Database, LayoutDashboard, LogOut, Search, ShieldCheck, User } from "lucide-react";
 import { PRODUCT_MODULES, type ModuleId } from "@fonteia/domain";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
@@ -14,8 +14,11 @@ import { LotDetailPage } from "./app/leiloes/lot-detail-page";
 import { ModulesPage } from "./app/modules/page";
 import { SearchPage } from "./app/search/page";
 import { SourcesPage } from "./app/sources/page";
+import { AccountPage } from "./app/account/page";
+import { LegalPage, type LegalKind } from "./app/legal/page";
+import { CookieBanner } from "./components/cookie-banner";
 
-type RouteKey = "dashboard" | "modules" | "sources" | "search" | "billing" | "lot-detail";
+type RouteKey = "dashboard" | "modules" | "sources" | "search" | "billing" | "lot-detail" | "conta";
 
 const navItems: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutDashboard }> = [
   { path: "/app", route: "dashboard", label: "Cockpit", icon: LayoutDashboard },
@@ -30,6 +33,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/fontes")) return "sources";
   if (path.startsWith("/app/modulos")) return "modules";
   if (path.startsWith("/app/planos")) return "billing";
+  if (path.startsWith("/app/conta")) return "conta";
   if (path.startsWith("/app/lote")) return "lot-detail";
   return "dashboard";
 }
@@ -126,17 +130,19 @@ function AppShell({ path, navigate }: AppShellProps) {
         </div>
 
         <div className="sidebar-user">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt={displayName} className="user-avatar" />
-          ) : (
-            <div className="user-avatar-placeholder">
-              <User size={16} aria-hidden="true" />
+          <button className="sidebar-user-main" onClick={() => go("/app/conta")} type="button" title="Minha conta">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName} className="user-avatar" />
+            ) : (
+              <div className="user-avatar-placeholder">
+                <User size={16} aria-hidden="true" />
+              </div>
+            )}
+            <div className="user-info">
+              <strong>{displayName}</strong>
+              <span>Plano Free</span>
             </div>
-          )}
-          <div className="user-info">
-            <strong>{displayName}</strong>
-            <span>Plano Free</span>
-          </div>
+          </button>
           <button
             className="signout-btn"
             onClick={() => void signOut()}
@@ -215,6 +221,14 @@ function AppShell({ path, navigate }: AppShellProps) {
           {route === "sources" && <SourcesPage />}
           {route === "modules" && <ModulesPage selectedModuleId={"leiloes" satisfies ModuleId} />}
           {route === "billing" && <BillingPage />}
+          {route === "conta" && (
+            <AccountPage
+              name={displayName}
+              email={user?.email ?? ""}
+              avatarUrl={avatarUrl}
+              onSignOut={() => void signOut()}
+            />
+          )}
         </div>
       </main>
 
@@ -256,14 +270,25 @@ export function App() {
     );
   }
 
-  const inApp = path.startsWith("/app");
+  const legalKind: LegalKind | null =
+    path === "/privacidade"
+      ? "privacidade"
+      : path === "/cookies"
+        ? "cookies"
+        : path === "/termos"
+          ? "termos"
+          : null;
 
-  if (inApp) {
+  const inApp = path.startsWith("/app");
+  let content: ReactNode;
+
+  if (legalKind) {
+    content = <LegalPage kind={legalKind} onHome={() => navigate("/")} />;
+  } else if (inApp) {
     if (!user) {
-      return <LoginPage onGoToLanding={() => navigate("/")} />;
-    }
-    if (!onboarded) {
-      return (
+      content = <LoginPage onGoToLanding={() => navigate("/")} />;
+    } else if (!onboarded) {
+      content = (
         <OnboardingPage
           name={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email?.split("@")[0]}
           onFinish={() => {
@@ -273,13 +298,19 @@ export function App() {
           }}
         />
       );
+    } else {
+      content = <AppShell path={path} navigate={navigate} />;
     }
-    return <AppShell path={path} navigate={navigate} />;
+  } else if (path === "/entrar") {
+    content = <LoginPage onGoToLanding={() => navigate("/")} />;
+  } else {
+    content = <LandingPage onLogin={() => navigate("/entrar")} />;
   }
 
-  if (path === "/entrar") {
-    return <LoginPage onGoToLanding={() => navigate("/")} />;
-  }
-
-  return <LandingPage onLogin={() => navigate("/entrar")} />;
+  return (
+    <>
+      {content}
+      <CookieBanner onOpenPolicy={() => navigate("/cookies")} />
+    </>
+  );
 }

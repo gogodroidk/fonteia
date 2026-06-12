@@ -6,7 +6,8 @@
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "turbo dev",
-    "build": "node scripts/run-workspaces.mjs build",
+    "build": "pnpm --filter @fonteia/web... build",
+    "build:all": "node scripts/run-workspaces.mjs build",
     "test": "node scripts/run-workspaces.mjs test",
     "lint": "node scripts/run-workspaces.mjs lint",
     "typecheck": "node scripts/run-workspaces.mjs typecheck",

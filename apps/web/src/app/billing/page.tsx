@@ -3,6 +3,18 @@ import { BILLING_PLANS, getPlanEntitlements } from "@fonteia/billing";
 
 const featuredPlanIds = new Set(["individual", "pro", "business"]);
 
+/**
+ * Links de pagamento do Stripe (Payment Links). Cole a URL de cada plano,
+ * gerada no painel do Stripe (Produtos → Payment Links). Enquanto vazio,
+ * o botão mostra o contato. Assim o checkout funciona sem backend.
+ */
+const STRIPE_PAYMENT_LINKS: Record<string, string> = {
+  individual: "",
+  escritorio: "",
+  pro: "",
+  business: "",
+};
+
 function formatQuota(value: number | "custom"): string {
   return value === "custom" ? "sob medida" : String(value);
 }
@@ -53,7 +65,14 @@ export function BillingPage() {
               <button
                 className={featuredPlanIds.has(plan.id) ? "primary-button" : "ghost-button"}
                 type="button"
-                onClick={() => setChosenPlan(plan.name)}
+                onClick={() => {
+                  const link = STRIPE_PAYMENT_LINKS[plan.id];
+                  if (link) {
+                    window.location.href = link;
+                  } else {
+                    setChosenPlan(plan.name);
+                  }
+                }}
               >
                 {plan.cta}
               </button>
