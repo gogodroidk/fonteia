@@ -34,7 +34,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/modulos")) return "modules";
   if (path.startsWith("/app/planos")) return "billing";
   if (path.startsWith("/app/conta")) return "conta";
-  if (path.startsWith("/app/lote")) return "lot-detail";
+  if (path.startsWith("/app/leiloes/") || path.startsWith("/app/lote")) return "lot-detail";
   return "dashboard";
 }
 
@@ -65,7 +65,7 @@ function AppShell({ path, navigate }: AppShellProps) {
 
   function handleSelectLot(lot: ReceitaLeilaoLot) {
     setSelectedLot(lot);
-    go("/app/lote");
+    go(`/app/leiloes/${lot.id}`);
   }
 
   const displayName =
@@ -213,7 +213,7 @@ function AppShell({ path, navigate }: AppShellProps) {
           )}
           {route === "lot-detail" &&
             (selectedLot ? (
-              <LotDetailPage lot={selectedLot} onBack={() => go("/app")} />
+              <LotDetailPage lot={selectedLot} onBack={() => go("/app")} onAsk={goToSearch} />
             ) : (
               <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />
             ))}
