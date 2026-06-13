@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ShieldCheck, X, Zap } from "lucide-react";
+import { Check, Mail, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
 import { stripeLinkFor } from "../../config/stripe";
 import { CouponRedeem } from "../../components/coupon-redeem";
@@ -128,7 +128,12 @@ export function BillingPage() {
                 type="button"
                 onClick={() => handleChoose(plano.id, plano.nome)}
               >
-                {plano.id !== "free" && <Zap size={15} fill="currentColor" aria-hidden="true" />}
+                {/* Ícone reflete a ação real: Zap = checkout imediato; Mail = contato comercial */}
+                {stripeLinkFor(plano.id) !== null ? (
+                  <Zap size={15} fill="currentColor" aria-hidden="true" />
+                ) : plano.id !== "free" ? (
+                  <Mail size={15} aria-hidden="true" />
+                ) : null}
                 {plano.cta}
               </button>
             </article>

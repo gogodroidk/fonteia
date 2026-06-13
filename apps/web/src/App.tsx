@@ -95,6 +95,24 @@ const FonteiaVsPlanilhaPage = lazy(() =>
 const FonteiaVsManualPage = lazy(() =>
   import("./app/publico/fonteia-vs-analise-manual").then((m) => ({ default: m.FonteiaVsManualPage })),
 );
+const ComoParticiparPage = lazy(() =>
+  import("./app/publico/como-participar-leilao-receita-federal").then((m) => ({ default: m.ComoParticiparPage })),
+);
+const MelhoresFerramentasPage = lazy(() =>
+  import("./app/publico/melhores-ferramentas-analisar-leiloes").then((m) => ({ default: m.MelhoresFerramentasPage })),
+);
+const BlogIndexPage = lazy(() =>
+  import("./app/publico/blog/page").then((m) => ({ default: m.BlogIndexPage })),
+);
+const PostValeAPenaPage = lazy(() =>
+  import("./app/publico/blog/leilao-receita-vale-a-pena").then((m) => ({ default: m.PostValeAPenaPage })),
+);
+const PostErrosIniciantesPage = lazy(() =>
+  import("./app/publico/blog/erros-iniciantes-leilao").then((m) => ({ default: m.PostErrosIniciantesPage })),
+);
+const PostComoLerEditalPage = lazy(() =>
+  import("./app/publico/blog/como-ler-edital-leilao").then((m) => ({ default: m.PostComoLerEditalPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -603,6 +621,12 @@ export function App() {
     path === "/riscos-leiloes-publicos" ? <RiscosLeiloesPage /> :
     path === "/fonteia-vs-planilha" ? <FonteiaVsPlanilhaPage /> :
     path === "/fonteia-vs-analise-manual" ? <FonteiaVsManualPage /> :
+    path === "/como-participar-leilao-receita-federal" ? <ComoParticiparPage /> :
+    path === "/melhores-ferramentas-analisar-leiloes" ? <MelhoresFerramentasPage /> :
+    path === "/blog" ? <BlogIndexPage /> :
+    path === "/blog/leilao-receita-vale-a-pena" ? <PostValeAPenaPage /> :
+    path === "/blog/erros-iniciantes-leilao" ? <PostErrosIniciantesPage /> :
+    path === "/blog/como-ler-edital-leilao" ? <PostComoLerEditalPage /> :
     null;
 
   const inApp = path.startsWith("/app");

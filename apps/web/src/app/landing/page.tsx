@@ -417,6 +417,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               {[
                 { label: "Como funciona", href: "#como-funciona" },
                 { label: "Planos", href: "#planos" },
+                { label: "Dúvidas", href: "#faq" },
               ].map((link) => (
                 <a
                   key={link.href}
@@ -545,10 +546,10 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   maxWidth: 520,
                 }}
               >
-                A Fonte.ia organiza cada lote de leilão da Receita Federal com os dados
+                A Fonte.ia reúne os lotes dos leilões da Receita Federal com os dados
                 oficiais — lance mínimo, prazo, quem pode participar — e entrega{" "}
                 <strong style={{ color: "var(--t-hi)" }}>score de oportunidade por regra e rastreabilidade até a fonte</strong>{" "}
-                para você decidir com fundamento, não com intuição.
+                para você analisar com fundamento, não com intuição.
               </p>
             </Reveal>
 
@@ -560,7 +561,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   onClick={onLogin}
                 >
                   <Zap size={18} fill="currentColor" aria-hidden="true" />
-                  Começar agora
+                  Experimentar 7 dias grátis
                 </button>
                 <a
                   href="#como-funciona"
@@ -569,6 +570,9 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   Como funciona <ArrowRight size={16} aria-hidden="true" />
                 </a>
               </div>
+              <p className="tiny muted" style={{ marginTop: 10 }}>
+                Sem cartão até o fim do teste · Cancele quando quiser
+              </p>
             </Reveal>
 
           </div>
@@ -901,7 +905,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="display"
               style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
             >
-              Leilão judicial não precisa<br />dar medo.
+              Leilão da Receita não precisa<br />dar medo.
             </h2>
           </Reveal>
 
@@ -1040,7 +1044,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               Do clique ao arremate em 3 passos
             </h2>
             <p className="muted" style={{ fontSize: 16, marginTop: 14, maxWidth: 520, margin: "14px auto 0" }}>
-              Para o investidor que exige rigor. E para quem está começando e não quer depender de sorte.
+              Para quem nunca arrematou nada e quer entender o que está comprando. E para quem opera há anos e quer dado oficial sem a correria manual.
             </p>
           </Reveal>
 
@@ -1293,21 +1297,15 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   </div>
 
                   <div style={{ marginBottom: 22 }}>
-                    {plano.preco === 0 ? (
-                      <div
-                        className="display"
-                        style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em" }}
-                      >
-                        Grátis
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                        <span className="display" style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em" }}>
-                          {formatBRL(plano.preco)}
-                        </span>
-                        <span className="muted small">{plano.periodo}</span>
-                      </div>
-                    )}
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                      <span className="display" style={{ fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em" }}>
+                        {formatBRL(plano.preco)}
+                      </span>
+                      <span className="muted small">{plano.periodo}</span>
+                    </div>
+                    <p className="tiny muted" style={{ marginTop: 6 }}>
+                      7 dias grátis · só paga depois · cancele quando quiser
+                    </p>
                   </div>
 
                   <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 11 }}>
@@ -1419,18 +1417,18 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="display"
               style={{ fontSize: "clamp(30px,4vw,48px)", lineHeight: 1.05, margin: "0 0 18px" }}
             >
-              Comece hoje.
-              <br />
+              Veja os leilões da Receita<br />
               <span
                 className="clip-text"
                 style={{ backgroundImage: "linear-gradient(100deg,var(--brand-2),var(--accent-2))" }}
               >
-                O próximo lote é seu.
+                com dado oficial e IA.
               </span>
             </h2>
             <p className="muted" style={{ fontSize: 16, marginBottom: 36, lineHeight: 1.6 }}>
-              Acesse os leilões da Receita Federal, passe qualquer lote no Raio-X
-              e decida antes do concorrente saber que ele existe.
+              Acesse cada lote com lance mínimo, prazo e elegibilidade direto
+              da fonte — e use o Raio-X com IA para ler o edital antes de propor.
+              7 dias grátis, sem cartão na hora do cadastro.
             </p>
             <button
               type="button"
@@ -1439,7 +1437,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               style={{ fontSize: 16, padding: "15px 32px" }}
             >
               <Zap size={18} fill="currentColor" aria-hidden="true" />
-              Começar agora
+              Experimentar grátis por 7 dias
             </button>
             <p className="tiny muted" style={{ marginTop: 16 }}>
               Sem contrato · Cancele quando quiser · Dados de fontes oficiais

@@ -252,7 +252,7 @@ export const OVERVIEW_STATS: Record<"oportunidades" | "economia" | "rastreadas" 
     spark: [69, 62, 53, 48, 51, 62, 80, 99, 111, 114, 108, 98, 88, 85],
   },
   economia: {
-    label: "Economia potencial mapeada",
+    label: "Valor total de lance mínimo monitorado",
     value: 8.6,
     suffix: "M",
     prefix: "R$ ",
@@ -277,27 +277,29 @@ export const OVERVIEW_STATS: Record<"oportunidades" | "economia" | "rastreadas" 
 // DEPOIMENTOS
 // ---------------------------------------------------------------------------
 
+// Depoimentos sem métricas financeiras fabricadas — foco em benefício real e rastreabilidade.
+// "ganho" mantido no tipo mas deixado vazio para não exibir cifras inventadas.
 export const DEPOIMENTOS: Depoimento[] = [
   {
     nome: "Mariana Alencar",
-    papel: "Importadora · 8 anos no mercado",
-    txt: "Acompanho leilões da Receita há anos. A Fonte.ia me entrega o lote já cruzado com o edital e o laudo — decido em minutos o que antes levava uma tarde inteira.",
+    papel: "Importadora · atuante em leilões da Receita",
+    txt: "Acompanho leilões da Receita há anos. A Fonte.ia me entrega o lote já cruzado com o edital e o laudo — tudo com a fonte citada. Ganho clareza antes de propor qualquer lance.",
     avatar: "MA",
-    ganho: "R$ 506 mil em economia/ano",
+    ganho: "",
   },
   {
     nome: "Dr. Rafael Tavares",
     papel: "Advogado tributarista",
-    txt: "A rastreabilidade até a fonte oficial é o que faltava. Anexo o relatório direto no parecer com segurança jurídica. Virou ferramenta padrão do escritório.",
+    txt: "A rastreabilidade até a fonte oficial é o que faltava. Cada dado vem com a URL e a data de coleta — posso anexar o relatório direto no parecer com respaldo documental.",
     avatar: "RT",
-    ganho: "11h economizadas/semana",
+    ganho: "",
   },
   {
     nome: "Carlos Bittencourt",
     papel: "Despachante aduaneiro",
-    txt: "Os alertas de novos editais da Receita mudaram minha operação. Não perco mais prazo de leilão eletrônico e fecho lotes com margem que antes passava batido.",
+    txt: "Os alertas de novos editais da Receita me ajudam a não perder prazo. Tenho as informações básicas do lote reunidas antes de abrir o portal oficial — poupa tempo na triagem.",
     avatar: "CB",
-    ganho: "3× mais lotes arrematados",
+    ganho: "",
   },
 ];
 

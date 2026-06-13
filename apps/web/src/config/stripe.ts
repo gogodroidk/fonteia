@@ -15,10 +15,20 @@
 export const STRIPE_PUBLISHABLE_KEY =
   "pk_live_51Sei4m4zjAI9pGd7PT2FgBYrpeUujaeQPEqXQ6J9X6yVnaZtaMXAXdhzGYhqXibJsYDg9hh32lHcOkF2iHMHYw3I007IWdiHIC";
 
-/** Payment Links por id de plano (bate com PLANOS em data/leiloes-seed.ts). */
+/**
+ * Payment Links por id de plano (bate com PLANOS em data/leiloes-seed.ts).
+ *
+ * O plano Corporativo NÃO tem Payment Link aqui por design:
+ * o CTA em PLANOS é "Falar com vendas" (contato comercial, não checkout direto).
+ * Ter um Payment Link para ele faria o botão redirecionar ao Stripe cobrando R$597
+ * na hora, quebrando a expectativa do usuário que clicou esperando falar com um humano.
+ * Quando não há link, handleChoose() em billing/page.tsx exibe o painel de contato
+ * com o e-mail comercial — ação e CTA ficam coerentes (honestidade de oferta).
+ */
 export const STRIPE_PAYMENT_LINKS: Record<string, string> = {
   pro: "https://buy.stripe.com/dRm00c4NGgYPdpV8HHasg00", // Profissional — R$ 197/mês
-  corporativo: "https://buy.stripe.com/14A14g1BueQHdpV9LLasg01", // Corporativo — R$ 597/mês
+  // corporativo: removido — CTA é "Falar com vendas", não checkout direto.
+  // Adicione o link aqui SOMENTE se o CTA em leiloes-seed.ts mudar para "Assinar o Corporativo".
 };
 
 /**

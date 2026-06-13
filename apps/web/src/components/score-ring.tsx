@@ -32,7 +32,7 @@ export function ScoreRing({ score, size = "sm" }: ScoreRingProps) {
         cy={dim / 2}
         r={r}
         fill="none"
-        stroke="#e8f5ef"
+        stroke="var(--surface-2)"
         strokeWidth={strokeW}
       />
       {/* Progress */}
