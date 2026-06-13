@@ -6,18 +6,31 @@ import {
   CalendarClock,
   CheckSquare,
   ExternalLink,
+  Loader2,
   MapPin,
   Printer,
+  Send,
   ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
-import { DemoDataBanner } from "../../components/demo-data-banner";
 import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
 import { Bar, FonteDots, riscoBadge } from "../../components/ui";
+import { getConfiguredApiUrl, trimTrailingSlash } from "../../lib/api-client";
+
+// Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -25,8 +38,6 @@ interface LotDetailPageProps {
   lot: ReceitaLeilaoLot;
   onBack: () => void;
   onAsk?: ((question: string) => void) | undefined;
-  isDemo?: boolean | undefined;
-  dataMessage?: string | undefined;
 }
 
 // ─── Alert modal state ───────────────────────────────────────────────────────
@@ -304,8 +315,6 @@ export function LotDetailPage({
   lot,
   onBack,
   onAsk: _onAsk,
-  isDemo = false,
-  dataMessage,
 }: LotDetailPageProps) {
   const scoring = scoreReceitaLeilaoLot(lot);
   const days = daysUntilDeadline(lot.proposalDeadline);
@@ -322,9 +331,70 @@ export function LotDetailPage({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Assistente de IA (Raio-X do lote)
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaAnswer, setIaAnswer] = useState<string | null>(null);
+  const [iaModel, setIaModel] = useState<string | null>(null);
+  const [iaDisclaimer, setIaDisclaimer] = useState<string | null>(null);
+  const [iaError, setIaError] = useState<string | null>(null);
+  const [iaUnavailable, setIaUnavailable] = useState(false);
+  const [iaQuestion, setIaQuestion] = useState("");
+
+  async function runRaioX(question?: string) {
+    setIaLoading(true);
+    setIaError(null);
+    setIaUnavailable(false);
+    try {
+      const base = getConfiguredApiUrl();
+      if (!base) {
+        throw new Error("Backend nao configurado.");
+      }
+      const trimmed = question?.trim();
+      const response = await fetch(`${trimTrailingSlash(base)}/ia/raio-x`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(trimmed ? { lot, question: trimmed } : { lot }),
+      });
+      const data = (await response.json()) as {
+        answer?: string;
+        model?: string;
+        disclaimer?: string;
+        error?: string;
+        message?: string;
+      };
+
+      if (response.status === 503) {
+        setIaUnavailable(true);
+        setIaAnswer(null);
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(data.message ?? data.error ?? `Erro ${response.status}`);
+      }
+
+      setIaAnswer(data.answer ?? null);
+      setIaModel(data.model ?? null);
+      setIaDisclaimer(data.disclaimer ?? null);
+    } catch (error) {
+      setIaError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIaLoading(false);
+    }
+  }
+
   useEffect(() => {
     setAlertName(`Alerta — Edital ${lot.edital}`);
   }, [lot.edital]);
+
+  // Reinicia o assistente ao trocar de lote
+  useEffect(() => {
+    setIaAnswer(null);
+    setIaModel(null);
+    setIaDisclaimer(null);
+    setIaError(null);
+    setIaUnavailable(false);
+    setIaQuestion("");
+  }, [lot.id]);
 
   useEffect(() => {
     return () => {
@@ -373,16 +443,6 @@ export function LotDetailPage({
 
       {/* Screen content */}
       <div className="lot-detail no-print">
-        {isDemo ? (
-          <DemoDataBanner
-            title="Lote em modo demonstracao"
-            message={
-              dataMessage ??
-              "Este lote veio de amostras locais. Use para validar a experiencia, nao para decisao real."
-            }
-          />
-        ) : null}
-
         {/* ── Main column ─────────────────────────────────────────────────── */}
         <div className="lot-detail-main">
           {/* Back button */}
@@ -927,7 +987,7 @@ export function LotDetailPage({
           {/* Separator */}
           <hr className="divide" />
 
-          {/* AI assistant placeholder */}
+          {/* AI assistant — Raio-X com IA (Claude via Worker fonteia-api) */}
           <div style={{ padding: "var(--s-4) var(--s-5)" }}>
             <div
               style={{
@@ -942,8 +1002,8 @@ export function LotDetailPage({
                   width: 32,
                   height: 32,
                   borderRadius: "var(--r-md)",
-                  background: "var(--n-100)",
-                  color: "var(--n-400)",
+                  background: iaAnswer ? "var(--g-50)" : "var(--n-100)",
+                  color: iaAnswer ? "var(--g-600)" : "var(--n-400)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -957,30 +1017,186 @@ export function LotDetailPage({
                   Assistente Fonte.ia
                 </strong>
                 <span style={{ fontSize: "0.75rem", color: "var(--n-400)" }}>
-                  Em ativacao
+                  {iaLoading
+                    ? "Analisando o lote…"
+                    : iaAnswer
+                    ? "Raio-X gerado"
+                    : iaUnavailable
+                    ? "Em ativacao"
+                    : "Raio-X do lote com IA"}
                 </span>
               </div>
             </div>
-            <div
-              style={{
-                background: "var(--n-50)",
-                border: "1px dashed var(--n-200)",
-                borderRadius: "var(--r-md)",
-                padding: "var(--s-4)",
-                fontSize: "0.82rem",
-                color: "var(--n-500)",
-                lineHeight: 1.55,
-                textAlign: "center",
-              }}
-            >
-              <p style={{ margin: "0 0 var(--s-2)" }}>
-                Em breve o assistente responde com base nas evidencias oficiais do edital.
+
+            {/* Estado: carregando */}
+            {iaLoading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "var(--s-2)",
+                  padding: "var(--s-5)",
+                  background: "var(--n-50)",
+                  border: "1px solid var(--n-100)",
+                  borderRadius: "var(--r-md)",
+                  fontSize: "0.82rem",
+                  color: "var(--n-500)",
+                }}
+              >
+                <Loader2 aria-hidden="true" size={16} className="spin" />
+                Lendo os dados oficiais e montando o Raio-X…
+              </div>
+            ) : iaAnswer ? (
+              /* Estado: resposta da IA */
+              <div
+                style={{
+                  background: "var(--g-50)",
+                  border: "1px solid var(--n-100)",
+                  borderLeft: "3px solid var(--g-500)",
+                  borderRadius: "0 var(--r-md) var(--r-md) 0",
+                  padding: "var(--s-4)",
+                  fontSize: "0.84rem",
+                  lineHeight: 1.6,
+                  color: "var(--n-700)",
+                }}
+              >
+                {iaAnswer.split("\n").map((line, i) =>
+                  line.trim() === "" ? (
+                    <div key={i} style={{ height: "var(--s-2)" }} />
+                  ) : (
+                    <p key={i} style={{ margin: "0 0 var(--s-2)" }}>
+                      {renderInline(line)}
+                    </p>
+                  ),
+                )}
+                {iaDisclaimer ? (
+                  <p
+                    style={{
+                      margin: "var(--s-3) 0 0",
+                      fontSize: "0.7rem",
+                      color: "var(--n-400)",
+                      borderTop: "1px solid var(--n-100)",
+                      paddingTop: "var(--s-2)",
+                    }}
+                  >
+                    {iaDisclaimer}
+                    {iaModel ? ` · Modelo: ${iaModel}` : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : iaUnavailable ? (
+              /* Estado: IA ainda nao configurada (honesto) */
+              <div
+                style={{
+                  background: "var(--n-50)",
+                  border: "1px dashed var(--n-200)",
+                  borderRadius: "var(--r-md)",
+                  padding: "var(--s-4)",
+                  fontSize: "0.82rem",
+                  color: "var(--n-500)",
+                  lineHeight: 1.55,
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ margin: "0 0 var(--s-2)" }}>
+                  O assistente de IA ainda nao foi ativado nesta conta.
+                </p>
+                <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--n-400)" }}>
+                  Os dados acima vem direto da fonte oficial. A analise por IA liga assim que a
+                  chave da Anthropic for configurada no servidor.
+                </p>
+              </div>
+            ) : (
+              /* Estado: ocioso — convida a gerar */
+              <div
+                style={{
+                  background: "var(--n-50)",
+                  border: "1px solid var(--n-100)",
+                  borderRadius: "var(--r-md)",
+                  padding: "var(--s-4)",
+                  fontSize: "0.82rem",
+                  color: "var(--n-600)",
+                  lineHeight: 1.55,
+                }}
+              >
+                <p style={{ margin: "0 0 var(--s-3)" }}>
+                  Gere uma leitura em linguagem simples deste lote — o que e, quem pode dar lance,
+                  prazo, valor de partida e o que conferir no edital.
+                </p>
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    void runRaioX();
+                  }}
+                  type="button"
+                  style={{
+                    width: "100%",
+                    justifyContent: "center",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                  }}
+                >
+                  <Sparkles aria-hidden="true" size={15} />
+                  Gerar Raio-X com IA
+                </button>
+              </div>
+            )}
+
+            {/* Erro */}
+            {iaError ? (
+              <p
+                style={{
+                  margin: "var(--s-2) 0 0",
+                  fontSize: "0.75rem",
+                  color: "var(--color-error)",
+                }}
+              >
+                Nao consegui gerar agora: {iaError}
               </p>
-              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--n-400)" }}>
-                Nenhuma resposta de IA esta ativa neste momento. Todos os dados exibidos acima
-                vem diretamente da fonte oficial.
-              </p>
-            </div>
+            ) : null}
+
+            {/* Pergunta livre — disponivel quando a IA respondeu ao menos uma vez */}
+            {iaAnswer ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!iaLoading && iaQuestion.trim()) {
+                    void runRaioX(iaQuestion);
+                  }
+                }}
+                style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-3)" }}
+              >
+                <input
+                  type="text"
+                  value={iaQuestion}
+                  onChange={(e) => {
+                    setIaQuestion(e.target.value);
+                  }}
+                  placeholder="Pergunte algo sobre este lote…"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: "8px 10px",
+                    fontSize: "0.8rem",
+                    border: "1px solid var(--n-200)",
+                    borderRadius: "var(--r-md)",
+                    background: "var(--surface, #fff)",
+                    color: "var(--n-900)",
+                  }}
+                />
+                <button
+                  className="ghost-button"
+                  type="submit"
+                  disabled={iaLoading || !iaQuestion.trim()}
+                  aria-label="Enviar pergunta"
+                  style={{ flexShrink: 0 }}
+                >
+                  <Send aria-hidden="true" size={15} />
+                </button>
+              </form>
+            ) : null}
           </div>
 
           {/* Separator */}

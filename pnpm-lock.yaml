@@ -211,6 +211,12 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.19.20)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  services/api:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   services/billing:
     dependencies:
       '@fonteia/domain':

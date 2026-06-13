@@ -1,5 +1,4 @@
 export {
-  SAMPLE_LEILAO_LOTS,
   getLeilaoLotById,
   listLeilaoLots,
   loadLeiloesLots,

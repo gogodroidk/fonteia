@@ -1,0 +1,23 @@
+name = "fonteia-api"
+main = "src/worker.ts"
+compatibility_date = "2026-06-10"
+
+# Este Worker e o backend publico (somente leitura) do app:
+#   GET  /leiloes/lotes       -> lotes ao vivo da Receita (sem segredo)
+#   GET  /leiloes/lotes/:id   -> um lote
+#   POST /ia/raio-x           -> analise por IA (requer ANTHROPIC_API_KEY)
+#   GET  /health
+#
+# Deploy:  pnpm --filter @fonteia/api-worker run deploy
+#   (ou: cd services/api && wrangler deploy --config wrangler.toml — o --config
+#    e obrigatorio; sem ele o wrangler pega o wrangler.jsonc da raiz, que e o app web)
+# URL de producao esperada: https://fonteia-api.<sua-conta>.workers.dev
+#
+# Para ligar a IA (opcional):
+#   wrangler secret put ANTHROPIC_API_KEY      # cole a chave sk-ant-...
+#
+# Vars opcionais (dashboard ou [vars] abaixo):
+#   ANTHROPIC_MODEL = "claude-opus-4-8"   # padrao; troque por claude-haiku-4-5 p/ custo menor
+
+# [vars]
+# ANTHROPIC_MODEL = "claude-opus-4-8"

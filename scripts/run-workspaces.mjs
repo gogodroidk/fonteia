@@ -21,6 +21,7 @@ const workspaceDirs = [
   "services/search-indexer",
   "services/alerting",
   "services/billing",
+  "services/api",
   "apps/api",
   "apps/web",
   "apps/mobile",
