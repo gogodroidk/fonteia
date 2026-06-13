@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fonte.ia — Logo System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #EDE9E3; }
+  * { box-sizing: border-box; }
+  .cap { font-family: 'Figtree', sans-serif; }
+  .lbl { font-family: 'Figtree', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; color: #5A6B82; }
+  .note { font-family: 'Figtree', sans-serif; font-size: 12.5px; line-height: 1.5; color: #6B7A90; }
+  .frameTitle { font-family: 'Figtree', sans-serif; font-size: 13px; font-weight: 700; color: #0B2240; letter-spacing: -0.01em; }
+  .frameSub { font-family: 'Figtree', sans-serif; font-size: 12px; font-weight: 500; color: #9AA8BC; }
+  .swatch { font-family: 'Figtree', sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="logo.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+// ---- small presentational helpers ----
+function Frame({ children, bg = '#FFFFFF', pad = 28, h, center = true }) {
+  return (
+    <div style={{
+      width: '100%', height: h, background: bg, padding: pad,
+      display: 'flex', flexDirection: 'column',
+      alignItems: center ? 'center' : 'flex-start',
+      justifyContent: 'center', gap: 14,
+    }}>{children}</div>
+  );
+}
+function Caption({ title, sub }) {
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div className="frameTitle">{title}</div>
+      {sub && <div className="frameSub" style={{ marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function Swatch({ name, hex, sub, dark }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 132 }}>
+      <div style={{ height: 76, borderRadius: 12, background: hex, border: '1px solid rgba(11,34,64,0.08)' }} />
+      <div className="swatch">
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0B2240' }}>{name}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 500, color: '#9AA8BC', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{hex.toUpperCase()}</div>
+        {sub && <div style={{ fontSize: 11, color: '#9AA8BC', marginTop: 1 }}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// clear-space + favicon demonstrations
+function Favicon({ px, label }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9 }}>
+      <FTile s={px} bg="grad" v="node" />
+      <div className="frameSub">{label}</div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+
+      {/* ============ THE MARK — explorations ============ */}
+      <DCSection id="mark" title="The mark" subtitle="One concept — an “F” built from data rows with a verified pinpoint — in four executions. ‘A · Node’ is the recommended lead.">
+        <DCArtboard id="m-node" label="A · Node  (recommended)" width={300} height={300}>
+          <Frame h="100%">
+            <FSymbol v="node" s={120} />
+            <Caption title="Node" sub="Verified source point" />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="m-strata" label="B · Strata" width={300} height={300}>
+          <Frame h="100%">
+            <FSymbol v="strata" s={120} />
+            <Caption title="Strata" sub="Layered data rows" />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="m-beacon" label="C · Beacon" width={300} height={300}>
+          <Frame h="100%">
+            <FSymbol v="beacon" s={120} />
+            <Caption title="Beacon" sub="A source emitting signal" />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="m-linked" label="D · Linked" width={300} height={300}>
+          <Frame h="100%">
+            <FSymbol v="linked" s={120} />
+            <Caption title="Linked" sub="Traceable connection" />
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ============ PRIMARY LOCKUPS ============ */}
+      <DCSection id="lockups" title="Primary lockups" subtitle="Horizontal is the default signature; stacked is for square / centered contexts.">
+        <DCArtboard id="lk-h" label="Horizontal — primary" width={520} height={260}>
+          <Frame h="100%"><LockupH symS={64} wordS={48} /></Frame>
+        </DCArtboard>
+        <DCArtboard id="lk-v" label="Stacked" width={360} height={320}>
+          <Frame h="100%"><LockupV symS={84} wordS={40} /></Frame>
+        </DCArtboard>
+        <DCArtboard id="lk-word" label="Wordmark only" width={360} height={200}>
+          <Frame h="100%"><Wordmark size={52} /></Frame>
+        </DCArtboard>
+        <DCArtboard id="lk-clear" label="Clear space & min size" width={360} height={320}>
+          <Frame h="100%" bg="#F7F9FC">
+            <div style={{ position: 'relative', padding: 28, border: '1px dashed #C7D2E0', borderRadius: 8 }}>
+              <FSymbol v="node" s={84} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, marginTop: 6 }}>
+              <FSymbol v="node" s={40} />
+              <FSymbol v="node" s={24} />
+              <FSymbol v="node" s={16} />
+            </div>
+            <div className="note" style={{ textAlign: 'center' }}>Clears at 16px · keep padding ≥ the stem width</div>
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ============ COLOR & REVERSE ============ */}
+      <DCSection id="color" title="Color, mono & reverse" subtitle="The system holds up in full color, single-ink and knocked-out white.">
+        <DCArtboard id="c-light" label="On light" width={420} height={230}>
+          <Frame h="100%"><LockupH symS={56} wordS={42} /></Frame>
+        </DCArtboard>
+        <DCArtboard id="c-dark" label="On navy" width={420} height={230}>
+          <Frame h="100%" bg="#0B2240">
+            <LockupH symS={56} wordS={42} ink="#FFFFFF" accent="#2DD4BF" sub="#8FA0B8" />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="c-mono" label="Single ink" width={420} height={230}>
+          <Frame h="100%"><LockupH symS={56} wordS={42} accent="#0B2240" sub="#6B7A90" /></Frame>
+        </DCArtboard>
+        <DCArtboard id="c-rev" label="Reverse (accent on tint)" width={420} height={230}>
+          <Frame h="100%" bg="#0E3B6E">
+            <LockupH symS={56} wordS={42} ink="#FFFFFF" accent="#3DD0BC" sub="#9DB6D6" />
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="c-palette" label="Palette" width={620} height={230}>
+          <Frame h="100%" center={false} pad={30}>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
+              <Swatch name="Ink" hex="#0B2240" sub="Primary / text" />
+              <Swatch name="Brand Blue" hex="#1D5FE0" sub="Links / actions" />
+              <Swatch name="Teal" hex="#14BBA4" sub="Accent / .ia" />
+              <Swatch name="Mist" hex="#F3F6FB" sub="Surface" />
+              <Swatch name="Hairline" hex="#E4EAF2" sub="Borders" />
+            </div>
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ============ APP ICON & FAVICON ============ */}
+      <DCSection id="icon" title="App icon & favicon" subtitle="Native rounded-square tile — the pinpoint glows in teal on deep navy.">
+        <DCArtboard id="ic-tile" label="App icon" width={300} height={300}>
+          <Frame h="100%" bg="#F7F9FC">
+            <div style={{ filter: 'drop-shadow(0 12px 28px rgba(11,34,64,0.22))' }}>
+              <FTile s={168} bg="grad" v="node" />
+            </div>
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="ic-fav" label="Favicon scaling" width={300} height={300}>
+          <Frame h="100%" bg="#F7F9FC">
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22 }}>
+              <Favicon px={64} label="64" />
+              <Favicon px={32} label="32" />
+              <Favicon px={16} label="16" />
+            </div>
+          </Frame>
+        </DCArtboard>
+        <DCArtboard id="ic-variants" label="Tile variants" width={300} height={300}>
+          <Frame h="100%" bg="#F7F9FC">
+            <div style={{ display: 'flex', gap: 18 }}>
+              <FTile s={96} bg="grad" v="node" />
+              <FTile s={96} bg="#FFFFFF" v="node" mono={false} />
+            </div>
+            <div className="note">Dark tile (default) · light tile for white UIs</div>
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ============ IN CONTEXT ============ */}
+      <DCSection id="context" title="In context" subtitle="How the identity behaves across the surfaces it has to live on.">
+        {/* Dashboard nav */}
+        <DCArtboard id="ctx-app" label="SaaS dashboard" width={720} height={460}>
+          <div style={{ width: '100%', height: '100%', background: '#F4F7FB', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ height: 60, background: '#FFFFFF', borderBottom: '1px solid #E4EAF2', display: 'flex', alignItems: 'center', padding: '0 22px', gap: 20 }}>
+              <LockupH symS={26} wordS={20} />
+              <div style={{ flex: 1 }}></div>
+              <div style={{ display: 'flex', gap: 18 }} className="lbl">
+                <span>Leilões</span><span>Fontes</span><span>Relatórios</span>
+              </div>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#0B2240', marginLeft: 6 }}></div>
+            </div>
+            <div style={{ display: 'flex', flex: 1 }}>
+              <div style={{ width: 168, background: '#FFFFFF', borderRight: '1px solid #E4EAF2', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {['Visão geral','Leilões ativos','Fontes oficiais','Rastreabilidade','Relatórios'].map((t,i)=>(
+                  <div key={t} className="lbl" style={{ color: i===1 ? '#1D5FE0' : '#8696AB', fontWeight: i===1?700:600 }}>{t}</div>
+                ))}
+              </div>
+              <div style={{ flex: 1, padding: 24 }}>
+                <div className="cap" style={{ fontSize: 20, fontWeight: 700, color: '#0B2240', letterSpacing: '-0.01em' }}>Leilões judiciais</div>
+                <div className="note" style={{ marginTop: 4 }}>Dados oficiais verificados · rastreáveis até a fonte</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
+                  {[0,1,2,3].map(i=>(
+                    <div key={i} style={{ background: '#FFFFFF', border: '1px solid #E4EAF2', borderRadius: 12, padding: 16, height: 96 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <FSymbol v="node" s={18} />
+                        <div style={{ width: 64, height: 7, borderRadius: 4, background: '#E4EAF2' }}></div>
+                      </div>
+                      <div style={{ width: '70%', height: 9, borderRadius: 4, background: '#EEF2F8', marginTop: 16 }}></div>
+                      <div style={{ display:'inline-block', marginTop: 14, padding:'4px 10px', borderRadius: 999, background:'#E7F8F4', color:'#0E8C7C', fontSize: 11, fontWeight:700 }} className="cap">Verificado</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </DCArtboard>
+
+        {/* Legal report header */}
+        <DCArtboard id="ctx-report" label="Legal report" width={440} height={460}>
+          <div style={{ width:'100%', height:'100%', background:'#FFFFFF', padding: 0, display:'flex', flexDirection:'column' }}>
+            <div style={{ height: 6, background: 'linear-gradient(90deg,#0B2240,#1D5FE0 70%,#14BBA4)' }}></div>
+            <div style={{ padding: '26px 30px', borderBottom: '1px solid #EEF2F8', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <LockupH symS={30} wordS={23} />
+              <div className="frameSub" style={{ textAlign:'right' }}>Relatório de<br/>rastreabilidade</div>
+            </div>
+            <div style={{ padding: '24px 30px' }}>
+              <div className="cap" style={{ fontSize: 19, fontWeight:700, color:'#0B2240' }}>Leilão judicial nº 0042‑87</div>
+              <div className="note" style={{ marginTop:6 }}>Fonte: Diário de Justiça Eletrônico · 11 jun 2026</div>
+              {[88,72,94,60,80].map((w,i)=>(
+                <div key={i} style={{ width: w+'%', height: 9, borderRadius: 5, background: i%2? '#F2F5FA':'#EEF2F8', marginTop: i?12:22 }}></div>
+              ))}
+              <div style={{ marginTop: 24, padding: 16, borderRadius: 12, background:'#F7F9FC', border:'1px solid #E4EAF2', display:'flex', gap:12, alignItems:'center' }}>
+                <FSymbol v="node" s={26} />
+                <div className="note" style={{ color:'#5A6B82' }}><b style={{color:'#0B2240'}}>Verificado na fonte</b> — cada dado deste relatório é rastreável ao documento oficial.</div>
+              </div>
+            </div>
+          </div>
+        </DCArtboard>
+
+        {/* Social avatar + presentation */}
+        <DCArtboard id="ctx-social" label="Social & presentation" width={440} height={460}>
+          <Frame h="100%" bg="#F7F9FC" pad={26}>
+            <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+              <FTile s={64} bg="grad" v="node" />
+              <div>
+                <div className="cap" style={{ fontSize:16, fontWeight:700, color:'#0B2240' }}>Fonte.ia</div>
+                <div className="frameSub">@fonte.ia · by Olli</div>
+              </div>
+            </div>
+            <div style={{ width:'100%', height: 1, background:'#E4EAF2', margin:'6px 0' }}></div>
+            <div style={{ width:'100%', borderRadius:16, overflow:'hidden', background:'#0B2240', padding:'34px 30px', display:'flex', flexDirection:'column', gap:14, position:'relative' }}>
+              <LockupH symS={34} wordS={26} ink="#FFFFFF" accent="#2DD4BF" sub="#8FA0B8" />
+              <div className="cap" style={{ color:'#FFFFFF', fontSize:22, fontWeight:700, letterSpacing:'-0.01em', lineHeight:1.2, maxWidth: 300 }}>
+                Dados públicos oficiais em decisões <span style={{color:'#2DD4BF'}}>claras e rastreáveis</span>.
+              </div>
+              <div className="note" style={{ color:'#8FA0B8' }}>Title slide · social card</div>
+            </div>
+          </Frame>
+        </DCArtboard>
+      </DCSection>
+
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

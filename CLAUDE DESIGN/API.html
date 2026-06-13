@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fonte.ia — API de Dados Públicos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Figtree', system-ui, sans-serif; background: #070C16; color: #EAF1FB; -webkit-font-smoothing: antialiased; }
+code, pre, .mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+/* tokens */
+:root {
+  --brand: #1D5FE0; --brand-2: #3D8BFF; --accent: #14CBB1; --accent-2: #2DD4BF;
+  --ok: #10B981; --warn: #F59E0B; --danger: #EF4444;
+  --ink: #0B2240; --surface: #0E1626; --surface-2: #111C30; --elevated: #16223A;
+  --border: rgba(255,255,255,.08); --border-2: rgba(255,255,255,.13);
+  --t-hi: #EAF1FB; --t-mid: #9FB0C8; --t-low: #647693;
+  --r: 12px; --shadow: 0 8px 32px rgba(0,0,0,.45);
+}
+
+/* layout */
+.page { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+section { padding: 80px 0; }
+section + section { border-top: 1px solid var(--border); }
+
+/* NAV */
+nav.top { position: fixed; top: 0; left: 0; right: 0; z-index: 50; border-bottom: 1px solid transparent; transition: all .3s; }
+nav.top.scrolled { background: rgba(7,12,22,.88); backdrop-filter: blur(18px); border-bottom-color: var(--border); }
+.nav-inner { max-width: 1160px; margin: 0 auto; padding: 0 28px; height: 62px; display: flex; align-items: center; gap: 20px; }
+.nav-logo { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+.nav-logo .word { font-size: 19px; font-weight: 700; letter-spacing: -.02em; color: var(--t-hi); }
+.nav-logo .word em { color: var(--accent-2); font-style: normal; }
+.nav-links { display: flex; gap: 26px; margin-left: 24px; }
+.nav-links a { font-size: 14px; font-weight: 600; color: var(--t-mid); text-decoration: none; transition: color .16s; }
+.nav-links a:hover, .nav-links a.active { color: var(--t-hi); }
+.nav-ctas { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 8px; font-family: 'Figtree', sans-serif; font-weight: 600; font-size: 14px; padding: 10px 18px; border-radius: 11px; border: 1px solid transparent; cursor: pointer; text-decoration: none; transition: all .16s; white-space: nowrap; }
+.btn-primary { background: linear-gradient(180deg, var(--brand-2), var(--brand)); color: #fff; box-shadow: 0 6px 20px rgba(29,95,224,.32); }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(29,95,224,.45); }
+.btn-ghost { background: transparent; border-color: var(--border-2); color: var(--t-hi); }
+.btn-ghost:hover { border-color: rgba(255,255,255,.25); background: rgba(255,255,255,.05); }
+.btn-accent { background: linear-gradient(180deg, var(--accent-2), var(--accent)); color: #042320; font-weight: 700; box-shadow: 0 6px 20px rgba(20,203,177,.28); }
+.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(20,203,177,.42); }
+.btn-sm { padding: 8px 14px; font-size: 13px; border-radius: 9px; }
+.btn-lg { padding: 14px 26px; font-size: 15.5px; border-radius: 13px; }
+
+/* HERO */
+.hero { padding: 140px 0 80px; position: relative; overflow: hidden; }
+.hero-bg { position: absolute; inset: 0; pointer-events: none; }
+.orb { position: absolute; border-radius: 50%; filter: blur(70px); }
+.grid-bg { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.032) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.032) 1px, transparent 1px); background-size: 30px 30px; mask-image: radial-gradient(900px at 50% 0%, #000, transparent 70%); }
+.eyebrow { font-size: 11.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-2); display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
+.eyebrow::before { content: ''; width: 18px; height: 2px; background: var(--accent-2); border-radius: 2px; }
+h1 { font-size: clamp(36px, 5vw, 58px); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+h2 { font-size: clamp(26px, 3.4vw, 40px); font-weight: 800; letter-spacing: -.025em; line-height: 1.1; }
+h3 { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.sub { font-size: clamp(15px, 1.6vw, 17px); color: var(--t-mid); line-height: 1.7; max-width: 540px; }
+.gradient-text { background: linear-gradient(100deg, var(--brand-2), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; }
+.badge-accent { background: rgba(45,212,191,.14); color: var(--accent-2); border: 1px solid rgba(45,212,191,.28); }
+.badge-brand { background: rgba(61,139,255,.14); color: var(--brand-2); border: 1px solid rgba(61,139,255,.28); }
+.badge-neutral { background: rgba(255,255,255,.07); color: var(--t-mid); border: 1px solid var(--border); }
+.badge-ok { background: rgba(16,185,129,.14); color: #34D399; border: 1px solid rgba(16,185,129,.28); }
+.badge-soon { background: rgba(245,158,11,.12); color: #FCD34D; border: 1px solid rgba(245,158,11,.25); }
+
+/* CARD */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; transition: border-color .2s, box-shadow .2s; }
+.card:hover { border-color: var(--border-2); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+@media (max-width: 900px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+
+/* CODE BLOCK */
+.code-block { background: #060A12; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.code-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.03); }
+.code-title { font-size: 12.5px; font-weight: 600; color: var(--t-mid); }
+.code-dots { display: flex; gap: 6px; }
+.code-dot { width: 11px; height: 11px; border-radius: 50%; }
+pre { padding: 22px 22px; overflow-x: auto; font-size: 13px; line-height: 1.7; color: #c9d1d9; }
+.c-key { color: #79c0ff; } /* blue — keys */
+.c-str { color: #a5d6ff; } /* light blue — strings */
+.c-num { color: #ffa657; } /* orange — numbers */
+.c-bool { color: #ff7b72; } /* red — bool/null */
+.c-cmt { color: #647693; font-style: italic; } /* comments */
+.c-method { color: #d2a8ff; } /* purple — HTTP method */
+.c-url { color: #2DD4BF; } /* teal — URL */
+.c-header { color: var(--accent-2); }
+
+/* ENDPOINT ROW */
+.endpoint { display: flex; align-items: flex-start; gap: 16px; padding: 16px 0; border-top: 1px solid var(--border); }
+.method { display: inline-flex; align-items: center; justify-content: center; min-width: 54px; padding: 4px 8px; border-radius: 7px; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; font-family: 'JetBrains Mono', monospace; }
+.method-get { background: rgba(16,185,129,.14); color: #34D399; }
+.method-post { background: rgba(61,139,255,.14); color: var(--brand-2); }
+.path { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; color: var(--accent-2); font-weight: 600; }
+.ep-desc { font-size: 13.5px; color: var(--t-mid); margin-top: 3px; }
+
+/* DIVIDER */
+hr { border: none; border-top: 1px solid var(--border); }
+.muted { color: var(--t-mid); }
+.tiny { font-size: 12px; }
+.small { font-size: 13.5px; }
+
+/* reveal */
+.reveal{transform:translateY(18px);transition:opacity .65s,transform .65s}
+.reveal.vis { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top" id="topnav">
+  <div class="nav-inner">
+    <a href="Fonte.ia Vendas.html" class="nav-logo">
+      <svg width="28" height="28" viewBox="0 0 64 64"><rect x="16" y="15" width="7.6" height="34" rx="3.8" fill="#EAF1FB"/><rect x="16" y="15" width="25" height="7.6" rx="3.8" fill="#EAF1FB"/><rect x="16" y="28.6" width="17.5" height="7.6" rx="3.8" fill="#EAF1FB"/><circle cx="47" cy="18.8" r="5" fill="#2DD4BF"/></svg>
+      <div class="word">Fonte<em>.ia</em></div>
+    </a>
+    <div class="nav-links">
+      <a href="Fonte.ia Vendas.html">Leilões</a>
+      <a href="Plataforma.html">Plataforma</a>
+      <a href="API.html" class="active">API</a>
+    </div>
+    <div class="nav-ctas">
+      <a href="Login.html" class="btn btn-ghost btn-sm">Entrar</a>
+      <a href="/cdn-cgi/l/email-protection#19786970597f76776d7c377078" class="btn btn-accent btn-sm">Solicitar acesso à API</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg">
+    <div class="orb" style="width:500px;height:400px;background:#1D5FE0;top:-100px;right:-80px;opacity:.14"></div>
+    <div class="orb" style="width:360px;height:320px;background:#14CBB1;bottom:0;left:-60px;opacity:.10"></div>
+    <div class="grid-bg"></div>
+  </div>
+  <div class="page reveal" style="position:relative">
+    <div class="eyebrow">API REST · JSON · Autenticada · SLA 99,9%</div>
+    <h1>Dados governamentais<br /><span class="gradient-text">prontos para integrar.</span></h1>
+    <p class="sub" style="margin-top:22px">A mesma inteligência que alimenta a plataforma Fonte.ia disponível como API REST. Consulte lotes, scores de risco e rastreabilidade de fontes diretamente no seu sistema.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:32px">
+      <a href="/cdn-cgi/l/email-protection#c8a9b8a188aea7a6bcade6a1a9" class="btn btn-accent btn-lg">Solicitar acesso à API</a>
+      <a href="#endpoints" class="btn btn-ghost btn-lg">Ver endpoints</a>
+    </div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:28px">
+      <span class="badge badge-ok"><span style="width:6px;height:6px;border-radius:50%;background:#34D399;display:inline-block"></span>API em produção</span>
+      <span class="badge badge-accent">REST + JSON</span>
+      <span class="badge badge-brand">Dado 100% rastreável</span>
+      <span class="badge badge-neutral">Plano Corporativo</span>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK STATS -->
+<div style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
+  <div class="page" style="padding:32px 28px">
+    <div class="grid-4">
+      <div class="reveal" style="text-align:center">
+        <div style="font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.025em">373K+</div>
+        <div class="small muted" style="margin-top:5px">Registros indexados</div>
+      </div>
+      <div class="reveal" style="text-align:center;transition-delay:.07s">
+        <div style="font-size:34px;font-weight:900;letter-spacing:-.025em;color:var(--accent-2)">5</div>
+        <div class="small muted" style="margin-top:5px">Fontes governamentais</div>
+      </div>
+      <div class="reveal" style="text-align:center;transition-delay:.14s">
+        <div style="font-size:34px;font-weight:900;letter-spacing:-.025em">&lt;200ms</div>
+        <div class="small muted" style="margin-top:5px">Latência mediana</div>
+      </div>
+      <div class="reveal" style="text-align:center;transition-delay:.21s">
+        <div style="font-size:34px;font-weight:900;letter-spacing:-.025em">99,9%</div>
+        <div class="small muted" style="margin-top:5px">SLA de disponibilidade</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EXAMPLE CALL + RESPONSE -->
+<section>
+  <div class="page">
+    <div class="reveal" style="text-align:center;margin-bottom:50px">
+      <div class="eyebrow" style="justify-content:center">Exemplo de integração</div>
+      <h2>Uma chamada. Toda a inteligência.</h2>
+      <p class="muted" style="margin-top:12px;font-size:15px;max-width:540px;margin-inline:auto">Faça um GET para <code style="color:var(--accent-2);font-size:14px">/lotes/:id</code> e receba o lote completo — score, fontes, custo total e rastreabilidade — num único objeto JSON.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1.05fr;gap:20px;align-items:start">
+      <!-- REQUEST -->
+      <div class="reveal" style="transition-delay:.05s">
+        <div style="font-size:12px;font-weight:700;color:var(--t-low);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Requisição</div>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots"><div class="code-dot" style="background:#ff5f57"></div><div class="code-dot" style="background:#febc2e"></div><div class="code-dot" style="background:#28c840"></div></div>
+            <div class="code-title">curl</div>
+            <span class="badge badge-ok" style="font-size:10.5px;padding:3px 8px">GET</span>
+          </div>
+          <pre><span class="c-cmt"># Buscar análise de um lote</span>
+<span class="c-method">curl</span> -X GET <span class="c-url">https://api.fonte.ia/v1/lotes/RFB-0042-87</span> \
+  -H <span class="c-str">"Authorization: Bearer fia_live_8a2f…3f9a"</span> \
+  -H <span class="c-str">"Content-Type: application/json"</span>
+
+<span class="c-cmt"># Listar lotes com filtros</span>
+<span class="c-method">curl</span> -X GET <span class="c-url">"https://api.fonte.ia/v1/lotes?orgao=rfb&amp;risco=baixo&amp;sort=score"</span> \
+  -H <span class="c-str">"Authorization: Bearer fia_live_8a2f…3f9a"</span></pre>
+        </div>
+      </div>
+      <!-- RESPONSE -->
+      <div class="reveal" style="transition-delay:.1s">
+        <div style="font-size:12px;font-weight:700;color:var(--t-low);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Resposta</div>
+        <div class="code-block">
+          <div class="code-header">
+            <div class="code-dots"><div class="code-dot" style="background:#ff5f57"></div><div class="code-dot" style="background:#febc2e"></div><div class="code-dot" style="background:#28c840"></div></div>
+            <div class="code-title">200 OK · application/json</div>
+            <span class="badge badge-ok" style="font-size:10.5px;padding:3px 8px">200</span>
+          </div>
+          <pre>{
+  <span class="c-key">"id"</span>: <span class="c-str">"RFB-0042-87"</span>,
+  <span class="c-key">"titulo"</span>: <span class="c-str">"Lote 42 — Eletrônicos (Alfândega Santos)"</span>,
+  <span class="c-key">"orgao"</span>: <span class="c-str">"Receita Federal do Brasil"</span>,
+  <span class="c-key">"edital"</span>: <span class="c-str">"RFB 0700100/2026"</span>,
+  <span class="c-key">"score"</span>: <span class="c-num">94</span>,
+  <span class="c-key">"risco"</span>: <span class="c-str">"baixo"</span>,
+  <span class="c-key">"financeiro"</span>: {
+    <span class="c-key">"avaliacao"</span>: <span class="c-num">920000</span>,
+    <span class="c-key">"lance_minimo"</span>: <span class="c-num">414000</span>,
+    <span class="c-key">"desconto_pct"</span>: <span class="c-num">55</span>,
+    <span class="c-key">"tributos_estimados"</span>: <span class="c-num">9200</span>,
+    <span class="c-key">"custo_total"</span>: <span class="c-num">443900</span>,
+    <span class="c-key">"economia_potencial"</span>: <span class="c-num">506000</span>
+  },
+  <span class="c-key">"encerramento"</span>: <span class="c-str">"2026-06-18T14:00:00-03:00"</span>,
+  <span class="c-key">"fontes"</span>: [
+    { <span class="c-key">"sigla"</span>: <span class="c-str">"RFB"</span>, <span class="c-key">"verificado"</span>: <span class="c-bool">true</span>,
+      <span class="c-key">"url_oficial"</span>: <span class="c-str">"https://gov.br/rfb/leilao/RFB-0042-87"</span> }
+  ],
+  <span class="c-key">"link_participacao"</span>: <span class="c-str">"https://licitacoes-e.com.br/…"</span>
+}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ENDPOINTS -->
+<section id="endpoints">
+  <div class="page">
+    <div class="reveal" style="margin-bottom:40px">
+      <div class="eyebrow">Referência</div>
+      <h2>Endpoints disponíveis</h2>
+      <p class="muted" style="margin-top:10px;font-size:15px">Todos retornam JSON. Autenticação via header <code style="color:var(--accent-2)">Authorization: Bearer &lt;token&gt;</code>.</p>
+    </div>
+    <div class="panel reveal" style="padding:0 24px">
+      <div class="endpoint" style="border:none">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/lotes</div>
+          <div class="ep-desc">Lista lotes com suporte a filtros: <code>orgao</code>, <code>tipo</code>, <code>risco</code>, <code>score_min</code>, <code>sort</code>, <code>page</code>, <code>limit</code></div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/lotes/:id</div>
+          <div class="ep-desc">Lote completo: dados financeiros, score, análise de risco e fontes vinculadas</div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/lotes/:id/rastreabilidade</div>
+          <div class="ep-desc">Cadeia completa de fontes oficiais com URLs e datas de verificação</div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/lotes/:id/relatorio</div>
+          <div class="ep-desc">Relatório completo em PDF ou JSON com análise de IA e rastreabilidade</div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/fontes</div>
+          <div class="ep-desc">Fontes conectadas, status de sincronização e contagem de registros</div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-post">POST</span>
+        <div style="flex:1">
+          <div class="path">/v1/webhooks</div>
+          <div class="ep-desc">Registrar endpoint para receber notificações de novos editais e atualizações</div>
+        </div>
+        <span class="badge badge-ok" style="font-size:11px">Disponível</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/contratos</div>
+          <div class="ep-desc">Contratos públicos federais — Portal da Transparência e SIASG</div>
+        </div>
+        <span class="badge badge-soon" style="font-size:11px">Em breve</span>
+      </div>
+      <div class="endpoint">
+        <span class="method method-get">GET</span>
+        <div style="flex:1">
+          <div class="path">/v1/propriedade-industrial</div>
+          <div class="ep-desc">Marcas e patentes — base do INPI com status atualizado</div>
+        </div>
+        <span class="badge badge-soon" style="font-size:11px">Em breve</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- USE CASES -->
+<section>
+  <div class="page">
+    <div class="reveal" style="text-align:center;margin-bottom:46px">
+      <div class="eyebrow" style="justify-content:center">Casos de uso</div>
+      <h2>Para quem a API é construída</h2>
+    </div>
+    <div class="grid-3">
+      <div class="card reveal">
+        <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--brand),#0a1e3a);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF1FB" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="7" height="7"/><rect x="15" y="3" width="7" height="7"/><rect x="15" y="15" width="7" height="7"/><rect x="2" y="15" width="7" height="7"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:8px">Plataformas de leilão</div>
+        <p class="small muted" style="line-height:1.65">Enriqueça seus lotes com score de risco, custo total estimado e rastreabilidade — sem infraestrutura própria de coleta.</p>
+      </div>
+      <div class="card reveal" style="transition-delay:.07s">
+        <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#7C5CFC,#4c2bb3);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF1FB" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:8px">Softwares jurídicos</div>
+        <p class="small muted" style="line-height:1.65">Exiba rastreabilidade de lotes e análise de risco diretamente no seu sistema de gestão de processos — com dado oficial vinculado.</p>
+      </div>
+      <div class="card reveal" style="transition-delay:.14s">
+        <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--accent),#0a3030);display:flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EAF1FB" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div style="font-weight:700;font-size:16px;margin-bottom:8px">BI e analytics</div>
+        <p class="small muted" style="line-height:1.65">Alimente dashboards de inteligência de mercado, modelos de precificação e alertas automáticos com dados de leilões governamentais em tempo real.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section>
+  <div class="page">
+    <div class="reveal" style="text-align:center;margin-bottom:46px">
+      <div class="eyebrow" style="justify-content:center">Acesso à API</div>
+      <h2>Disponível no plano Corporativo</h2>
+      <p class="muted" style="margin-top:12px;font-size:15px;max-width:500px;margin-inline:auto">A API é incluída no plano Corporativo junto com acesso ilimitado à plataforma para até 8 usuários.</p>
+    </div>
+    <div style="max-width:680px;margin:0 auto">
+      <div class="panel reveal" style="padding:32px;display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center">
+        <div>
+          <div style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--t-low);margin-bottom:10px">Corporativo</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px">
+            <span style="font-size:44px;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums">R$&nbsp;597</span>
+            <span class="muted" style="font-weight:600">/mês</span>
+          </div>
+          <p class="small muted" style="line-height:1.55;margin-bottom:22px">Tudo do Profissional, mais API com 10.000 req/mês, exportação em lote e gerente de conta dedicado.</p>
+          <a href="/cdn-cgi/l/email-protection#b3d2c3daf3d5dcddc7d69ddad2" class="btn btn-accent" style="width:100%;justify-content:center">Falar com a equipe</a>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <div style="font-size:13px;font-weight:700;color:var(--t-mid);margin-bottom:2px">Incluso no plano:</div>
+          <hr style="border-color:var(--border)">
+          {[['Acesso à API REST', true], ['10.000 req/mês incluídas', true], ['Webhooks de novos editais', true], ['Relatórios em lote (PDF/JSON)', true], ['Documentação + suporte técnico', true], ['SLA 99,9%', true]].map(([t, ok]) => `
+          <div style="display:flex;align-items:center;gap:10px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span class="small">${t}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FOOTER -->
+<section style="padding:60px 0 80px">
+  <div class="page">
+    <div class="reveal" style="text-align:center;max-width:640px;margin:0 auto">
+      <h2>Pronto para integrar?</h2>
+      <p class="muted" style="margin-top:14px;font-size:16px;line-height:1.65">Entre em contato com a equipe técnica da Fonte.ia para obter sua chave de API, documentação completa e suporte à integração.</p>
+      <div style="display:flex;gap:14px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+        <a href="/cdn-cgi/l/email-protection#ef8e9f86af8980819b8ac1868e" class="btn btn-accent btn-lg">Solicitar acesso</a>
+        <a href="Fonte.ia App.html" class="btn btn-ghost btn-lg">Explorar a plataforma</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer style="border-top:1px solid var(--border);padding:28px 0">
+  <div class="page" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+    <a href="Fonte.ia Vendas.html" class="nav-logo" style="gap:9px">
+      <svg width="22" height="22" viewBox="0 0 64 64"><rect x="16" y="15" width="7.6" height="34" rx="3.8" fill="#EAF1FB"/><rect x="16" y="15" width="25" height="7.6" rx="3.8" fill="#EAF1FB"/><rect x="16" y="28.6" width="17.5" height="7.6" rx="3.8" fill="#EAF1FB"/><circle cx="47" cy="18.8" r="5" fill="#2DD4BF"/></svg>
+      <div class="word" style="font-size:16px">Fonte<em>.ia</em></div>
+    </a>
+    <div style="display:flex;gap:22px;flex-wrap:wrap">
+      <a href="Fonte.ia Vendas.html" class="tiny muted" style="text-decoration:none;font-weight:600">Leilões</a>
+      <a href="Plataforma.html" class="tiny muted" style="text-decoration:none;font-weight:600">Plataforma</a>
+      <a href="API.html" class="tiny muted" style="text-decoration:none;font-weight:600">API</a>
+      <a href="Login.html" class="tiny muted" style="text-decoration:none;font-weight:600">Entrar</a>
+    </div>
+    <div class="tiny muted">© 2026 Fonte.ia · by Olli</div>
+  </div>
+</footer>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// Nav scroll effect
+const nav = document.getElementById('topnav');
+window.addEventListener('scroll', () => nav.classList.toggle('scrolled', window.scrollY > 30));
+
+// Reveal on scroll
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('vis'); obs.unobserve(e.target); } });
+}, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('.reveal').forEach(el => {
+  const d = el.style.transitionDelay || '0s';
+  obs.observe(el);
+  // Safety: reveal after 1.4s regardless
+  setTimeout(() => el.classList.add('vis'), 1400 + parseFloat(d) * 1000);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fonte.ia — Criar conta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Figtree', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { display: flex; min-height: 100vh; background: #070C16; color: #EAF1FB; }
+.left { flex: 0 0 46%; display: flex; flex-direction: column; justify-content: space-between; padding: 48px 52px; background: #070C16; position: relative; overflow: hidden; }
+.left-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px); background-size: 30px 30px; }
+.orb { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+.lc { position: relative; z-index: 1; }
+.right { flex: 1; background: #0E1626; display: flex; align-items: flex-start; justify-content: center; padding: 52px 40px; border-left: 1px solid rgba(255,255,255,.07); overflow-y: auto; }
+.form-box { width: 100%; max-width: 400px; }
+.mark-f { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+.mark-word { font-size: 21px; font-weight: 700; letter-spacing: -.02em; color: #EAF1FB; line-height: 1; }
+.mark-word em { color: #2DD4BF; font-style: normal; }
+.mark-sub { font-size: 9.5px; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #647693; margin-top: 3px; }
+.hero-tag { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #14CBB1; margin-bottom: 22px; display: flex; align-items: center; gap: 8px; }
+.hero-tag::before { content: ''; width: 18px; height: 2px; background: #14CBB1; border-radius: 2px; }
+.hero-h { font-size: clamp(24px, 3vw, 36px); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 16px; }
+.hero-p { font-size: 14.5px; color: #647693; line-height: 1.65; }
+.feat-list { display: flex; flex-direction: column; gap: 13px; margin-top: 32px; }
+.feat { display: flex; align-items: flex-start; gap: 12px; }
+.feat-dot { width: 20px; height: 20px; border-radius: 6px; background: rgba(45,212,191,.14); border: 1px solid rgba(45,212,191,.28); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.feat-dot::after { content: '✓'; font-size: 11px; font-weight: 800; color: #2DD4BF; }
+.feat-text { font-size: 14px; color: #9FB0C8; line-height: 1.5; }
+.feat-text b { color: #EAF1FB; font-weight: 600; }
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.plan-opt { padding: 14px; border-radius: 12px; border: 2px solid rgba(255,255,255,.08); background: transparent; cursor: pointer; text-align: left; transition: all .18s; position: relative; }
+.plan-opt:hover { border-color: rgba(255,255,255,.18); }
+.plan-opt.selected { border-color: #14CBB1; background: rgba(45,212,191,.07); }
+.plan-opt .plan-name { font-size: 14px; font-weight: 700; color: #EAF1FB; font-family: 'Figtree', sans-serif; }
+.plan-opt .plan-price { font-size: 12.5px; color: #647693; margin-top: 3px; font-family: 'Figtree', sans-serif; }
+.plan-opt .plan-badge { position: absolute; top: 10px; right: 10px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: rgba(45,212,191,.18); color: #2DD4BF; }
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 15px; }
+label { font-size: 13px; font-weight: 600; color: #9FB0C8; }
+input[type=text], input[type=email], input[type=password] { background: #070C16; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; padding: 12px 14px; font-family: 'Figtree', sans-serif; font-size: 14.5px; color: #EAF1FB; outline: none; transition: border-color .18s, box-shadow .18s; width: 100%; }
+input:focus { border-color: #2D6FF0; box-shadow: 0 0 0 4px rgba(45,111,240,.16); }
+input::placeholder { color: #3A4D66; }
+.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 42px; }
+.pw-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #3A4D66; padding: 0; display: flex; }
+.pw-toggle:hover { color: #9FB0C8; }
+.check-row { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 14px; }
+.check-row input[type=checkbox] { width: 17px; height: 17px; border-radius: 5px; cursor: pointer; accent-color: #14CBB1; flex-shrink: 0; margin-top: 2px; }
+.check-row label { font-size: 13px; color: #647693; line-height: 1.5; cursor: pointer; }
+.check-row a { color: #5B9BFF; font-weight: 600; text-decoration: none; }
+.check-row a:hover { text-decoration: underline; }
+.btn-primary { width: 100%; padding: 14px; border-radius: 11px; border: none; cursor: pointer; background: linear-gradient(180deg, #3D8BFF, #1D5FE0); color: #fff; font-family: 'Figtree', sans-serif; font-size: 15px; font-weight: 700; box-shadow: 0 8px 24px rgba(29,95,224,.36), inset 0 1px 0 rgba(255,255,255,.2); transition: transform .14s, box-shadow .2s; letter-spacing: -.01em; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px rgba(29,95,224,.48); }
+.btn-primary:active { transform: translateY(1px); }
+.form-title { font-size: 23px; font-weight: 800; letter-spacing: -.025em; color: #EAF1FB; margin-bottom: 6px; }
+.form-sub { font-size: 14px; color: #647693; margin-bottom: 28px; line-height: 1.5; }
+.form-sub a { color: #5B9BFF; font-weight: 600; text-decoration: none; }
+.form-footer { font-size: 12.5px; color: #647693; text-align: center; margin-top: 22px; }
+.form-footer a { color: #5B9BFF; font-weight: 600; text-decoration: none; }
+.error-msg { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.28); border-radius: 9px; padding: 11px 14px; font-size: 13px; color: #FCA5A5; margin-bottom: 16px; display: none; }
+.error-msg.show { display: block; }
+.divider { display: flex; align-items: center; gap: 12px; margin: 8px 0 14px; }
+.divider span { font-size: 11.5px; color: #3A4D66; font-weight: 600; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,.07); }
+.section-lbl { font-size: 12.5px; font-weight: 700; color: #647693; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 10px; }
+@media (max-width: 820px) {
+  .left { display: none; }
+  .right { background: #070C16; border: none; padding: 36px 24px; }
+  body { display: block; }
+}
+</style>
+</head>
+<body>
+
+<div class="left">
+  <div class="left-grid"></div>
+  <div class="orb" style="width:340px;height:300px;background:#1D5FE0;top:-60px;right:-40px;opacity:.16"></div>
+  <div class="orb" style="width:260px;height:240px;background:#0FB7A0;bottom:-40px;left:20px;opacity:.13"></div>
+  <div class="lc">
+    <a href="Fonte.ia Vendas.html" class="mark-f" style="text-decoration:none">
+      <svg width="30" height="30" viewBox="0 0 64 64"><rect x="16" y="15" width="7.6" height="34" rx="3.8" fill="#EAF1FB"/><rect x="16" y="15" width="25" height="7.6" rx="3.8" fill="#EAF1FB"/><rect x="16" y="28.6" width="17.5" height="7.6" rx="3.8" fill="#EAF1FB"/><circle cx="47" cy="18.8" r="5" fill="#2DD4BF"/></svg>
+      <div><div class="mark-word">Fonte<em>.ia</em></div><div class="mark-sub">by Olli</div></div>
+    </a>
+  </div>
+  <div class="lc" style="flex:1;display:flex;align-items:center;padding:40px 0">
+    <div>
+      <div class="hero-tag">5 análises gratuitas · sem cartão</div>
+      <div class="hero-h">Comece a analisar<br />lotes em minutos.</div>
+      <div class="hero-p">Crie sua conta e acesse 5 análises completas de lotes governamentais — score de risco, custo total, rastreabilidade e IA. Sem cartão de crédito.</div>
+      <div class="feat-list">
+        <div class="feat"><div class="feat-dot"></div><div class="feat-text"><b>Score de risco</b> calculado a partir das fontes oficiais</div></div>
+        <div class="feat"><div class="feat-dot"></div><div class="feat-text"><b>Custo total</b> incluindo tributos, taxa e ônus</div></div>
+        <div class="feat"><div class="feat-dot"></div><div class="feat-text"><b>Chat com IA</b> para perguntas sobre qualquer lote</div></div>
+        <div class="feat"><div class="feat-dot"></div><div class="feat-text"><b>Relatório PDF</b> com rastreabilidade completa</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="lc">
+    <div style="display:flex;gap:18px;flex-wrap:wrap">
+      <span style="font-size:12px;color:#3A4D66;display:flex;align-items:center;gap:5px"><span style="color:#2DD4BF;font-weight:800">✓</span>Dado rastreável</span>
+      <span style="font-size:12px;color:#3A4D66;display:flex;align-items:center;gap:5px"><span style="color:#2DD4BF;font-weight:800">✓</span>Garantia de 7 dias</span>
+      <span style="font-size:12px;color:#3A4D66;display:flex;align-items:center;gap:5px"><span style="color:#2DD4BF;font-weight:800">✓</span>LGPD</span>
+    </div>
+  </div>
+</div>
+
+<div class="right">
+  <div class="form-box">
+    <div class="form-title">Criar conta</div>
+    <div class="form-sub">Já tem conta? <a href="Login.html">Entrar</a></div>
+
+    <div id="errMsg" class="error-msg"></div>
+
+    <form id="signupForm" onsubmit="handleSignup(event)">
+      <div class="section-lbl">Escolha seu plano inicial</div>
+      <div class="plan-grid">
+        <button type="button" class="plan-opt selected" id="planFree" onclick="selectPlan('free')">
+          <div class="plan-badge">Grátis</div>
+          <div class="plan-name">Avaliação</div>
+          <div class="plan-price">5 análises · sem cartão</div>
+        </button>
+        <button type="button" class="plan-opt" id="planPro" onclick="selectPlan('pro')">
+          <div class="plan-name">Profissional</div>
+          <div class="plan-price">R$ 197/mês · ilimitado</div>
+        </button>
+      </div>
+
+      <div class="divider"><span>seus dados</span></div>
+
+      <div class="row-2">
+        <div class="field">
+          <label for="nome">Nome</label>
+          <input type="text" id="nome" placeholder="João" autocomplete="given-name" />
+        </div>
+        <div class="field">
+          <label for="sobrenome">Sobrenome</label>
+          <input type="text" id="sobrenome" placeholder="Mendes" autocomplete="family-name" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" placeholder="voce@empresa.com.br" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label for="empresa">Empresa / Escritório <span style="font-weight:400;color:#3A4D66">(opcional)</span></label>
+        <input type="text" id="empresa" placeholder="Mendes Advogados" autocomplete="organization" />
+      </div>
+      <div class="field">
+        <label for="senha">Senha</label>
+        <div class="pw-wrap">
+          <input type="password" id="senha" placeholder="Mínimo 8 caracteres" autocomplete="new-password" />
+          <button type="button" class="pw-toggle" onclick="togglePw('senha','eye1')">
+            <svg id="eye1" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:18px">
+        <label for="senha2">Confirmar senha</label>
+        <div class="pw-wrap">
+          <input type="password" id="senha2" placeholder="Repita a senha" autocomplete="new-password" />
+          <button type="button" class="pw-toggle" onclick="togglePw('senha2','eye2')">
+            <svg id="eye2" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="check-row">
+        <input type="checkbox" id="lgpd" required />
+        <label for="lgpd">Concordo com os <a href="Termos.html" target="_blank">Termos de Uso</a> e a <a href="Privacidade.html" target="_blank">Política de Privacidade</a>. Compreendo como meus dados são tratados conforme a LGPD.</label>
+      </div>
+      <div class="check-row">
+        <input type="checkbox" id="mkt" />
+        <label for="mkt">Aceito receber comunicações sobre novos editais e funcionalidades da plataforma.</label>
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Criar minha conta</button>
+    </form>
+
+    <div class="form-footer">
+      Ao criar a conta você concorda com nossos <a href="Termos.html" target="_blank">Termos</a> e <a href="Privacidade.html" target="_blank">Privacidade</a>.
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedPlan = 'free';
+function selectPlan(p) {
+  selectedPlan = p;
+  document.getElementById('planFree').classList.toggle('selected', p==='free');
+  document.getElementById('planPro').classList.toggle('selected', p==='pro');
+}
+function togglePw(id, eyeId) {
+  const inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function handleSignup(e) {
+  e.preventDefault();
+  const err = document.getElementById('errMsg');
+  err.classList.remove('show');
+  const nome = document.getElementById('nome').value.trim();
+  const sob = document.getElementById('sobrenome').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const s1 = document.getElementById('senha').value;
+  const s2 = document.getElementById('senha2').value;
+  const lgpd = document.getElementById('lgpd').checked;
+  if (!nome || !sob || !email) { err.textContent = 'Preencha nome, sobrenome e e-mail.'; err.classList.add('show'); return; }
+  if (s1.length < 8) { err.textContent = 'A senha deve ter pelo menos 8 caracteres.'; err.classList.add('show'); return; }
+  if (s1 !== s2) { err.textContent = 'As senhas não coincidem.'; err.classList.add('show'); return; }
+  if (!lgpd) { err.textContent = 'É necessário aceitar os Termos e a Política de Privacidade.'; err.classList.add('show'); return; }
+  const btn = document.getElementById('submitBtn');
+  btn.textContent = 'Criando conta…'; btn.disabled = true;
+  setTimeout(() => {
+    localStorage.setItem('fonteia_user', JSON.stringify({ name: nome + ' ' + sob, email, plan: selectedPlan }));
+    localStorage.setItem('fonteia_plan', JSON.stringify(selectedPlan === 'pro' ? 'pro' : 'free'));
+    localStorage.setItem('fonteia_uses', JSON.stringify(5));
+    localStorage.setItem('fonteia_onboarded', 'false'); // trigger onboarding
+    window.location.href = 'Fonte.ia App.html';
+  }, 1000);
+}
+</script>
+</body>
+</html>

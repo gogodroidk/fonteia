@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fonte.ia — Dados oficiais viram decisão que dá lucro</title>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  .nav-link:hover{color:var(--t-hi)!important}
+  input[type=range]{height:6px;border-radius:999px;background:var(--surface-2);outline:none;-webkit-appearance:none;appearance:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--brand-2),var(--brand));cursor:pointer;box-shadow:0 2px 8px rgba(29,95,224,.5),0 0 0 4px var(--ring)}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border:none;border-radius:50%;background:var(--brand);cursor:pointer;box-shadow:0 2px 8px rgba(29,95,224,.5)}
+  html{scroll-behavior:smooth}
+  @media (max-width:1000px){
+    .hero-grid{grid-template-columns:1fr!important;gap:44px!important}
+    .grid{grid-template-columns:repeat(2,1fr)!important}
+  }
+  @media (max-width:640px){
+    .grid{grid-template-columns:1fr!important}
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="logo.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="screens-1.jsx"></script>
+<script type="text/babel" src="sales-1.jsx"></script>
+<script type="text/babel" src="sales-2.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+function SalesApp() {
+  const read = () => { try { return JSON.parse(localStorage.getItem('fonteia_theme')) || 'dark'; } catch { return 'dark'; } };
+  const [theme, setThemeRaw] = useState(read);
+  const setTheme = (t) => { setThemeRaw(t); localStorage.setItem('fonteia_theme', JSON.stringify(t)); };
+  return (
+    <div className="app-root" data-theme={theme}>
+      <SalesNav theme={theme} setTheme={setTheme} />
+      <main>
+        <Hero />
+        <TrustStrip />
+        <BeforeAfter />
+        <HowItWorks />
+        <RoiCalc />
+        <Results />
+        <Testimonials />
+        <Pricing />
+        <FAQ />
+        <FinalCTA />
+      </main>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<SalesApp />);
+</script>
+</body>
+</html>

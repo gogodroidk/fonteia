@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fonte.ia — Plataforma</title>
+<link rel="stylesheet" href="styles.css" />
+<style>
+  input[type=range]{height:6px;border-radius:999px;background:var(--surface-2);outline:none;-webkit-appearance:none;appearance:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--brand);cursor:pointer;box-shadow:0 2px 6px rgba(29,95,224,.45)}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:var(--brand);cursor:pointer}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="logo.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="app-shell.jsx"></script>
+<script type="text/babel" src="screens-painel.jsx"></script>
+<script type="text/babel" src="screens-lotes.jsx"></script>
+<script type="text/babel" src="screens-rest.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+function OnboardingModal({ step, setStep, onDone }) {
+  const steps = [
+    { icon: 'sparkle', title: 'Bem-vindo à Fonte.ia', body: 'Você tem 5 análises completas gratuitas. Em cada análise recebe score de risco, custo total, rastreabilidade e chat com IA — com base em dados oficiais.', cta: 'Próximo' },
+    { icon: 'database', title: 'Configure seus órgãos', body: 'Escolha quais órgãos monitorar em Conta → Órgãos. Por padrão monitoramos RFB, PGFN e SPU. Você será avisado quando novos editais forem publicados.', cta: 'Próximo' },
+    { icon: 'layers', title: 'Faça sua primeira análise', body: 'Acesse Lotes, escolha qualquer lote e clique em Analisar. Em segundos você terá o custo total, score de risco e um chat de IA para perguntas.', cta: 'Ir para os lotes' },
+  ];
+  const s = steps[step];
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 110, background: 'rgba(4,8,18,.65)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 480, background: 'var(--elevated)', border: '1px solid var(--border)', borderRadius: 20, boxShadow: 'var(--shadow-xl)', overflow: 'hidden', animation: 'rise .35s cubic-bezier(.2,.7,.3,1)' }}>
+        <div style={{ height: 4, background: 'var(--surface-2)', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', background: 'linear-gradient(90deg,var(--brand),var(--accent))', borderRadius: 999, width: ((step + 1) / steps.length * 100) + '%', transition: 'width .4s cubic-bezier(.2,.7,.3,1)' }} />
+        </div>
+        <div style={{ padding: '32px 32px 28px' }}>
+          <div style={{ width: 48, height: 48, borderRadius: 13, background: 'linear-gradient(135deg,var(--brand),var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20, boxShadow: 'var(--shadow-md)' }}>
+            <Icon name={s.icon} size={22} fill={s.icon === 'sparkle' ? '#fff' : 'none'} style={{ color: '#fff' }} />
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-.02em', marginBottom: 12 }}>{s.title}</div>
+          <p style={{ fontSize: 14.5, color: 'var(--t-mid)', lineHeight: 1.65, marginBottom: 28 }}>{s.body}</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {steps.map((_, i) => <div key={i} style={{ width: i === step ? 20 : 7, height: 7, borderRadius: 999, background: i === step ? 'var(--brand-ink)' : 'var(--border-2)', transition: 'all .3s' }} />)}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn--ghost btn--sm" onClick={onDone} style={{ fontSize: 13 }}>Pular</button>
+              <button className="btn btn--primary" onClick={() => step < steps.length - 1 ? setStep(step + 1) : onDone()}>{s.cta} <Icon name="arrow" size={15} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const LS = {
+  theme: 'fonteia_theme', uses: 'fonteia_uses', plan: 'fonteia_plan',
+  analyzed: 'fonteia_analyzed', watch: 'fonteia_watch',
+};
+const read = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
+
+function App() {
+  const [theme, setThemeRaw] = useState(() => read(LS.theme, 'dark'));
+  const [route, setRoute] = useState('painel');
+  const [selected, setSelected] = useState(null);
+  const [plan, setPlan] = useState(() => read(LS.plan, 'free'));
+  const [uses, setUses] = useState(() => read(LS.uses, 5));
+  const [analyzed, setAnalyzed] = useState(() => new Set(read(LS.analyzed, [])));
+  const [watch, setWatch] = useState(() => new Set(read(LS.watch, ['RFB-0042-87'])));
+  const [paywall, setPaywall] = useState(false);
+  const [pwTrigger, setPwTrigger] = useState('');
+  const [search, setSearch] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [toast, setToast] = useState('');
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [bellUnread, setBellUnread] = useState(3);
+  const [onboarding, setOnboarding] = useState(() => {
+    try { return localStorage.getItem('fonteia_onboarded') === 'false'; } catch { return false; }
+  });
+  const [onbStep, setOnbStep] = useState(0);
+
+  const setTheme = t => { setThemeRaw(t); localStorage.setItem(LS.theme, JSON.stringify(t)); };
+  const flash = msg => { setToast(msg); setTimeout(() => setToast(''), 2800); };
+
+  useEffect(() => { localStorage.setItem(LS.watch, JSON.stringify([...watch])); }, [watch]);
+  useEffect(() => {
+    const h = e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearch(true); } };
+    window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h);
+  }, []);
+
+  const usesLeft = (plan !== 'free') ? Infinity : uses;
+
+  const goDetail = l => { setSelected(l); setRoute('detalhe'); window.scrollTo({ top: 0 }); };
+
+  const onAnalyze = l => {
+    if (analyzed.has(l.id) || plan !== 'free') { goDetail(l); return; }
+    if (uses > 0) {
+      const nu = uses - 1;
+      setUses(nu); localStorage.setItem(LS.uses, JSON.stringify(nu));
+      const na = new Set(analyzed); na.add(l.id); setAnalyzed(na);
+      localStorage.setItem(LS.analyzed, JSON.stringify([...na]));
+      goDetail(l);
+      flash(nu > 0 ? `Análise concluída · ${nu} de 5 restantes` : 'Última análise de avaliação utilizada.');
+    } else {
+      setPwTrigger(''); setPaywall(true);
+    }
+  };
+
+  const toggleWatch = id => setWatch(w => { const n = new Set(w); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const openUpgrade = t => { setPwTrigger(t || ''); setPaywall(true); };
+  const choosePlan = p => {
+    setPaywall(false);
+    if (p === 'pro') {
+      setPlan('pro'); localStorage.setItem(LS.plan, JSON.stringify('pro'));
+      flash('Plano Profissional ativo — análises ilimitadas.');
+    } else { setRoute('conta'); }
+  };
+
+  const navRoute = route === 'detalhe' ? 'lotes' : route;
+
+  const screen = () => {
+    switch (route) {
+      case 'painel':     return <PainelScreen onAnalyze={onAnalyze} setRoute={setRoute} />;
+      case 'lotes':      return <LotesScreen onAnalyze={onAnalyze} />;
+      case 'detalhe':    return <LoteDetalhe lote={selected} onBack={() => setRoute('lotes')} watched={watch.has(selected?.id)} onWatch={() => toggleWatch(selected?.id)} onFlash={flash} />;
+      case 'alertas':    return <AlertasScreen watch={watch} toggleWatch={toggleWatch} onAnalyze={onAnalyze} />;
+      case 'relatorios': return <RelatoriosScreen onAnalyze={onAnalyze} onUpgrade={() => openUpgrade('')} />;
+      case 'fontes':     return <FontesScreen />;
+      case 'conta':      return <ContaScreen theme={theme} setTheme={setTheme} plan={plan} onUpgrade={() => openUpgrade('')} />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="app-root" data-theme={theme} style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar
+        route={navRoute} setRoute={r => { setRoute(r); window.scrollTo({ top: 0 }); }}
+        plan={plan} usesLeft={usesLeft === Infinity ? 99 : uses}
+        onUpgrade={() => openUpgrade('')}
+        collapsed={collapsed} onToggle={() => setCollapsed(c => !c)}
+      />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <Topbar route={route} theme={theme} setTheme={setTheme} onSearch={() => setSearch(true)} onUpgrade={() => openUpgrade('')} plan={plan}
+          onBell={() => { setNotifOpen(o => !o); setBellUnread(0); }} bellUnread={bellUnread} />
+        <main className="no-print" style={{ padding: '24px 28px 60px', maxWidth: 1360, width: '100%', margin: '0 auto' }} key={route}>
+          {plan !== 'free' && (
+            <div className="row between" style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: 'color-mix(in srgb,var(--accent) 10%,transparent)', border: '1px solid color-mix(in srgb,var(--accent) 22%,transparent)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}><Icon name="check" size={14} sw={2.5} style={{ verticalAlign: -2, color: 'var(--accent-ink)' }} /> Plano <b>Profissional</b> ativo</span>
+              <button className="link tiny" onClick={() => { setPlan('free'); setUses(5); setAnalyzed(new Set()); localStorage.setItem(LS.plan, '"free"'); localStorage.setItem(LS.uses, '5'); localStorage.setItem(LS.analyzed, '[]'); flash('Demo reiniciada — 5 análises de avaliação.'); }}>Reiniciar demo</button>
+            </div>
+          )}
+          {screen()}
+        </main>
+      </div>
+      <Paywall open={paywall} onClose={() => setPaywall(false)} onChoose={choosePlan} trigger={pwTrigger} />
+      <SearchModal open={search} onClose={() => setSearch(false)} onPick={onAnalyze} />
+      <NotificationsPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
+      <Toast msg={toast} show={!!toast} />
+      {onboarding && <OnboardingModal step={onbStep} setStep={setOnbStep} onDone={() => { setOnboarding(false); localStorage.setItem('fonteia_onboarded','true'); }} />}
+      <a href="Login.html" className="btn btn--ghost btn--sm no-print" style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 50, boxShadow: 'var(--shadow-md)', fontSize: 12 }}>
+        <Icon name="external" size={13} />Login
+      </a>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
