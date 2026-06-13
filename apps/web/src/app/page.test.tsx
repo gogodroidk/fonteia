@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_MODULES } from "@fonteia/domain";
+import { PLANOS } from "../data/leiloes-seed";
 import { DashboardPage } from "./page";
 import { BillingPage } from "./billing/page";
 import { ModulesPage } from "./modules/page";
@@ -10,7 +11,7 @@ describe("Fonte.ia web shell", () => {
   it("renders the dashboard with the active leiloes wedge and evidence promise", () => {
     const html = renderToStaticMarkup(<DashboardPage />);
 
-    expect(html).toContain("Melhores lotes para investigar hoje");
+    expect(html).toContain("Ultimos lotes publicados");
     expect(html).toContain("Fonte antes de opiniao");
     expect(html).toContain("Receita Federal SLE");
   });
@@ -31,12 +32,12 @@ describe("Fonte.ia web shell", () => {
     expect(html).toContain("operacional fragil");
   });
 
-  it("renders billing as the commercial cascade across modules", () => {
+  it("renders billing plans with checkout CTAs", () => {
     const html = renderToStaticMarkup(<BillingPage />);
 
-    expect(html).toContain("Planos para vender");
-    expect(html).toContain("Individual");
-    expect(html).toContain("Business");
-    expect(html).toContain("upsells visiveis");
+    expect(html).toContain("Planos");
+    for (const plano of PLANOS) {
+      expect(html).toContain(plano.nome);
+    }
   });
 });

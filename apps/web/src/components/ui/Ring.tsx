@@ -1,0 +1,80 @@
+import { type ReactNode } from "react";
+
+export interface RingProps {
+  /** Progress value between 0 and 1 */
+  value: number;
+  size?: number | undefined;
+  stroke?: number | undefined;
+  color?: string | undefined;
+  track?: string | undefined;
+  children?: ReactNode | undefined;
+}
+
+/**
+ * Generic progress ring. `value` is 0–1.
+ * Children are rendered centered inside the ring.
+ */
+export function Ring({
+  value,
+  size = 64,
+  stroke = 7,
+  color = "var(--accent-ink)",
+  track = "var(--surface-2)",
+  children,
+}: RingProps) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clampedValue = Math.min(1, Math.max(0, value));
+  const off = c * (1 - clampedValue);
+
+  const motionStyle: React.CSSProperties =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? {}
+      : { transition: "stroke-dashoffset .9s cubic-bezier(.2,.7,.3,1)" };
+
+  return (
+    <div
+      style={{ position: "relative", width: size, height: size, flexShrink: 0 }}
+    >
+      <svg
+        width={size}
+        height={size}
+        style={{ transform: "rotate(-90deg)" }}
+        aria-hidden="true"
+      >
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={track}
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeDasharray={c}
+          strokeDashoffset={off}
+          strokeLinecap="round"
+          style={motionStyle}
+        />
+      </svg>
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}

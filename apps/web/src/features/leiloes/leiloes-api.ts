@@ -12,8 +12,8 @@ export interface LeiloesLoadResult {
   lots: ReceitaLeilaoLot[];
   isDemo: boolean;
   message: string;
-  lastSyncedAt?: string;
-  errors?: string[];
+  lastSyncedAt?: string | undefined;
+  errors?: string[] | undefined;
 }
 
 export interface LeilaoLotResult extends LeiloesLoadResult {
@@ -96,7 +96,7 @@ async function fetchApiLotById(lotId: string, fetcher: typeof fetch): Promise<Re
   return payload;
 }
 
-async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string }> {
+async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string | undefined }> {
   const supabaseUrl = getPublicEnv("VITE_SUPABASE_URL");
   const publishableKey = getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY");
 

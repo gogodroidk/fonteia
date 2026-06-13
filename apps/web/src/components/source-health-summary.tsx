@@ -2,10 +2,10 @@ import type { PublicSource } from "@fonteia/domain";
 import { SourceStatusBadge } from "./source-status-badge";
 
 interface SourceHealthSummaryProps {
-  source?: PublicSource;
+  source?: PublicSource | undefined;
   label: string;
   message: string;
-  lastSyncedAt?: string;
+  lastSyncedAt?: string | undefined;
 }
 
 function formatSyncedAt(value?: string): string {
