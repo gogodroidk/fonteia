@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle, User, Phone } from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { LogoMark } from "../../components/ui/logo-mark";
@@ -315,6 +315,93 @@ function PasswordField({
   );
 }
 
+// ─── Phone mask helper ────────────────────────────────────────────────────────
+
+function applyPhoneMask(raw: string): string {
+  // Strip everything except digits
+  const digits = raw.replace(/\D/g, "").slice(0, 11);
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10)
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  // 11 digits — mobile with 9th digit
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+// ─── Signup banner ────────────────────────────────────────────────────────────
+
+function SignupBanner() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "13px 16px",
+        borderRadius: "var(--r-md)",
+        background: "color-mix(in srgb, var(--accent-2, #14CBB1) 10%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--accent-2, #14CBB1) 22%, transparent)",
+        marginBottom: 22,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 22,
+          lineHeight: 1,
+          flexShrink: 0,
+        }}
+        aria-hidden="true"
+      >
+        🎯
+      </span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t-hi)", marginBottom: 2 }}>
+          7 dias grátis, sem cartão de crédito
+        </div>
+        <div style={{ fontSize: 12, color: "var(--t-low)", lineHeight: 1.4 }}>
+          Acesso completo ao módulo de leilões da Receita Federal. Cancele quando quiser.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Field with icon ──────────────────────────────────────────────────────────
+
+function IconField({
+  id,
+  label,
+  icon,
+  hint,
+  children,
+}: {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="auth-field" style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
+        <span style={{ color: "var(--accent-2, #14CBB1)", display: "flex", alignItems: "center" }} aria-hidden="true">
+          {icon}
+        </span>
+        <label htmlFor={id} className="auth-label" style={{ margin: 0 }}>
+          {label}
+        </label>
+        {hint && (
+          <span style={{ fontSize: 11, color: "var(--t-low)", fontWeight: 500, marginLeft: 2 }}>
+            {hint}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function LoginPage({ onGoToLanding }: LoginPageProps) {
@@ -323,11 +410,16 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Signup-only extra fields
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // ── Auth handlers (logic unchanged) ────────────────────────────────────────
+  // ── Auth handlers ────────────────────────────────────────────────────────────
 
   async function handleGoogle() {
     setError(null);
@@ -338,12 +430,31 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     e.preventDefault();
     setError(null);
     setSuccessMsg(null);
+    setNameError(null);
+
+    // Signup-specific validation
+    if (mode === "signup") {
+      const trimmedName = fullName.trim();
+      if (trimmedName.length === 0) {
+        setNameError("Nome completo é obrigatório.");
+        return;
+      }
+    }
+
     setSubmitting(true);
 
-    const result =
-      mode === "login"
-        ? await signInWithEmail(email, password)
-        : await signUpWithEmail(email, password);
+    let result: { error: string | null };
+
+    if (mode === "login") {
+      result = await signInWithEmail(email, password);
+    } else {
+      const trimmedName = fullName.trim();
+      const trimmedPhone = phone.trim();
+      result = await signUpWithEmail(email, password, {
+        full_name: trimmedName,
+        ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+      });
+    }
 
     setSubmitting(false);
 
@@ -373,9 +484,12 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     setMode(next);
     setError(null);
     setSuccessMsg(null);
+    setNameError(null);
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  const isSignup = mode === "signup";
 
   return (
     <div style={{ display: "flex", minHeight: "100dvh", background: "var(--bg)", color: "var(--t-hi)" }}>
@@ -391,11 +505,11 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           background: "var(--surface)",
           borderLeft: "1px solid var(--border)",
           display: "flex",
-          alignItems: mode === "signup" ? "flex-start" : "center",
+          alignItems: isSignup ? "flex-start" : "center",
           justifyContent: "center",
-          padding: mode === "signup" ? "52px 40px" : "48px 40px",
+          padding: isSignup ? "52px 40px" : "48px 40px",
           position: "relative",
-          overflowY: mode === "signup" ? "auto" : undefined,
+          overflowY: isSignup ? "auto" : undefined,
         }}
       >
         {/* Top-right controls */}
@@ -413,36 +527,55 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
         </div>
 
         {/* Form box */}
-        <div className="auth-form-box" style={{ width: "100%", maxWidth: 400, marginTop: mode === "signup" ? 48 : 0 }}>
+        <div className="auth-form-box" style={{ width: "100%", maxWidth: 420, marginTop: isSignup ? 48 : 0 }}>
 
           {/* Mobile logo */}
           <div style={{ marginBottom: 28 }}>
             <BrandLockup size="sm" onClick={onGoToLanding} />
           </div>
 
-          {/* Title + subtitle */}
-          <div style={{ marginBottom: mode === "signup" ? 28 : 32 }}>
-            <h1 className="h2" style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.025em", marginBottom: 6 }}>
-              {mode === "login" ? "Acesse sua conta" : "Crie sua conta"}
-            </h1>
-            <p style={{ fontSize: 14.5, color: "var(--t-low)", lineHeight: 1.5, margin: 0 }}>
-              {mode === "login" ? (
-                <>
-                  Não tem conta?{" "}
-                  <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("signup")}>
-                    Criar conta grátis
-                  </button>
-                </>
-              ) : (
-                <>
-                  7 dias grátis, sem cartão. Cancele quando quiser.{" "}
-                  <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("login")}>
-                    Já tem conta? Entrar
-                  </button>
-                </>
-              )}
-            </p>
-          </div>
+          {/* ── SIGNUP HEADER ── */}
+          {isSignup ? (
+            <div style={{ marginBottom: 24 }}>
+              <h1
+                className="h2"
+                style={{
+                  fontSize: 26,
+                  fontWeight: 800,
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.1,
+                  marginBottom: 6,
+                  color: "var(--t-hi)",
+                }}
+              >
+                Crie sua conta
+              </h1>
+              <p style={{ fontSize: 14.5, color: "var(--t-low)", lineHeight: 1.5, margin: 0 }}>
+                7 dias grátis, sem cartão.{" "}
+                <button
+                  type="button"
+                  className="link"
+                  style={{ fontSize: 14.5 }}
+                  onClick={() => switchMode("login")}
+                >
+                  Já tem conta? Entrar
+                </button>
+              </p>
+            </div>
+          ) : (
+            /* ── LOGIN HEADER ── */
+            <div style={{ marginBottom: 32 }}>
+              <h1 className="h2" style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.025em", marginBottom: 6 }}>
+                Acesse sua conta
+              </h1>
+              <p style={{ fontSize: 14.5, color: "var(--t-low)", lineHeight: 1.5, margin: 0 }}>
+                Não tem conta?{" "}
+                <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("signup")}>
+                  Criar conta grátis
+                </button>
+              </p>
+            </div>
+          )}
 
           {/* Demo mode banner */}
           {demoMode && (
@@ -509,6 +642,9 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             </div>
           )}
 
+          {/* Signup trust banner */}
+          {isSignup && <SignupBanner />}
+
           {/* Google OAuth button */}
           <button
             type="button"
@@ -523,15 +659,96 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           {/* Divider */}
           <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "20px 0" }}>
             <hr className="divide" style={{ flex: 1 }} />
-            <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, whiteSpace: "nowrap" }}>ou</span>
+            <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, whiteSpace: "nowrap" }}>
+              {isSignup ? "ou preencha seus dados" : "ou"}
+            </span>
             <hr className="divide" style={{ flex: 1 }} />
           </div>
 
           {/* Email + password form */}
-          <form onSubmit={(e) => void handleSubmit(e)}>
+          <form onSubmit={(e) => void handleSubmit(e)} noValidate>
+
+            {/* ── SIGNUP-ONLY FIELDS ── */}
+            {isSignup && (
+              <>
+                {/* Nome completo */}
+                <IconField
+                  id="auth-fullname"
+                  label="Nome completo"
+                  icon={<User size={13} />}
+                >
+                  <input
+                    id="auth-fullname"
+                    type="text"
+                    className={`input${nameError ? " input--error" : ""}`}
+                    autoComplete="name"
+                    placeholder="Seu nome e sobrenome"
+                    value={fullName}
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (nameError) setNameError(null);
+                    }}
+                    required
+                    aria-required="true"
+                    aria-describedby={nameError ? "auth-fullname-err" : undefined}
+                    style={{ marginTop: 0 }}
+                  />
+                  {nameError && (
+                    <span
+                      id="auth-fullname-err"
+                      role="alert"
+                      style={{ fontSize: 12, color: "var(--danger)", marginTop: 5, display: "block" }}
+                    >
+                      {nameError}
+                    </span>
+                  )}
+                </IconField>
+
+                {/* Telefone / WhatsApp */}
+                <IconField
+                  id="auth-phone"
+                  label="WhatsApp"
+                  icon={<Phone size={13} />}
+                  hint="(recomendado)"
+                >
+                  <input
+                    id="auth-phone"
+                    type="tel"
+                    className="input"
+                    autoComplete="tel"
+                    placeholder="(11) 99999-9999"
+                    value={phone}
+                    onChange={(e) => setPhone(applyPhoneMask(e.target.value))}
+                    inputMode="numeric"
+                    aria-label="Telefone ou WhatsApp (opcional)"
+                    style={{ marginTop: 0 }}
+                  />
+                </IconField>
+
+                {/* Horizontal rule to visually group account credentials */}
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "var(--t-low)",
+                    margin: "18px 0 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <span style={{ flex: 1, height: 1, background: "var(--border)", display: "inline-block" }} />
+                  Acesso
+                  <span style={{ flex: 1, height: 1, background: "var(--border)", display: "inline-block" }} />
+                </div>
+              </>
+            )}
+
             {/* Email */}
-            <div className="auth-field" style={{ marginBottom: 16 }}>
-              <label htmlFor="auth-email" className="auth-label">
+            <div className="auth-field" style={{ marginBottom: 14 }}>
+              <label htmlFor="auth-email" className="auth-label" style={{ marginBottom: 7 }}>
                 E-mail
               </label>
               <input
@@ -543,12 +760,12 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                style={{ marginTop: 7 }}
+                aria-required="true"
               />
             </div>
 
             {/* Password */}
-            <div style={{ marginBottom: 22 }}>
+            <div style={{ marginBottom: isSignup ? 24 : 22 }}>
               <PasswordField
                 id="auth-password"
                 label="Senha"
@@ -574,24 +791,51 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             </div>
 
             {/* Submit */}
-            <button
-              type="submit"
-              className="btn btn--primary btn--block btn--lg"
-              disabled={submitting}
-              style={{ justifyContent: "center", gap: 8, letterSpacing: "-0.01em" }}
-            >
-              {submitting ? (
-                <Spinner />
-              ) : mode === "login" ? (
-                "Entrar"
-              ) : (
-                "Começar grátis"
-              )}
-            </button>
+            {isSignup ? (
+              <button
+                type="submit"
+                className="btn btn--primary btn--block btn--lg"
+                disabled={submitting}
+                style={{
+                  justifyContent: "center",
+                  gap: 8,
+                  letterSpacing: "-0.01em",
+                  fontSize: 15.5,
+                  fontWeight: 700,
+                  padding: "14px 20px",
+                }}
+              >
+                {submitting ? <Spinner /> : "Começar grátis →"}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="btn btn--primary btn--block btn--lg"
+                disabled={submitting}
+                style={{ justifyContent: "center", gap: 8, letterSpacing: "-0.01em" }}
+              >
+                {submitting ? <Spinner /> : "Entrar"}
+              </button>
+            )}
+
+            {/* Signup fine print */}
+            {isSignup && (
+              <p style={{ fontSize: 11.5, color: "var(--t-low)", textAlign: "center", marginTop: 12, lineHeight: 1.5 }}>
+                Ao criar sua conta você concorda com os{" "}
+                <a href="/termos" target="_blank" rel="noreferrer" className="link" style={{ fontSize: 11.5 }}>
+                  Termos de uso
+                </a>{" "}
+                e a{" "}
+                <a href="/privacidade" target="_blank" rel="noreferrer" className="link" style={{ fontSize: 11.5 }}>
+                  Política de privacidade
+                </a>
+                .
+              </p>
+            )}
           </form>
 
           {/* Footer links */}
-          <p style={{ fontSize: 12.5, color: "var(--t-low)", textAlign: "center", marginTop: 22 }}>
+          <p style={{ fontSize: 12.5, color: "var(--t-low)", textAlign: "center", marginTop: isSignup ? 16 : 22 }}>
             {mode === "login" ? (
               <>
                 Não tem conta?{" "}
@@ -648,6 +892,10 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
         .auth-field {
           display: flex;
           flex-direction: column;
+        }
+        .input--error {
+          border-color: var(--danger, #ef4444) !important;
+          box-shadow: 0 0 0 2px rgba(239,68,68,.15);
         }
       `}</style>
     </div>
