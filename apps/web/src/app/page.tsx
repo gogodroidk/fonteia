@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
-import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
+import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import { Bar, CountUp, FonteDots, ScoreRing, riscoBadge } from "../components/ui";
 import { listLeilaoLots } from "../features/leiloes/leiloes-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
@@ -69,6 +69,7 @@ export function DashboardPage(props: {
   const [term, setTerm] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
   const [watchlistSize, setWatchlistSize] = useState(0);
 
   useEffect(() => {
@@ -127,10 +128,32 @@ export function DashboardPage(props: {
     });
   }, [scoredLots, term, riskFilter, personFilter]);
 
+  // Ordenação (visível já: score / preço / prazo; desconto quando houver avaliação)
+  const sortedEntries = useMemo(() => {
+    const list = [...filteredEntries];
+    list.sort((a, b) => {
+      if (sortBy === "desconto") {
+        return (lotEconomia(b.lot)?.descontoPct ?? -1) - (lotEconomia(a.lot)?.descontoPct ?? -1);
+      }
+      if (sortBy === "preco") return a.lot.minimumBidCents - b.lot.minimumBidCents;
+      if (sortBy === "prazo") return daysUntil(a.lot.proposalDeadline) - daysUntil(b.lot.proposalDeadline);
+      return b.scoring.score - a.scoring.score;
+    });
+    return list;
+  }, [filteredEntries, sortBy]);
+
   // KPIs derived from real lots
   const kpiLotesDisponiveis = lots.length;
-  const kpiOrgaosMonitorados = useMemo(
-    () => new Set(lots.map((l) => l.agency)).size,
+  const kpiEncerrando = useMemo(
+    () =>
+      lots.filter((l) => {
+        const d = daysUntil(l.proposalDeadline);
+        return d >= 0 && d <= 7;
+      }).length,
+    [lots],
+  );
+  const totalEconomiaCents = useMemo(
+    () => lots.reduce((sum, l) => sum + (lotEconomia(l)?.economiaCents ?? 0), 0),
     [lots],
   );
 
@@ -142,25 +165,21 @@ export function DashboardPage(props: {
 
   // KPI strip derived from real data
   const kpiStrip = [
-    {
-      key: "lotes",
-      label: "Lotes disponíveis",
-      value: kpiLotesDisponiveis,
-      color: KPI_COLORS[0],
-    },
-    {
-      key: "orgaos",
-      label: "Órgãos monitorados",
-      value: kpiOrgaosMonitorados,
-      color: KPI_COLORS[1],
-    },
-    {
-      key: "watchlist",
-      label: "Acompanhando",
-      value: watchlistSize,
-      color: KPI_COLORS[2],
-    },
-  ] as const;
+    { key: "lotes", label: "Lotes disponíveis", value: kpiLotesDisponiveis, color: KPI_COLORS[0], money: false },
+    ...(totalEconomiaCents > 0
+      ? [
+          {
+            key: "economia",
+            label: "Economia mapeada",
+            value: totalEconomiaCents / 100,
+            color: KPI_COLORS[1],
+            money: true,
+          },
+        ]
+      : []),
+    { key: "encerrando", label: "Encerrando ≤ 7 dias", value: kpiEncerrando, color: KPI_COLORS[3], money: false },
+    { key: "watchlist", label: "Acompanhando", value: watchlistSize, color: KPI_COLORS[2], money: false },
+  ];
 
   return (
     <div className="dashboard-page">
@@ -184,12 +203,12 @@ export function DashboardPage(props: {
         }
         .dashboard-page .kpi-strip {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 12px;
         }
         .dashboard-page .leiloes-filter-row {
           display: grid;
-          grid-template-columns: 1.4fr 1fr 1fr;
+          grid-template-columns: 1.4fr 1fr 1fr 1fr;
           gap: 10px;
         }
         .dashboard-page .leiloes-filter-row input,
@@ -241,7 +260,7 @@ export function DashboardPage(props: {
 
       {/* ── 3 KPIs derivados dos lotes reais ─────────────────────── */}
       <section className="kpi-strip">
-        {kpiStrip.map(({ key, label, value, color }) => (
+        {kpiStrip.map(({ key, label, value, color, money }) => (
           <div className="card card--pad" key={key}>
             <div className="row between" style={{ alignItems: "flex-start" }}>
               <span
@@ -269,6 +288,8 @@ export function DashboardPage(props: {
               >
                 {isLoading ? (
                   <span className="muted" style={{ fontSize: 18 }}>—</span>
+                ) : money ? (
+                  <span>{formatBRL(value)}</span>
                 ) : (
                   <CountUp value={value} decimals={0} />
                 )}
@@ -333,6 +354,23 @@ export function DashboardPage(props: {
                   : "PJ"}
               </div>
             </div>
+            {(() => {
+              const eco = lotEconomia(featuredEntry.lot);
+              return eco ? (
+                <div className="inset" style={{ padding: 14 }}>
+                  <div className="tiny muted" style={{ marginBottom: 4 }}>
+                    Economia estimada
+                  </div>
+                  <div
+                    className="num"
+                    style={{ fontWeight: 800, fontSize: 18, color: "var(--accent-ink)" }}
+                  >
+                    {formatBRL(eco.economiaCents / 100)}{" "}
+                    <span style={{ fontSize: 12, fontWeight: 700 }}>−{eco.descontoPct}%</span>
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
 
           <div className="row between" style={{ gap: 12, flexWrap: "wrap" }}>
@@ -399,6 +437,16 @@ export function DashboardPage(props: {
             <option value="pf">Permite PF</option>
             <option value="pj">Apenas PJ</option>
           </select>
+          <select
+            aria-label="Ordenar lotes"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="score">Melhor oportunidade</option>
+            <option value="desconto">Maior desconto</option>
+            <option value="prazo">Encerrando antes</option>
+            <option value="preco">Menor preço</option>
+          </select>
         </div>
 
         {isLoading ? (
@@ -416,7 +464,7 @@ export function DashboardPage(props: {
           <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
             Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.
           </p>
-        ) : filteredEntries.length === 0 ? (
+        ) : sortedEntries.length === 0 ? (
           <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
             Nenhum lote encontrado para os filtros aplicados.
           </p>
@@ -455,7 +503,7 @@ export function DashboardPage(props: {
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.map(({ lot, scoring }, rowIdx) => {
+                {sortedEntries.map(({ lot, scoring }, rowIdx) => {
                   const badge = riscoBadge(scoring.label);
                   const days = daysUntil(lot.proposalDeadline);
                   const isClickable = onSelectLot !== undefined;
