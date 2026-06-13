@@ -27,6 +27,8 @@ import { getConfiguredApiUrl, getSupabasePublicConfig, trimTrailingSlash } from 
 import { displayCity } from "../../lib/receita-localidades";
 import { useAuth } from "../../auth/auth-context";
 import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-detalhe-api";
+import { ComoDarLance } from "../../components/como-dar-lance";
+import { estimarCustoTotal } from "../../lib/custo-total";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -720,11 +722,27 @@ export function LotDetailPage({
   }, []);
 
   function handleSaveAlert() {
+    // Persiste de verdade neste navegador (radar local) — nada de "falso sucesso".
+    try {
+      const raw = window.localStorage.getItem("fonteia_alerts");
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      list.push({
+        lotId: lot.id,
+        edital: lot.edital,
+        name: alertName,
+        channel: alertChannel,
+        createdAt: new Date().toISOString(),
+      });
+      window.localStorage.setItem("fonteia_alerts", JSON.stringify(list));
+    } catch {
+      // localStorage indisponível: segue sem quebrar.
+    }
     setAlertOpen(false);
-    setSuccessMessage("✓ Alerta criado no app. E-mail e WhatsApp ficam para a proxima etapa.");
+    setSuccessMessage("✓ Lote salvo no seu radar (neste navegador). Avisos por e-mail/WhatsApp entram em breve.");
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
-    }, 3000);
+    }, 4000);
   }
 
   // Evidence for EvidencePanel
@@ -1048,6 +1066,60 @@ export function LotDetailPage({
             {successMessage ? (
               <div className="lot-success-message">{successMessage}</div>
             ) : null}
+          </section>
+
+          {/* ── Como dar lance (guia honesto pra quem nunca participou) ────── */}
+          <ComoDarLance sourceUrl={lot.sourceUrl} />
+
+          {/* ── Custo total estimado (o que realmente sai do bolso) ───────── */}
+          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+            <div>
+              <span className="section-label">Quanto voce paga de verdade</span>
+              <h3 style={{ marginTop: "var(--s-1)" }}>Custo total estimado</h3>
+            </div>
+            {(() => {
+              const custo = estimarCustoTotal({ lanceCents: lot.minimumBidCents });
+              const rowTd: React.CSSProperties = {
+                padding: "10px 0",
+                fontSize: "0.9rem",
+                color: "var(--n-600)",
+                borderBottom: "1px solid var(--n-100)",
+              };
+              const valTd: React.CSSProperties = {
+                padding: "10px 0",
+                textAlign: "right",
+                fontWeight: 700,
+                color: "var(--n-700)",
+                fontVariantNumeric: "tabular-nums",
+                borderBottom: "1px solid var(--n-100)",
+              };
+              return (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr>
+                      <td style={rowTd}>Lance minimo</td>
+                      <td style={valTd}>{formatBRL(custo.lanceCents / 100)}</td>
+                    </tr>
+                    <tr>
+                      <td style={rowTd}>Comissao do leiloeiro (5%)</td>
+                      <td style={valTd}>{formatBRL(custo.comissaoCents / 100)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...rowTd, borderBottom: "none", fontWeight: 800, color: "var(--n-900)" }}>
+                        Custo estimado (no minimo)
+                      </td>
+                      <td style={{ ...valTd, borderBottom: "none", fontWeight: 800, fontSize: "1.1rem", color: "var(--g-700)" }}>
+                        {formatBRL(custo.totalCents / 100)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              );
+            })()}
+            <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
+              Estimativa: lance + comissao padrao de 5% do leiloeiro. <strong>Nao inclui</strong> tributos
+              (ICMS/IOF), retirada, frete e encargos — que variam por edital. Confirme no edital antes de propor.
+            </p>
           </section>
 
           {/* ── Itens do lote (gracioso: só quando a fonte traz os dados) ──── */}
