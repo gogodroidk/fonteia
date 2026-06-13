@@ -5,7 +5,7 @@ import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import type { LeiloesDataSource } from "../../features/leiloes/leiloes-api";
-import { ScoreRing, FonteDots, riscoBadge } from "../../components/ui";
+import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
 
 // ─── Fonte (Receita Federal) para os FonteDots ────────────────────────────────
@@ -163,6 +163,17 @@ function deadlineUrgencyClass(days: number): string {
   return "t-mid";
 }
 
+// ─── Confidence badge (label = alto → melhor oportunidade, NOT risco) ─────────
+
+function confidenceBadge(label: LeilaoOpportunityScore["label"]): {
+  className: string;
+  text: string;
+} {
+  if (label === "alto") return { className: "badge--ok", text: "Alta oportunidade" };
+  if (label === "medio") return { className: "badge--warn", text: "Oportunidade média" };
+  return { className: "badge--neutral", text: "Avaliar com cautela" };
+}
+
 // ─── Card de resultado ────────────────────────────────────────────────────────
 
 interface ResultCardProps {
@@ -172,7 +183,7 @@ interface ResultCardProps {
 
 function ResultCard({ entry, onOpen }: ResultCardProps) {
   const { lot, scoring, economia } = entry;
-  const { className: riscoClass, label: riscoLabel } = riscoBadge(scoring.label);
+  const badge = confidenceBadge(scoring.label);
   const days = daysUntil(lot.proposalDeadline);
   const urgencyClass = deadlineUrgencyClass(days);
   const deadlineLabel = formatDeadlineShort(lot.proposalDeadline);
@@ -225,9 +236,9 @@ function ResultCard({ entry, onOpen }: ResultCardProps) {
           </div>
         </div>
 
-        {/* Risco badge */}
+        {/* Confidence badge */}
         <div>
-          <span className={`badge ${riscoClass}`}>{riscoLabel}</span>
+          <span className={`badge ${badge.className}`}>{badge.text}</span>
         </div>
 
         {/* Lance mínimo + economia (só quando há avaliação confiável) */}

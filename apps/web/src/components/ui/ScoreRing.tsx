@@ -9,8 +9,8 @@ export interface ScoreRingProps {
 }
 
 function scoreColor(v: number): string {
-  if (v >= 80) return "var(--ok)";
-  if (v >= 65) return "var(--warn)";
+  if (v >= 75) return "var(--ok)";
+  if (v >= 50) return "var(--warn)";
   return "var(--danger)";
 }
 

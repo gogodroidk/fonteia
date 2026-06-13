@@ -26,30 +26,32 @@ import { readWatchlist, subscribeWatchlist } from "../../lib/watchlist";
 import { useTheme } from "../../theme/theme-context";
 import type { Theme } from "../../theme/theme-context";
 import { STRIPE_CUSTOMER_PORTAL_URL } from "../../config/stripe";
-import { getMyTrial } from "../../features/billing/coupon-api";
 import { CouponRedeem } from "../../components/coupon-redeem";
+import { usePlan } from "../../lib/use-plan";
+import type { PlanId } from "../../lib/use-plan";
 
-// ─── Constants (honest, no backend) ───────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Contato de suporte do produto (público, honesto). */
 const SUPPORT_EMAIL = "contato@fontebrasil.online";
 
-/** Resumo honesto do acesso atual: teste por cupom (se houver) ou sem assinatura. */
-function describeAccess(trialUntil: string | null): { active: boolean; label: string; until: string } {
-  if (!trialUntil) return { active: false, label: "Sem assinatura ativa", until: "" };
-  const date = new Date(trialUntil);
-  const active = !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
-  if (!active) return { active: false, label: "Sem assinatura ativa", until: "" };
-  return {
-    active: true,
-    label: "Teste ativo",
-    until: date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "long",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  };
+/** Rótulo legível do plano vindo do hook usePlan(). */
+function planLabel(plan: PlanId): string {
+  if (plan === "corporativo") return "Corporativo";
+  if (plan === "pro") return "Profissional";
+  return "Gratuito";
+}
+
+/** Formata a data de expiração de trial para pt-BR. */
+function formatUntil(until: string): string {
+  const date = new Date(until);
+  if (Number.isNaN(date.getTime())) return until;
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /**
@@ -248,14 +250,49 @@ function LinkRow({
 
 // ─── Tab panels ─────────────────────────────────────────────────────────────
 
+interface TabPerfilPlanProps {
+  isPro: boolean;
+  plan: PlanId;
+  trial: boolean;
+  until: string | undefined;
+  planLoading: boolean;
+}
+
 function TabPerfil({
   name,
   email,
   avatarUrl,
-  trialUntil,
-}: Pick<AccountPageProps, "name" | "email" | "avatarUrl"> & { trialUntil: string | null }) {
+  isPro,
+  plan,
+  trial,
+  until,
+  planLoading,
+}: Pick<AccountPageProps, "name" | "email" | "avatarUrl"> & TabPerfilPlanProps) {
   const watchCount = useWatchlistCount();
-  const access = describeAccess(trialUntil);
+
+  // Rótulo do badge de plano (exibido sob o email)
+  const badgeLabel = planLoading
+    ? "Carregando..."
+    : isPro
+      ? trial
+        ? "Teste ativo"
+        : planLabel(plan)
+      : "Sem assinatura";
+
+  const badgeClass = planLoading
+    ? "badge badge--neutral"
+    : isPro
+      ? "badge badge--accent"
+      : "badge badge--neutral";
+
+  // Linha "Plano atual" na tabela
+  const planRowVal = planLoading
+    ? "…"
+    : isPro
+      ? trial && until !== undefined
+        ? `${planLabel(plan)} — teste até ${formatUntil(until)}`
+        : planLabel(plan)
+      : "Gratuito";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -292,13 +329,13 @@ function TabPerfil({
               <Mail size={13} aria-hidden="true" style={{ flexShrink: 0 }} />
               {email}
             </div>
-            <span className={`badge ${access.active ? "badge--accent" : "badge--neutral"}`} style={{ marginTop: 8 }}>
-              {access.active ? "Teste ativo" : "Sem assinatura"}
+            <span className={badgeClass} style={{ marginTop: 8 }}>
+              {badgeLabel}
             </span>
           </div>
         </div>
         <TRow label="Membro desde" val="Junho 2026" />
-        <TRow label="Plano atual" val={access.active ? `Teste — ate ${access.until}` : "Sem assinatura ativa"} />
+        <TRow label="Plano atual" val={planRowVal} />
         <TRow label="Teste" val="7 dias grátis nos planos pagos" />
       </div>
 
@@ -352,46 +389,75 @@ function TabPerfil({
         </button>
       </div>
 
-      {/* Ampliar acesso */}
-      <div
-        className="panel"
-        style={{
-          padding: 22,
-          background: "linear-gradient(135deg,var(--brand),#13294d)",
-          color: "#fff",
-          border: "none",
-        }}
-      >
-        <div className="row" style={{ gap: 8, marginBottom: 6 }}>
-          <Sparkles size={17} aria-hidden="true" />
-          <strong style={{ fontSize: 15 }}>Desbloqueie o acesso completo</strong>
-        </div>
-        <p
+      {/* Ampliar acesso — só aparece para usuários sem plano pago */}
+      {!isPro && (
+        <div
+          className="panel"
           style={{
-            fontSize: 13,
-            opacity: 0.85,
-            lineHeight: 1.5,
-            margin: "0 0 14px",
+            padding: 22,
+            background: "linear-gradient(135deg,var(--brand),#13294d)",
+            color: "#fff",
+            border: "none",
           }}
         >
-          Análises ilimitadas, alertas de novos editais e relatórios com
-          rastreabilidade completa. Comece com 7 dias grátis — só paga depois.
-        </p>
-        <button
-          type="button"
-          className="btn btn--accent"
-          onClick={() => navigate("/app/planos")}
-        >
-          <Zap size={15} aria-hidden="true" />
-          Assinar agora
-        </button>
-      </div>
+          <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+            <Sparkles size={17} aria-hidden="true" />
+            <strong style={{ fontSize: 15 }}>Desbloqueie o acesso completo</strong>
+          </div>
+          <p
+            style={{
+              fontSize: 13,
+              opacity: 0.85,
+              lineHeight: 1.5,
+              margin: "0 0 14px",
+            }}
+          >
+            Análises ilimitadas, alertas de novos editais e relatórios com
+            rastreabilidade completa. Comece com 7 dias grátis — só paga depois.
+          </p>
+          <button
+            type="button"
+            className="btn btn--accent"
+            onClick={() => navigate("/app/planos")}
+          >
+            <Zap size={15} aria-hidden="true" />
+            Ver planos
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function TabAssinatura({ trialUntil }: { trialUntil: string | null }) {
-  const access = describeAccess(trialUntil);
+interface TabAssinaturaProps {
+  isPro: boolean;
+  plan: PlanId;
+  trial: boolean;
+  until: string | undefined;
+  planLoading: boolean;
+}
+
+function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinaturaProps) {
+  const badgeLabel = planLoading
+    ? "Carregando..."
+    : isPro
+      ? trial ? "Teste ativo" : "Ativo"
+      : "Sem assinatura";
+
+  const badgeClass = planLoading
+    ? "badge badge--neutral"
+    : isPro
+      ? "badge badge--accent"
+      : "badge badge--neutral";
+
+  const descText = planLoading
+    ? "Verificando seu plano…"
+    : isPro
+      ? trial && until !== undefined
+        ? `Acesso de teste (${planLabel(plan)}) ativo até ${formatUntil(until)}. Assine para manter sem interrupção.`
+        : `Você está no plano ${planLabel(plan)}. Gerencie ou cancele abaixo.`
+      : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo.";
+
   return (
     <div className="panel" style={{ padding: 26 }}>
       <div
@@ -399,54 +465,56 @@ function TabAssinatura({ trialUntil }: { trialUntil: string | null }) {
         style={{ marginBottom: 18 }}
       >
         <div style={{ fontWeight: 700, fontSize: 15 }}>Plano atual</div>
-        <span className={`badge ${access.active ? "badge--accent" : "badge--neutral"}`}>
-          {access.active ? "Teste ativo" : "Sem assinatura"}
+        <span className={badgeClass}>
+          {badgeLabel}
         </span>
       </div>
 
       <div style={{ fontSize: 13, color: "var(--t-mid)", marginBottom: 18 }}>
-        {access.active
-          ? `Acesso de teste ativo até ${access.until}. Assine para manter sem interrupção.`
-          : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo."}
+        {descText}
       </div>
 
-      <div style={{ marginBottom: 18 }}>
-        <CouponRedeem compact />
-      </div>
-
-      <div
-        style={{
-          padding: 20,
-          borderRadius: 14,
-          background: "linear-gradient(135deg,var(--brand),#13294d)",
-          color: "#fff",
-          marginBottom: 18,
-        }}
-      >
-        <div style={{ fontWeight: 800, fontSize: 16 }}>
-          Profissional — R$ 197/mês
+      {!isPro && (
+        <div style={{ marginBottom: 18 }}>
+          <CouponRedeem compact />
         </div>
+      )}
+
+      {!isPro && (
         <div
           style={{
-            fontSize: 13,
-            opacity: 0.85,
-            marginTop: 5,
-            lineHeight: 1.5,
+            padding: 20,
+            borderRadius: 14,
+            background: "linear-gradient(135deg,var(--brand),#13294d)",
+            color: "#fff",
+            marginBottom: 18,
           }}
         >
-          Análises ilimitadas, alertas de editais e relatórios PDF com
-          rastreabilidade completa.
+          <div style={{ fontWeight: 800, fontSize: 16 }}>
+            Profissional — R$ 197/mês
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              opacity: 0.85,
+              marginTop: 5,
+              lineHeight: 1.5,
+            }}
+          >
+            Análises ilimitadas, alertas de editais e relatórios PDF com
+            rastreabilidade completa.
+          </div>
+          <button
+            type="button"
+            className="btn btn--accent"
+            onClick={() => navigate("/app/planos")}
+            style={{ marginTop: 14 }}
+          >
+            <Zap size={15} aria-hidden="true" />
+            Assinar agora
+          </button>
         </div>
-        <button
-          type="button"
-          className="btn btn--accent"
-          onClick={() => navigate("/app/planos")}
-          style={{ marginTop: 14 }}
-        >
-          <Zap size={15} aria-hidden="true" />
-          Assinar agora
-        </button>
-      </div>
+      )}
 
       {STRIPE_CUSTOMER_PORTAL_URL && (
         <a
@@ -966,18 +1034,33 @@ function SideNav({
 export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPageProps) {
   const [activeTab, setActiveTab] = useState<TabId>("perfil");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [trialUntil, setTrialUntil] = useState<string | null>(null);
-
-  useEffect(() => {
-    void getMyTrial().then(setTrialUntil);
-  }, []);
+  const { plan, isPro, trial, until, loading: planLoading } = usePlan();
 
   function renderPanel() {
     switch (activeTab) {
       case "perfil":
-        return <TabPerfil name={name} email={email} avatarUrl={avatarUrl} trialUntil={trialUntil} />;
+        return (
+          <TabPerfil
+            name={name}
+            email={email}
+            avatarUrl={avatarUrl}
+            isPro={isPro}
+            plan={plan}
+            trial={trial}
+            until={until}
+            planLoading={planLoading}
+          />
+        );
       case "assinatura":
-        return <TabAssinatura trialUntil={trialUntil} />;
+        return (
+          <TabAssinatura
+            isPro={isPro}
+            plan={plan}
+            trial={trial}
+            until={until}
+            planLoading={planLoading}
+          />
+        );
       case "aparencia":
         return <TabAparencia />;
       case "notificacoes":
