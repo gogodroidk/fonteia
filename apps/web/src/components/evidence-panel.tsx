@@ -20,7 +20,8 @@ export function EvidencePanel({ title = "Trilha de fonte", evidence }: EvidenceP
         <ShieldCheck aria-hidden="true" size={20} />
         <div>
           <span className="section-label">Fonte antes de opiniao</span>
-          <h2>{title}</h2>
+          {/* a11y: h3 — this panel is secondary content within a detail page that already has an h2 */}
+          <h3>{title}</h3>
         </div>
       </div>
 
