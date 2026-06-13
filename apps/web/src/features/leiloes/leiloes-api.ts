@@ -53,7 +53,7 @@ async function fetchApiLotById(lotId: string, fetcher: typeof fetch): Promise<Re
 async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string | undefined }> {
   const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
 
-  const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc&limit=1000";
+  const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc&limit=2000";
   const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
     headers: {
       accept: "application/json",
