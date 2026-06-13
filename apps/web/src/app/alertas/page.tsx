@@ -4,14 +4,18 @@ import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import { FonteDots, ScoreRing, riscoBadge } from "../../components/ui";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { formatBRL } from "../../data/leiloes-seed";
+import { supabase } from "../../auth/supabase-client";
+import { useAuth } from "../../auth/auth-context";
 import {
   Bell,
   BookmarkX,
   ChevronRight,
   Clock,
+  Mail,
   Search,
   Star,
   TrendingDown,
+  Trash2,
   Zap,
 } from "lucide-react";
 
@@ -41,6 +45,20 @@ const DEFAULT_PREFS: AlertPrefs = {
   scoreAlto: false,
   quedaPreco: false,
 };
+
+/** Shape returned by the `list_my_alerts()` RPC. */
+interface ServerAlert {
+  id: string;
+  lot_id: string;
+  lot_label: string;
+  edital: string;
+  proposal_deadline: string;
+  email: string;
+  channel: string;
+  status: string;
+  notified_at: string | null;
+  created_at: string;
+}
 
 // ─── LocalStorage helpers ─────────────────────────────────────────────────────
 
@@ -317,9 +335,284 @@ function EmptyWatchlist({ onExplore }: EmptyWatchlistProps) {
   );
 }
 
+// ─── Email Alerts section ─────────────────────────────────────────────────────
+
+interface EmailAlertsSectionProps {
+  user: import("@supabase/supabase-js").User | null;
+  demoMode: boolean;
+}
+
+function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
+  const [alerts, setAlerts] = useState<ServerAlert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | undefined>();
+  const [removing, setRemoving] = useState<string | undefined>();
+  const [removeError, setRemoveError] = useState<string | undefined>();
+
+  const isLoggedIn = user !== null;
+
+  useEffect(() => {
+    if (!isLoggedIn || !supabase || demoMode) return;
+
+    let active = true;
+    setLoading(true);
+    setFetchError(undefined);
+
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc("list_my_alerts");
+        if (!active) return;
+        if (error) {
+          setFetchError(error.message);
+        } else {
+          setAlerts((data ?? []) as ServerAlert[]);
+        }
+      } catch (err: unknown) {
+        if (!active) return;
+        setFetchError(err instanceof Error ? err.message : "Erro ao carregar alertas.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isLoggedIn, demoMode]);
+
+  async function handleRemove(lotId: string): Promise<void> {
+    if (!supabase) return;
+    setRemoving(lotId);
+    setRemoveError(undefined);
+
+    const { error } = await supabase.rpc("delete_alert", { p_lot_id: lotId });
+
+    if (error) {
+      setRemoveError(error.message);
+      setRemoving(undefined);
+      return;
+    }
+
+    setAlerts((prev) => prev.filter((a) => a.lot_id !== lotId));
+    setRemoving(undefined);
+  }
+
+  // Not logged in or demo mode
+  if (!isLoggedIn || demoMode) {
+    return (
+      <div
+        className="panel"
+        style={{
+          padding: "28px 24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          alignItems: "flex-start",
+        }}
+      >
+        <div className="row" style={{ gap: 8, marginBottom: 2 }}>
+          <Mail size={16} style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 15 }}>Alertas por e-mail</span>
+        </div>
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 10,
+            background: "color-mix(in srgb,var(--accent) 8%,var(--surface-2))",
+            border: "1px solid color-mix(in srgb,var(--accent) 22%,transparent)",
+            fontSize: 13,
+            color: "var(--t-mid)",
+            lineHeight: 1.5,
+          }}
+        >
+          {demoMode
+            ? "Alertas por e-mail não estão disponíveis no modo demonstração. Configure o Supabase para habilitar esta funcionalidade."
+            : "Faça login para ver e gerenciar seus alertas de prazo por e-mail."}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Section header */}
+      <div className="row between" style={{ marginBottom: 12 }}>
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 2 }}>
+            <Mail size={16} style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Alertas por e-mail</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--t-mid)" }}>
+            Você recebe um e-mail quando o prazo do lote estiver chegando (até 3 dias antes).
+          </p>
+        </div>
+        {alerts.length > 0 ? (
+          <span className="badge badge--neutral num" style={{ fontSize: 12 }}>
+            {alerts.length}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Remove error */}
+      {removeError !== undefined ? (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 9,
+            background: "color-mix(in srgb,var(--danger) 8%,var(--surface-2))",
+            border: "1px solid color-mix(in srgb,var(--danger) 20%,transparent)",
+            fontSize: 13,
+            color: "var(--danger)",
+            marginBottom: 10,
+          }}
+        >
+          {removeError}
+        </div>
+      ) : null}
+
+      {/* Loading */}
+      {loading ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            color: "var(--t-mid)",
+            fontSize: 14,
+          }}
+        >
+          Carregando alertas...
+        </div>
+      ) : fetchError !== undefined ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            color: "var(--danger)",
+            fontSize: 14,
+          }}
+        >
+          {fetchError}
+        </div>
+      ) : alerts.length === 0 ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 2,
+            }}
+          >
+            <Mail size={20} style={{ color: "var(--t-mid)" }} />
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Nenhum alerta criado</div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--t-mid)",
+              maxWidth: 320,
+              lineHeight: 1.5,
+            }}
+          >
+            Você ainda não criou alertas. Abra um lote e clique em "Criar alerta de prazo".
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {alerts.map((alert) => {
+            const days = daysUntil(alert.proposal_deadline);
+            const deadlineColor =
+              days <= 3 ? "var(--danger)" : days <= 7 ? "var(--warn)" : "var(--t-mid)";
+            const isBeingRemoved = removing === alert.lot_id;
+
+            return (
+              <div
+                key={alert.id}
+                className="panel"
+                style={{
+                  padding: "14px 18px",
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  opacity: isBeingRemoved ? 0.5 : 1,
+                  transition: "opacity 0.15s",
+                }}
+              >
+                {/* Content */}
+                <div style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
+                    {alert.lot_label}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--t-low)", marginBottom: 5 }}>
+                    Edital {alert.edital}
+                  </div>
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: deadlineColor, fontWeight: 600 }}>
+                      <Clock
+                        size={11}
+                        style={{ verticalAlign: "middle", marginRight: 3 }}
+                      />
+                      encerra {formatDeadline(alert.proposal_deadline)}
+                      {days <= 7 && days > 0 ? ` (${days}d)` : ""}
+                      {days <= 0 ? " (vencido)" : ""}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--t-low)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {alert.email}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Remove */}
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  type="button"
+                  title="Remover alerta"
+                  aria-label="Remover alerta"
+                  disabled={isBeingRemoved}
+                  onClick={() => {
+                    void handleRemove(alert.lot_id);
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilaoLot) => void }) {
+  const { user, demoMode } = useAuth();
+
   // Watchlist state (list of lot IDs)
   const [watchlistIds, setWatchlistIds] = useState<string[]>(() => loadWatchlistIds());
 
@@ -419,106 +712,113 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
           }
         }
       `}</style>
-      {/* ── Left: Watchlist ───────────────────────────────────────── */}
-      <div>
-        {/* Header */}
-        <div className="row between" style={{ marginBottom: 16 }}>
-          <div>
-            <h1
+
+      {/* ── Left: Watchlist + Email Alerts ───────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+        {/* Watchlist */}
+        <div>
+          {/* Header */}
+          <div className="row between" style={{ marginBottom: 16 }}>
+            <div>
+              <h1
+                style={{
+                  fontWeight: 700,
+                  fontSize: 20,
+                  letterSpacing: "-.02em",
+                  marginBottom: 2,
+                }}
+              >
+                Watchlist & Alertas
+              </h1>
+              <p style={{ fontSize: 13.5, color: "var(--t-mid)" }}>
+                {watchlistIds.length > 0
+                  ? `${watchlistIds.length} lote${watchlistIds.length !== 1 ? "s" : ""} acompanhado${watchlistIds.length !== 1 ? "s" : ""}`
+                  : "Nenhum lote na watchlist"}
+              </p>
+            </div>
+            {watchlistIds.length > 0 ? (
+              <span className="badge badge--neutral num" style={{ fontSize: 12 }}>
+                {watchlistIds.length}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Lot list */}
+          {isLoading ? (
+            <div
+              className="panel"
               style={{
-                fontWeight: 700,
-                fontSize: 20,
-                letterSpacing: "-.02em",
-                marginBottom: 2,
+                padding: "40px 32px",
+                textAlign: "center",
+                color: "var(--t-mid)",
+                fontSize: 14,
               }}
             >
-              Watchlist & Alertas
-            </h1>
-            <p style={{ fontSize: 13.5, color: "var(--t-mid)" }}>
-              {watchlistIds.length > 0
-                ? `${watchlistIds.length} lote${watchlistIds.length !== 1 ? "s" : ""} acompanhado${watchlistIds.length !== 1 ? "s" : ""}`
-                : "Nenhum lote na watchlist"}
-            </p>
-          </div>
-          {watchlistIds.length > 0 ? (
-            <span className="badge badge--neutral num" style={{ fontSize: 12 }}>
-              {watchlistIds.length}
-            </span>
-          ) : null}
+              Carregando lotes...
+            </div>
+          ) : loadError !== undefined ? (
+            <div
+              className="panel"
+              style={{
+                padding: "40px 32px",
+                textAlign: "center",
+                color: "var(--danger)",
+                fontSize: 14,
+              }}
+            >
+              {loadError}
+            </div>
+          ) : watchlistIds.length === 0 ? (
+            <EmptyWatchlist />
+          ) : scoredWatchlist.length === 0 ? (
+            // IDs exist but lots not found in current data (stale IDs)
+            <div
+              className="panel"
+              style={{
+                padding: "32px 24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+                alignItems: "flex-start",
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 14, color: "var(--t-mid)" }}>
+                {watchlistIds.length} lote{watchlistIds.length !== 1 ? "s" : ""} na
+                watchlist, mas não encontrado{watchlistIds.length !== 1 ? "s" : ""} na
+                fonte atual.
+              </div>
+              <div style={{ fontSize: 13, color: "var(--t-low)" }}>
+                Os editais podem ter encerrado ou os IDs estão desatualizados.
+              </div>
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={() => {
+                  setWatchlistIds([]);
+                  saveWatchlistIds([]);
+                }}
+              >
+                Limpar watchlist
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {scoredWatchlist.map(({ lot, scoring }) => (
+                <WatchlistCard
+                  key={lot.id}
+                  lot={lot}
+                  score={scoring.score}
+                  scoreLabel={scoring.label}
+                  onSelect={onSelectLot !== undefined ? () => onSelectLot(lot) : undefined}
+                  onRemove={() => removeLot(lot.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Lot list */}
-        {isLoading ? (
-          <div
-            className="panel"
-            style={{
-              padding: "40px 32px",
-              textAlign: "center",
-              color: "var(--t-mid)",
-              fontSize: 14,
-            }}
-          >
-            Carregando lotes...
-          </div>
-        ) : loadError !== undefined ? (
-          <div
-            className="panel"
-            style={{
-              padding: "40px 32px",
-              textAlign: "center",
-              color: "var(--danger)",
-              fontSize: 14,
-            }}
-          >
-            {loadError}
-          </div>
-        ) : watchlistIds.length === 0 ? (
-          <EmptyWatchlist />
-        ) : scoredWatchlist.length === 0 ? (
-          // IDs exist but lots not found in current data (stale IDs)
-          <div
-            className="panel"
-            style={{
-              padding: "32px 24px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              alignItems: "flex-start",
-            }}
-          >
-            <div style={{ fontWeight: 600, fontSize: 14, color: "var(--t-mid)" }}>
-              {watchlistIds.length} lote{watchlistIds.length !== 1 ? "s" : ""} na
-              watchlist, mas não encontrado{watchlistIds.length !== 1 ? "s" : ""} na
-              fonte atual.
-            </div>
-            <div style={{ fontSize: 13, color: "var(--t-low)" }}>
-              Os editais podem ter encerrado ou os IDs estão desatualizados.
-            </div>
-            <button
-              className="btn btn--ghost btn--sm"
-              type="button"
-              onClick={() => {
-                setWatchlistIds([]);
-                saveWatchlistIds([]);
-              }}
-            >
-              Limpar watchlist
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {scoredWatchlist.map(({ lot, scoring }) => (
-              <WatchlistCard
-                key={lot.id}
-                lot={lot}
-                score={scoring.score}
-                scoreLabel={scoring.label}
-                onSelect={onSelectLot !== undefined ? () => onSelectLot(lot) : undefined}
-                onRemove={() => removeLot(lot.id)}
-              />
-            ))}
-          </div>
-        )}
+        {/* Email Alerts */}
+        <EmailAlertsSection user={user} demoMode={demoMode} />
       </div>
 
       {/* ── Right: Alert preferences ──────────────────────────────── */}
