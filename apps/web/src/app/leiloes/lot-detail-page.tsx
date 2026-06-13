@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -6,16 +6,20 @@ import {
   CalendarClock,
   CheckSquare,
   ExternalLink,
+  ImageOff,
   Loader2,
   MapPin,
+  Package,
   Printer,
   Send,
   ShieldCheck,
   Sparkles,
+  TrendingDown,
   Users,
 } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
-import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
+import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
+import type { LotEconomia } from "@fonteia/scoring";
 import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
 import { Bar, FonteDots, riscoBadge } from "../../components/ui";
@@ -125,17 +129,22 @@ function deadlineStatus(days: number): DeadlineStatus {
   return "ok";
 }
 
-function deadlineStatusClass(status: DeadlineStatus): string {
-  if (status === "expired" || status === "urgent") return "color-error";
-  if (status === "soon") return "color-warning";
-  return "color-ok";
-}
-
 function deadlineStatusLabel(days: number): string {
   if (days <= 0) return "Prazo vencido";
   if (days === 1) return "Vence amanha";
   if (days <= 6) return `Vence em ${days} dias — decisao urgente`;
   return `${days} dias restantes`;
+}
+
+interface DeadlineTone {
+  bg: string;
+  fg: string;
+}
+
+function deadlineTone(status: DeadlineStatus): DeadlineTone {
+  if (status === "ok") return { bg: "var(--color-success-bg)", fg: "var(--color-success)" };
+  if (status === "expired") return { bg: "var(--color-error-bg)", fg: "var(--color-error)" };
+  return { bg: "var(--color-warning-bg)", fg: "var(--color-warning)" };
 }
 
 // ─── Score-derived risk bars (derived from scoring factors, no invented data) ──
@@ -148,7 +157,7 @@ interface RiskBar {
 
 function buildRiskBars(
   scoring: ReturnType<typeof scoreReceitaLeilaoLot>,
-  lot: ReceitaLeilaoLot,
+  _lot: ReceitaLeilaoLot,
 ): RiskBar[] {
   const bars: RiskBar[] = [];
 
@@ -192,14 +201,251 @@ function buildRiskBars(
   return bars;
 }
 
+// ─── Imagens do lote (gracioso: imageUrls[] preferido, senão imageUrl) ─────────
+
+function collectImages(lot: ReceitaLeilaoLot): string[] {
+  const out: string[] = [];
+  const push = (value: string | undefined) => {
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0 && !out.includes(trimmed)) out.push(trimmed);
+    }
+  };
+  if (Array.isArray(lot.imageUrls)) {
+    for (const url of lot.imageUrls) push(url);
+  }
+  push(lot.imageUrl);
+  return out;
+}
+
+// ─── Itens do lote (gracioso: só renderiza quando a fonte traz os campos) ──────
+
+interface LotItem {
+  descricao: string;
+  quantidade?: string | undefined;
+  unidade?: string | undefined;
+}
+
+interface LotItensInfo {
+  recinto?: string | undefined;
+  itens: LotItem[];
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+/**
+ * Lê descrições/quantidades/recinto de um payload mais rico (catálogo completo),
+ * SEM fabricar nada: se os campos não existirem no `raw`, devolve null e a seção
+ * inteira some. Faz narrowing seguro sobre `unknown` para passar no strict TS.
+ */
+function extractLotItens(lot: ReceitaLeilaoLot): LotItensInfo | null {
+  const raw = lot.raw as unknown as Record<string, unknown>;
+  if (!raw || typeof raw !== "object") return null;
+
+  const recinto =
+    asString(raw["recinto"]) ?? asString(raw["patio"]) ?? asString(raw["localRetirada"]);
+
+  // Procura a primeira coleção de itens conhecida.
+  const candidateKeys = ["itensDetalhesLote", "itensLote", "itens", "detalhesLote"];
+  let rawItens: unknown;
+  for (const key of candidateKeys) {
+    const value = raw[key];
+    if (Array.isArray(value) && value.length > 0) {
+      rawItens = value;
+      break;
+    }
+  }
+
+  const itens: LotItem[] = [];
+  if (Array.isArray(rawItens)) {
+    for (const entry of rawItens) {
+      if (!entry || typeof entry !== "object") continue;
+      const obj = entry as Record<string, unknown>;
+      const descricao =
+        asString(obj["descricao"]) ??
+        asString(obj["descricaoItem"]) ??
+        asString(obj["nome"]) ??
+        asString(obj["item"]);
+      if (!descricao) continue;
+      const quantidade = asString(obj["quantidade"]) ?? asString(obj["qtd"]);
+      const unidade = asString(obj["unidade"]) ?? asString(obj["unidadeMedida"]);
+      itens.push({ descricao, quantidade, unidade });
+    }
+  }
+
+  if (itens.length === 0 && !recinto) return null;
+  return { recinto, itens };
+}
+
+// ─── Photo / gallery ──────────────────────────────────────────────────────────
+
+interface LotPhotoProps {
+  images: string[];
+  alt: string;
+  /** Overlay rendered on top of the photo (badges, score, etc.). */
+  overlay?: React.ReactNode;
+}
+
+function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
+  const [active, setActive] = useState(0);
+  // Falha de carregamento por índice — cai para o placeholder gracioso.
+  const [broken, setBroken] = useState<Record<number, boolean>>({});
+
+  // Reseta ao trocar o conjunto de imagens (troca de lote).
+  useEffect(() => {
+    setActive(0);
+    setBroken({});
+  }, [images]);
+
+  const current = images[active];
+  const showImage = typeof current === "string" && broken[active] !== true;
+  const hasGallery = images.length > 1;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          aspectRatio: "16 / 10",
+          borderRadius: "var(--r-lg)",
+          overflow: "hidden",
+          background: "linear-gradient(135deg, #1a2e52, #0c1c3a)",
+          border: "1px solid var(--n-100)",
+        }}
+      >
+        {showImage ? (
+          <img
+            src={current}
+            alt={alt}
+            loading="lazy"
+            onError={() => {
+              setBroken((prev) => ({ ...prev, [active]: true }));
+            }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+          />
+        ) : (
+          // Placeholder gracioso (gradiente) quando não há foto utilizável.
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "var(--s-2)",
+              color: "rgba(255,255,255,0.78)",
+              textAlign: "center",
+              padding: "var(--s-4)",
+            }}
+          >
+            <ImageOff aria-hidden="true" size={34} />
+            <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+              Sem foto publicada para este lote
+            </span>
+            <span style={{ fontSize: "0.72rem", opacity: 0.8 }}>
+              A fonte oficial nao disponibilizou imagem.
+            </span>
+          </div>
+        )}
+
+        {overlay ? (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>{overlay}</div>
+        ) : null}
+      </div>
+
+      {/* Thumbnails — only when there is a real gallery */}
+      {hasGallery ? (
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--s-2)",
+            overflowX: "auto",
+            paddingBottom: 2,
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {images.map((url, i) => {
+            const selected = i === active;
+            return (
+              <button
+                key={`${url}-${i}`}
+                type="button"
+                onClick={() => {
+                  setActive(i);
+                }}
+                aria-label={`Ver foto ${i + 1} de ${images.length}`}
+                aria-pressed={selected}
+                style={{
+                  flexShrink: 0,
+                  width: 56,
+                  height: 56,
+                  minWidth: 44,
+                  minHeight: 44,
+                  padding: 0,
+                  borderRadius: "var(--r-sm)",
+                  overflow: "hidden",
+                  cursor: "pointer",
+                  background: "var(--n-100)",
+                  border: selected ? "2px solid var(--g-500)" : "1px solid var(--n-200)",
+                }}
+              >
+                {broken[i] === true ? (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      display: "flex",
+                      width: "100%",
+                      height: "100%",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--n-400)",
+                    }}
+                  >
+                    <ImageOff size={16} />
+                  </span>
+                ) : (
+                  <img
+                    src={url}
+                    alt=""
+                    loading="lazy"
+                    onError={() => {
+                      setBroken((prev) => ({ ...prev, [i]: true }));
+                    }}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 // ─── Print Report (no-display on screen) ─────────────────────────────────────
 
 interface PrintReportProps {
   lot: ReceitaLeilaoLot;
   scoring: ReturnType<typeof scoreReceitaLeilaoLot>;
+  economia: LotEconomia | null;
 }
 
-function PrintReport({ lot, scoring }: PrintReportProps) {
+function PrintReport({ lot, scoring, economia }: PrintReportProps) {
   const today = new Date().toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "long",
@@ -222,6 +468,12 @@ function PrintReport({ lot, scoring }: PrintReportProps) {
 
       <div className="report-section">
         <div className="report-section-title">Identificacao do lote</div>
+        {lot.category ? (
+          <div className="report-row">
+            <span>Categoria</span>
+            <b>{lot.category}</b>
+          </div>
+        ) : null}
         <div className="report-row">
           <span>Lote</span>
           <b>
@@ -256,6 +508,20 @@ function PrintReport({ lot, scoring }: PrintReportProps) {
 
       <div className="report-section">
         <div className="report-section-title">Resumo financeiro</div>
+        {economia ? (
+          <>
+            <div className="report-row">
+              <span>Avaliacao oficial</span>
+              <b>{formatBRL(economia.avaliacaoCents / 100)}</b>
+            </div>
+            <div className="report-row">
+              <span>Economia (avaliacao − minimo)</span>
+              <b>
+                {formatBRL(economia.economiaCents / 100)} ({economia.descontoPct}%)
+              </b>
+            </div>
+          </>
+        ) : null}
         <div className="report-row">
           <span>Lance minimo (fonte oficial)</span>
           <b>{formatBRL(lot.minimumBidCents / 100)}</b>
@@ -317,12 +583,18 @@ export function LotDetailPage({
   onAsk: _onAsk,
 }: LotDetailPageProps) {
   const scoring = scoreReceitaLeilaoLot(lot);
+  const economia = lotEconomia(lot);
   const days = daysUntilDeadline(lot.proposalDeadline);
   const dlStatus = deadlineStatus(days);
+  const dlTone = deadlineTone(dlStatus);
   const { className: riscoBadgeClass, label: riscoBadgeLabel } = riscoBadge(
     scoring.label === "alto" ? "baixo" : scoring.label === "medio" ? "medio" : "alto",
   );
   const riskBars = buildRiskBars(scoring, lot);
+
+  const images = useMemo(() => collectImages(lot), [lot]);
+  const itensInfo = useMemo(() => extractLotItens(lot), [lot]);
+  const lotTitle = `Edital ${lot.edital} — Lote ${lot.displayNumber}`;
 
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
@@ -438,7 +710,7 @@ export function LotDetailPage({
   return (
     <>
       {/* Print block — hidden on screen, visible only on print */}
-      <PrintReport lot={lot} scoring={scoring} />
+      <PrintReport lot={lot} scoring={scoring} economia={economia} />
 
       {/* Screen content */}
       <div className="lot-detail no-print">
@@ -450,148 +722,342 @@ export function LotDetailPage({
             Voltar
           </button>
 
-          {/* ── Header card ──────────────────────────────────────────────── */}
-          <div className="lot-detail-header">
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* Badges */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "var(--s-2)",
-                  marginBottom: "var(--s-3)",
-                }}
-              >
-                <span className={`badge ${riscoBadgeClass}`}>
-                  <ShieldCheck aria-hidden="true" size={12} />
-                  {riscoBadgeLabel}
-                </span>
-                <span className="badge badge--neutral" style={{ fontFamily: "monospace" }}>
-                  Lote {lot.displayNumber}
-                </span>
-                {lot.eligiblePersonTypes.includes("pf") ? (
-                  <span className="badge badge--info">
-                    <Users aria-hidden="true" size={12} />
-                    PF permitida
-                  </span>
-                ) : (
-                  <span className="badge badge--warn">
-                    <Users aria-hidden="true" size={12} />
-                    Somente PJ
-                  </span>
-                )}
-              </div>
+          {/* ════════════════════════════════════════════════════════════════
+              HERO — foto + identidade + valor + ações (tudo no topo)
+              ════════════════════════════════════════════════════════════════ */}
+          <section
+            className="lot-detail-header"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--s-5)", padding: "var(--s-5)" }}
+          >
+            {/* Foto / galeria com overlays */}
+            <LotPhoto
+              images={images}
+              alt={`Foto do lote ${lot.displayNumber} — ${lot.category ?? lot.agency}`}
+              overlay={
+                <>
+                  {/* Categoria — canto superior esquerdo, quando existe */}
+                  {lot.category ? (
+                    <span
+                      className="badge badge--neutral"
+                      style={{
+                        position: "absolute",
+                        top: "var(--s-3)",
+                        left: "var(--s-3)",
+                        maxWidth: "60%",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      <Package aria-hidden="true" size={12} />
+                      {lot.category.toLowerCase()}
+                    </span>
+                  ) : null}
 
-              {/* Title */}
-              <h2 style={{ marginBottom: "var(--s-3)", lineHeight: 1.2, overflowWrap: "anywhere" }}>
-                Edital {lot.edital} — Lote {lot.displayNumber}
-              </h2>
+                  {/* Desconto — canto superior direito, só com economia honesta */}
+                  {economia ? (
+                    <span
+                      className="badge"
+                      style={{
+                        position: "absolute",
+                        top: "var(--s-3)",
+                        right: "var(--s-3)",
+                        background: "var(--g-700)",
+                        color: "#fff",
+                        fontWeight: 800,
+                        boxShadow: "var(--shadow-sm)",
+                      }}
+                    >
+                      <TrendingDown aria-hidden="true" size={12} />-{economia.descontoPct}% vs avaliacao
+                    </span>
+                  ) : null}
 
-              {/* Agency + City */}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "var(--s-4)",
-                  color: "var(--n-500)",
-                  fontSize: "0.9rem",
-                }}
+                  {/* Score — canto inferior direito */}
+                  <div style={{ position: "absolute", bottom: "var(--s-3)", right: "var(--s-3)" }}>
+                    <ScoreRing score={scoring.score} size="lg" />
+                  </div>
+                </>
+              }
+            />
+
+            {/* Badges de identidade */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s-2)" }}>
+              <span className={`badge ${riscoBadgeClass}`}>
+                <ShieldCheck aria-hidden="true" size={12} />
+                {riscoBadgeLabel}
+              </span>
+              <span className="badge badge--neutral" style={{ fontFamily: "monospace" }}>
+                Lote {lot.displayNumber}
+              </span>
+              {lot.eligiblePersonTypes.includes("pf") ? (
+                <span className="badge badge--info">
+                  <Users aria-hidden="true" size={12} />
+                  PF permitida
+                </span>
+              ) : (
+                <span className="badge badge--warn">
+                  <Users aria-hidden="true" size={12} />
+                  Somente PJ
+                </span>
+              )}
+              <span
+                className={`badge score-label-${scoring.label}`}
+                style={{ background: "var(--n-50)", border: "1px solid var(--n-100)" }}
               >
-                <span
-                  style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)" }}
-                >
-                  <Building2 aria-hidden="true" size={14} />
-                  {lot.agency}
-                </span>
-                <span
-                  style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)" }}
-                >
-                  <MapPin aria-hidden="true" size={14} />
-                  {lot.city}
-                </span>
-              </div>
+                Oportunidade {scoring.label.toUpperCase()}
+              </span>
             </div>
 
-            {/* Score ring large */}
+            {/* Título */}
+            <h2 style={{ margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{lotTitle}</h2>
+
+            {/* Órgão + cidade */}
             <div
               style={{
                 display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "var(--s-1)",
-                flexShrink: 0,
+                flexWrap: "wrap",
+                gap: "var(--s-4)",
+                color: "var(--n-500)",
+                fontSize: "0.9rem",
+                marginTop: "calc(-1 * var(--s-2))",
               }}
             >
-              <ScoreRing score={scoring.score} size="lg" />
-              <span className="section-label">Oportunidade</span>
-              <strong
-                className={`score-label score-label-${scoring.label}`}
-                style={{ fontSize: "0.95rem" }}
-              >
-                {scoring.label.toUpperCase()}
-              </strong>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)" }}>
+                <Building2 aria-hidden="true" size={14} />
+                {lot.agency}
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)" }}>
+                <MapPin aria-hidden="true" size={14} />
+                {lot.city}
+              </span>
             </div>
 
-            {/* Actions */}
-            <div className="lot-detail-actions" style={{ alignSelf: "flex-start" }}>
+            {/* Bloco de valor — lance mínimo + economia (quando houver) */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "var(--s-3)",
+              }}
+            >
+              {/* Lance mínimo (sempre) */}
+              <div
+                style={{
+                  flex: "1 1 200px",
+                  minWidth: 0,
+                  background: "var(--g-50)",
+                  border: "1px solid var(--n-100)",
+                  borderLeft: "3px solid var(--g-500)",
+                  borderRadius: "0 var(--r-md) var(--r-md) 0",
+                  padding: "var(--s-3) var(--s-4)",
+                }}
+              >
+                <span className="section-label">Lance minimo</span>
+                <strong
+                  style={{
+                    display: "block",
+                    marginTop: "var(--s-1)",
+                    fontSize: "1.5rem",
+                    fontWeight: 800,
+                    color: "var(--g-700)",
+                    fontVariantNumeric: "tabular-nums",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {formatBRL(lot.minimumBidCents / 100)}
+                </strong>
+              </div>
+
+              {/* Economia real (avaliação − mínimo) — só quando honesta */}
+              {economia ? (
+                <div
+                  style={{
+                    flex: "1 1 200px",
+                    minWidth: 0,
+                    background: "var(--color-success-bg)",
+                    border: "1px solid var(--g-200)",
+                    borderLeft: "3px solid var(--g-600)",
+                    borderRadius: "0 var(--r-md) var(--r-md) 0",
+                    padding: "var(--s-3) var(--s-4)",
+                  }}
+                >
+                  <span
+                    className="section-label"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-1)" }}
+                  >
+                    <TrendingDown aria-hidden="true" size={12} />
+                    Economia potencial
+                  </span>
+                  <strong
+                    style={{
+                      display: "block",
+                      marginTop: "var(--s-1)",
+                      fontSize: "1.5rem",
+                      fontWeight: 800,
+                      color: "var(--color-success)",
+                      fontVariantNumeric: "tabular-nums",
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {formatBRL(economia.economiaCents / 100)}
+                  </strong>
+                  <span style={{ fontSize: "0.75rem", color: "var(--n-500)" }}>
+                    -{economia.descontoPct}% sobre avaliacao de {formatBRL(economia.avaliacaoCents / 100)}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {/* Prazo / urgência */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--s-2)",
+                flexWrap: "wrap",
+                padding: "var(--s-3) var(--s-4)",
+                borderRadius: "var(--r-md)",
+                background: dlTone.bg,
+                color: dlTone.fg,
+                fontSize: "0.85rem",
+                fontWeight: 700,
+              }}
+            >
+              <CalendarClock aria-hidden="true" size={15} />
+              <span>{deadlineStatusLabel(days)}</span>
+              <span style={{ fontWeight: 400, opacity: 0.85 }}>
+                · encerra {formatDeadline(lot.proposalDeadline)}
+              </span>
+            </div>
+
+            {/* Ações primárias — alvos de toque ≥44px, empilham no mobile */}
+            <div className="lot-hero-actions">
+              <a
+                href={lot.sourceUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="primary-button lot-hero-action"
+              >
+                <ExternalLink aria-hidden="true" size={16} />
+                Participar no leilao
+              </a>
               <button
-                className="ghost-button"
+                className="ghost-button lot-hero-action"
                 onClick={() => {
                   setAlertOpen(true);
                 }}
                 type="button"
               >
                 <Bell aria-hidden="true" size={16} />
-                Criar alerta
+                Criar alerta de prazo
               </button>
               <button
-                className="ghost-button"
+                className="ghost-button lot-hero-action"
                 onClick={() => {
                   window.print();
                 }}
                 type="button"
               >
                 <Printer aria-hidden="true" size={16} />
-                Gerar PDF
+                Gerar relatorio PDF
               </button>
             </div>
-          </div>
 
-          {successMessage ? (
-            <div className="lot-success-message">{successMessage}</div>
+            {successMessage ? (
+              <div className="lot-success-message">{successMessage}</div>
+            ) : null}
+          </section>
+
+          {/* ── Itens do lote (gracioso: só quando a fonte traz os dados) ──── */}
+          {itensInfo ? (
+            <section
+              className="lot-detail-header"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}
+            >
+              <div>
+                <span className="section-label">Conteudo</span>
+                <h3
+                  style={{
+                    marginTop: "var(--s-1)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                  }}
+                >
+                  <Package aria-hidden="true" size={16} />
+                  Itens do lote
+                </h3>
+              </div>
+
+              {itensInfo.recinto ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                    fontSize: "0.875rem",
+                    color: "var(--n-600)",
+                  }}
+                >
+                  <MapPin aria-hidden="true" size={14} />
+                  <span>
+                    Recinto / patio: <strong style={{ color: "var(--n-900)" }}>{itensInfo.recinto}</strong>
+                  </span>
+                </div>
+              ) : null}
+
+              {itensInfo.itens.length > 0 ? (
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--s-2)",
+                  }}
+                >
+                  {itensInfo.itens.map((item, i) => (
+                    <li
+                      key={`${item.descricao}-${i}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: "var(--s-3)",
+                        padding: "10px var(--s-3)",
+                        background: "var(--n-50)",
+                        border: "1px solid var(--n-100)",
+                        borderRadius: "var(--r-md)",
+                        fontSize: "0.875rem",
+                        color: "var(--n-700)",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{item.descricao}</span>
+                      {item.quantidade ? (
+                        <span
+                          className="badge badge--neutral"
+                          style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}
+                        >
+                          {item.quantidade}
+                          {item.unidade ? ` ${item.unidade}` : ""}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
+                Descricoes conforme publicadas na fonte oficial. Confirme quantidades e estado dos bens
+                no edital antes de propor.
+              </p>
+            </section>
           ) : null}
 
-          {/* ── Meta grid ─────────────────────────────────────────────────── */}
-          <div className="lot-detail-meta">
-            <div className="lot-meta-item">
-              <span className="section-label">Orgao</span>
-              <strong>{lot.agency}</strong>
-            </div>
-            <div className="lot-meta-item">
-              <span className="section-label">Cidade</span>
-              <strong>{lot.city}</strong>
-            </div>
-            <div className="lot-meta-item">
-              <span className="section-label">Edital</span>
-              <strong>{lot.edital}</strong>
-            </div>
-            <div className="lot-meta-item">
-              <span className="section-label">Lote interno</span>
-              <strong>{lot.lotNumber}</strong>
-            </div>
-            <div className="lot-meta-item">
-              <span className="section-label">Participantes</span>
-              <strong>{eligibilityLabel(lot)}</strong>
-            </div>
-            <div className="lot-meta-item">
-              <span className="section-label">Lance minimo</span>
-              <strong className="lot-minimum-value">
-                {formatBRL(lot.minimumBidCents / 100)}
-              </strong>
-            </div>
-          </div>
-
-          {/* ── Relatório por template ────────────────────────────────────── */}
+          {/* ── Resumo factual + riscos por regra + checklist ─────────────── */}
           <section
             className="lot-detail-header"
             style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}
@@ -614,17 +1080,32 @@ export function LotDetailPage({
                 color: "var(--n-700)",
               }}
             >
-              <p>
+              <p style={{ margin: 0 }}>
                 O lote <strong>{lot.displayNumber}</strong> faz parte do edital{" "}
                 <strong>{lot.edital}</strong> conduzido por{" "}
                 <strong>{lot.agency}</strong>, com sede em{" "}
-                <strong>{lot.city}</strong>. O prazo final para propostas e{" "}
+                <strong>{lot.city}</strong>.{" "}
+                {lot.category ? (
+                  <>
+                    Categoria do bem: <strong>{lot.category}</strong>.{" "}
+                  </>
+                ) : null}
+                O prazo final para propostas e{" "}
                 <strong>{formatDeadline(lot.proposalDeadline)}</strong>. O lance
                 minimo definido na fonte oficial e de{" "}
                 <strong>{formatBRL(lot.minimumBidCents / 100)}</strong>.{" "}
+                {economia ? (
+                  <>
+                    A avaliacao oficial e de{" "}
+                    <strong>{formatBRL(economia.avaliacaoCents / 100)}</strong>, o que representa uma
+                    economia potencial de{" "}
+                    <strong>{formatBRL(economia.economiaCents / 100)}</strong> ({economia.descontoPct}%
+                    abaixo da avaliacao).{" "}
+                  </>
+                ) : null}
                 {eligibilityLong(lot)}
               </p>
-              <p style={{ marginTop: "var(--s-3)", fontSize: "0.8rem", color: "var(--n-400)" }}>
+              <p style={{ marginTop: "var(--s-3)", marginBottom: 0, fontSize: "0.8rem", color: "var(--n-400)" }}>
                 Fonte: Receita Federal — SLE (receita-leiloes-sle). Coletado em{" "}
                 {formatDateShort(lot.collectedAt)}. Todos os dados acima sao exatamente os
                 publicados na fonte — sem estimativas ou complementos.
@@ -727,6 +1208,63 @@ export function LotDetailPage({
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <tbody>
+                {economia ? (
+                  <>
+                    <tr>
+                      <td
+                        style={{
+                          padding: "12px 0",
+                          fontSize: "0.9rem",
+                          color: "var(--n-600)",
+                          borderBottom: "1px solid var(--n-100)",
+                        }}
+                      >
+                        Avaliacao oficial
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 0",
+                          textAlign: "right",
+                          fontSize: "1rem",
+                          fontWeight: 700,
+                          color: "var(--n-700)",
+                          fontVariantNumeric: "tabular-nums",
+                          borderBottom: "1px solid var(--n-100)",
+                        }}
+                      >
+                        {formatBRL(economia.avaliacaoCents / 100)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td
+                        style={{
+                          padding: "12px 0",
+                          fontSize: "0.9rem",
+                          color: "var(--n-600)",
+                          borderBottom: "1px solid var(--n-100)",
+                        }}
+                      >
+                        Economia (avaliacao − minimo){" "}
+                        <span style={{ fontSize: "0.72rem", color: "var(--n-400)", fontWeight: 400 }}>
+                          ({economia.descontoPct}% de desconto)
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          padding: "12px 0",
+                          textAlign: "right",
+                          fontSize: "1rem",
+                          fontWeight: 800,
+                          color: "var(--color-success)",
+                          fontVariantNumeric: "tabular-nums",
+                          borderBottom: "1px solid var(--n-100)",
+                        }}
+                      >
+                        {formatBRL(economia.economiaCents / 100)}
+                      </td>
+                    </tr>
+                  </>
+                ) : null}
                 <tr>
                   <td
                     style={{
@@ -793,8 +1331,9 @@ export function LotDetailPage({
               </tbody>
             </table>
             <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
-              Avaliacao oficial, descontos, tributos e custos adicionais nao estao disponíveis nesta
-              fonte. Consulte o edital para valores completos.
+              {economia
+                ? "Tributos, onus e custos de remocao nao estao inclusos. Consulte o edital para os valores completos."
+                : "Avaliacao oficial, descontos, tributos e custos adicionais nao estao disponiveis nesta fonte. Consulte o edital para valores completos."}
             </p>
           </section>
 
@@ -875,116 +1414,6 @@ export function LotDetailPage({
 
         {/* ── Sidebar (sticky) ─────────────────────────────────────────────── */}
         <div className="evidence-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
-
-          {/* Prazo card */}
-          <div
-            style={{
-              padding: "var(--s-5)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--s-3)",
-            }}
-          >
-            <div>
-              <span className="section-label">Prazo</span>
-              <h3 style={{ marginTop: "var(--s-1)", display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
-                <CalendarClock aria-hidden="true" size={16} />
-                Encerramento das propostas
-              </h3>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                fontSize: "0.875rem",
-                color: "var(--n-600)",
-              }}
-            >
-              <span>Prazo oficial</span>
-              <strong style={{ color: "var(--n-900)" }}>
-                {formatDeadline(lot.proposalDeadline)}
-              </strong>
-            </div>
-
-            {/* Status chip */}
-            <div
-              style={{
-                padding: "var(--s-3) var(--s-4)",
-                borderRadius: "var(--r-md)",
-                background:
-                  dlStatus === "ok"
-                    ? "var(--color-success-bg)"
-                    : dlStatus === "expired"
-                    ? "var(--color-error-bg)"
-                    : "var(--color-warning-bg)",
-                color:
-                  dlStatus === "ok"
-                    ? "var(--color-success)"
-                    : dlStatus === "expired"
-                    ? "var(--color-error)"
-                    : "var(--color-warning)",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-              }}
-            >
-              <CalendarClock aria-hidden="true" size={14} />
-              {deadlineStatusLabel(days)}
-            </div>
-
-            {/* CTA */}
-            <a
-              href={lot.sourceUrl}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="primary-button"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "var(--s-2)",
-                textDecoration: "none",
-                borderRadius: "var(--r-md)",
-                padding: "12px var(--s-4)",
-                width: "100%",
-                fontSize: "0.9rem",
-              }}
-            >
-              <ExternalLink aria-hidden="true" size={15} />
-              Participar no leilão oficial
-            </a>
-
-            <button
-              className="ghost-button"
-              onClick={() => {
-                window.print();
-              }}
-              style={{ width: "100%", justifyContent: "center" }}
-              type="button"
-            >
-              <Printer aria-hidden="true" size={15} />
-              Gerar relatorio PDF
-            </button>
-
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setAlertOpen(true);
-              }}
-              style={{ width: "100%", justifyContent: "center" }}
-              type="button"
-            >
-              <Bell aria-hidden="true" size={15} />
-              Criar alerta de prazo
-            </button>
-          </div>
-
-          {/* Separator */}
-          <hr className="divide" />
 
           {/* AI assistant — Raio-X com IA (Claude via Worker fonteia-api) */}
           <div style={{ padding: "var(--s-4) var(--s-5)" }}>
@@ -1266,6 +1695,34 @@ export function LotDetailPage({
           </div>
         </div>
       ) : null}
+
+      {/* Local styles — escopo do componente, sem CSS global. */}
+      <style>{`
+        .lot-hero-actions {
+          display: flex;
+          flex-direction: column;
+          gap: var(--s-2);
+        }
+        .lot-hero-action {
+          width: 100%;
+          justify-content: center;
+          min-height: 44px;
+          font-size: 0.9rem;
+          text-decoration: none;
+        }
+        @media (min-width: 480px) {
+          .lot-hero-actions {
+            flex-direction: row;
+            flex-wrap: wrap;
+          }
+          .lot-hero-actions .lot-hero-action:first-child {
+            flex: 1 1 100%;
+          }
+          .lot-hero-actions .ghost-button.lot-hero-action {
+            flex: 1 1 0;
+          }
+        }
+      `}</style>
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, X } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
@@ -364,8 +364,8 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
             submit();
           }}
         >
-          <label className="search-kw__field">
-            <Search size={18} aria-hidden="true" />
+          <div className="search-kw__field">
+            <Search className="search-kw__field-icon" size={19} aria-hidden="true" />
             <input
               type="search"
               value={question}
@@ -374,9 +374,24 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
               aria-label="Pergunte sobre os lotes"
               enterKeyHint="search"
             />
-          </label>
+            {question ? (
+              <button
+                type="button"
+                className="search-kw__clear"
+                onClick={() => {
+                  setQuestion("");
+                  setSubmitted("");
+                }}
+                aria-label="Limpar busca"
+                title="Limpar"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
           <button className="btn btn--primary search-kw__submit" type="submit">
-            Buscar
+            <Search size={18} strokeWidth={2.4} aria-hidden="true" />
+            <span>Buscar</span>
           </button>
         </form>
 
@@ -491,21 +506,35 @@ const searchStyles = `
 .search-kw__form {
   display: flex;
   gap: 10px;
-  margin-top: 16px;
+  margin-top: 18px;
   flex-wrap: wrap;
+  align-items: stretch;
 }
 .search-kw__field {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 240px;
+  gap: 10px;
+  flex: 1 1 260px;
   min-width: 0;
-  padding: 0 12px;
-  height: 46px;
+  padding: 0 8px 0 14px;
+  height: 52px;
   border: 1px solid var(--border, #d4d8e0);
-  border-radius: var(--r-md, 10px);
+  border-radius: var(--r-md, 12px);
   background: var(--surface, #fff);
   color: var(--t-low, #5a6473);
+  transition: border-color .18s, box-shadow .18s;
+}
+.search-kw__field:focus-within {
+  border-color: var(--brand-ink, #1d5fe0);
+  box-shadow: 0 0 0 4px var(--ring, rgba(29, 95, 224, 0.16));
+}
+.search-kw__field-icon {
+  flex-shrink: 0;
+  color: var(--t-low, #5a6473);
+  transition: color .18s;
+}
+.search-kw__field:focus-within .search-kw__field-icon {
+  color: var(--brand-ink, #1d5fe0);
 }
 .search-kw__field input {
   flex: 1;
@@ -513,14 +542,44 @@ const searchStyles = `
   border: 0;
   outline: none;
   background: transparent;
-  font-size: 15px;
+  font-size: 15.5px;
+  color: var(--t-hi, #0d1320);
+}
+/* Remove the native search "clear" so our own button is the single affordance. */
+.search-kw__field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-kw__clear {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--t-low, #5a6473);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.search-kw__clear:hover {
+  background: var(--surface-2, #f1f4f9);
   color: var(--t-hi, #0d1320);
 }
 .search-kw__submit {
-  height: 46px;
+  height: 52px;
   flex: 0 0 auto;
   min-height: 44px;
-  padding: 0 20px;
+  min-width: 132px;
+  padding: 0 26px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: var(--r-md, 12px);
+}
+.search-kw__submit svg {
+  flex-shrink: 0;
 }
 .search-kw__chips {
   display: flex;
@@ -558,8 +617,12 @@ const searchStyles = `
   color: var(--danger, #dc2626);
 }
 @media (max-width: 520px) {
+  .search-kw__field {
+    flex: 1 1 100%;
+  }
   .search-kw__submit {
     flex: 1 1 100%;
+    width: 100%;
   }
 }
 `;
