@@ -1,21 +1,53 @@
-import { useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
+  ArrowRight,
   Bell,
   Check,
   Cookie,
+  ExternalLink,
+  FileText,
+  Gavel,
+  Heart,
+  HelpCircle,
+  Lock,
   LogOut,
   Mail,
+  MessageCircle,
   Moon,
   ShieldCheck,
+  Sparkles,
   Sun,
   Trash2,
   User,
   Zap,
 } from "lucide-react";
 import { openCookieSettings } from "../../lib/consent";
+import { readWatchlist, subscribeWatchlist } from "../../lib/watchlist";
 import { useTheme } from "../../theme/theme-context";
 import type { Theme } from "../../theme/theme-context";
 import { STRIPE_CUSTOMER_PORTAL_URL } from "../../config/stripe";
+
+// ─── Constants (honest, no backend) ───────────────────────────────────────────
+
+/** Contato de suporte do produto (público, honesto). */
+const SUPPORT_EMAIL = "contato@fontebrasil.online";
+
+/** Cota do plano de avaliação — estática e honesta enquanto não há billing real. */
+const FREE_ANALYSES_TOTAL = 5;
+
+/**
+ * Navegação SPA via History API (mesmo esquema do App: pushState + popstate).
+ * Mantém URLs compartilháveis e o botão voltar funcionando, sem reload.
+ */
+function navigate(to: string): void {
+  if (typeof window === "undefined") return;
+  if (to.startsWith("/")) {
+    window.history.pushState(null, "", to);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  } else {
+    window.location.href = to;
+  }
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -32,7 +64,8 @@ type TabId =
   | "aparencia"
   | "notificacoes"
   | "privacidade"
-  | "seguranca";
+  | "seguranca"
+  | "ajuda";
 
 interface TabDef {
   id: TabId;
@@ -48,6 +81,7 @@ const TABS: TabDef[] = [
   { id: "notificacoes", label: "Notificações" },
   { id: "privacidade", label: "Privacidade & Cookies" },
   { id: "seguranca", label: "Segurança" },
+  { id: "ajuda", label: "Ajuda" },
 ];
 
 // ─── Small helpers ───────────────────────────────────────────────────────────
@@ -92,6 +126,109 @@ function TRow({ label, val }: { label: string; val: string }) {
   );
 }
 
+/**
+ * Live count of the local watchlist (key `fonteia_watchlist`). Reflects writes
+ * from the Lotes/Alertas pages in the same tab and across tabs. Degrades to 0
+ * when storage is unavailable.
+ */
+function useWatchlistCount(): number {
+  const [count, setCount] = useState<number>(() => readWatchlist().length);
+  useEffect(() => subscribeWatchlist((ids) => setCount(ids.length)), []);
+  return count;
+}
+
+/** A full-width navigation row used for in-app links and legal pages. */
+function LinkRow({
+  icon: Icon,
+  label,
+  hint,
+  onClick,
+  href,
+  external,
+}: {
+  icon: typeof User;
+  label: string;
+  hint?: string;
+  onClick?: () => void;
+  href?: string;
+  external?: boolean;
+}) {
+  const inner = (
+    <>
+      <span
+        className="inset"
+        aria-hidden="true"
+        style={{
+          width: 34,
+          height: 34,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <Icon size={16} style={{ color: "var(--t-mid)" }} />
+      </span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 14, fontWeight: 600 }}>
+          {label}
+        </span>
+        {hint && (
+          <span
+            style={{
+              display: "block",
+              fontSize: 12.5,
+              color: "var(--t-mid)",
+              marginTop: 1,
+            }}
+          >
+            {hint}
+          </span>
+        )}
+      </span>
+      {external ? (
+        <ExternalLink size={15} aria-hidden="true" style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+      ) : (
+        <ArrowRight size={15} aria-hidden="true" style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+      )}
+    </>
+  );
+
+  const rowStyle: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    minHeight: 56,
+    padding: "10px 12px",
+    borderRadius: 12,
+    border: "1px solid var(--border)",
+    background: "var(--surface)",
+    color: "var(--t-hi)",
+    textAlign: "left",
+    textDecoration: "none",
+    cursor: "pointer",
+    font: "inherit",
+  };
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        style={rowStyle}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} style={rowStyle}>
+      {inner}
+    </button>
+  );
+}
+
 // ─── Tab panels ─────────────────────────────────────────────────────────────
 
 function TabPerfil({
@@ -99,50 +236,142 @@ function TabPerfil({
   email,
   avatarUrl,
 }: Pick<AccountPageProps, "name" | "email" | "avatarUrl">) {
+  const watchCount = useWatchlistCount();
+
   return (
-    <div className="panel" style={{ padding: 26 }}>
-      <div className="row" style={{ gap: 16, marginBottom: 24 }}>
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt={name}
-            className="avatar"
-            style={{ width: 60, height: 60 }}
-          />
-        ) : (
-          <div
-            className="avatar"
-            style={{ width: 60, height: 60, fontSize: 22 }}
-          >
-            {getInitials(name)}
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Identidade */}
+      <div className="panel" style={{ padding: 26 }}>
+        <div className="row" style={{ gap: 16, marginBottom: 24 }}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={name}
+              className="avatar"
+              style={{ width: 60, height: 60 }}
+            />
+          ) : (
+            <div
+              className="avatar"
+              style={{ width: 60, height: 60, fontSize: 22 }}
+            >
+              {getInitials(name)}
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 18 }}>{name}</div>
+            <div
+              className="row"
+              style={{
+                gap: 5,
+                color: "var(--t-mid)",
+                fontSize: 14,
+                marginTop: 3,
+                wordBreak: "break-word",
+              }}
+            >
+              <Mail size={13} aria-hidden="true" style={{ flexShrink: 0 }} />
+              {email}
+            </div>
+            <span className="badge badge--accent" style={{ marginTop: 8 }}>
+              Avaliação gratuita
+            </span>
           </div>
-        )}
-        <div>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>{name}</div>
-          <div
-            className="row"
-            style={{ gap: 5, color: "var(--t-mid)", fontSize: 14, marginTop: 3 }}
-          >
-            <Mail size={13} aria-hidden="true" />
-            {email}
+        </div>
+        <TRow label="Membro desde" val="Junho 2026" />
+        <TRow label="Plano atual" val="Avaliação gratuita" />
+        <TRow label="Análises grátis" val={`${FREE_ANALYSES_TOTAL} incluídas`} />
+      </div>
+
+      {/* Meu radar — watchlist local */}
+      <div className="panel" style={{ padding: 22 }}>
+        <div className="row between" style={{ marginBottom: 14 }}>
+          <div className="row" style={{ gap: 9 }}>
+            <span
+              className="inset"
+              aria-hidden="true"
+              style={{
+                width: 36,
+                height: 36,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Heart size={17} style={{ color: "var(--accent-ink)" }} />
+            </span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Meu radar</div>
+              <div style={{ fontSize: 12.5, color: "var(--t-mid)" }}>
+                Lotes que você marcou para acompanhar
+              </div>
+            </div>
           </div>
-          <span className="badge badge--accent" style={{ marginTop: 8 }}>
-            Avaliação gratuita
+          <span className="badge badge--neutral" aria-live="polite">
+            {watchCount} {watchCount === 1 ? "lote" : "lotes"}
           </span>
         </div>
+        <p
+          style={{
+            fontSize: 13.5,
+            color: "var(--t-mid)",
+            lineHeight: 1.55,
+            margin: "0 0 14px",
+          }}
+        >
+          {watchCount === 0
+            ? "Você ainda não acompanha nenhum lote. Toque no coração de um lote para salvá-lo aqui — fica guardado neste navegador."
+            : `Você acompanha ${watchCount} ${watchCount === 1 ? "lote" : "lotes"}. Volte à lista para revisar prazos e detalhes.`}
+        </p>
+        <button
+          type="button"
+          className="btn btn--ghost btn--block"
+          onClick={() => navigate("/app/lotes")}
+        >
+          <Gavel size={15} aria-hidden="true" />
+          {watchCount === 0 ? "Explorar lotes" : "Ver meus lotes"}
+        </button>
       </div>
-      <TRow label="Membro desde" val="Junho 2026" />
-      <TRow label="Plano atual" val="Avaliação" />
+
+      {/* Ampliar acesso */}
+      <div
+        className="panel"
+        style={{
+          padding: 22,
+          background: "linear-gradient(135deg,var(--brand),#13294d)",
+          color: "#fff",
+          border: "none",
+        }}
+      >
+        <div className="row" style={{ gap: 8, marginBottom: 6 }}>
+          <Sparkles size={17} aria-hidden="true" />
+          <strong style={{ fontSize: 15 }}>Quer mais que 5 análises?</strong>
+        </div>
+        <p
+          style={{
+            fontSize: 13,
+            opacity: 0.85,
+            lineHeight: 1.5,
+            margin: "0 0 14px",
+          }}
+        >
+          Análises ilimitadas, alertas de novos editais e relatórios com
+          rastreabilidade completa.
+        </p>
+        <button
+          type="button"
+          className="btn btn--accent"
+          onClick={() => navigate("/app/planos")}
+        >
+          <Zap size={15} aria-hidden="true" />
+          Ampliar acesso
+        </button>
+      </div>
     </div>
   );
 }
 
 function TabAssinatura() {
-  function goToPlanos() {
-    window.history.pushState(null, "", "/app/planos");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  }
-
   return (
     <div className="panel" style={{ padding: 26 }}>
       <div
@@ -154,10 +383,10 @@ function TabAssinatura() {
       </div>
 
       <div className="bar" style={{ marginBottom: 8 }}>
-        <i style={{ width: "40%" }} />
+        <i style={{ width: "0%" }} />
       </div>
       <div style={{ fontSize: 13, color: "var(--t-mid)", marginBottom: 22 }}>
-        2 de 5 análises utilizadas
+        {FREE_ANALYSES_TOTAL} análises grátis disponíveis nesta avaliação.
       </div>
 
       <div
@@ -186,11 +415,11 @@ function TabAssinatura() {
         <button
           type="button"
           className="btn btn--accent"
-          onClick={goToPlanos}
+          onClick={() => navigate("/app/planos")}
           style={{ marginTop: 14 }}
         >
           <Zap size={15} aria-hidden="true" />
-          Assinar Profissional
+          Ampliar acesso
         </button>
       </div>
 
@@ -295,27 +524,20 @@ function TabAparencia() {
   );
 }
 
-interface NotifState {
-  email: boolean;
-  push: boolean;
-}
-
 function TabNotificacoes() {
-  const [notif, setNotif] = useState<NotifState>({ email: true, push: true });
+  // Único canal real hoje: avisos dentro do app. Os demais são honestos ("em breve").
+  const [inApp, setInApp] = useState(true);
 
-  const toggle = (key: keyof NotifState) =>
-    setNotif((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const rows: { key: keyof NotifState; title: string; desc: string }[] = [
+  const soon: { icon: typeof Mail; title: string; desc: string }[] = [
     {
-      key: "email",
+      icon: Mail,
       title: "E-mail",
-      desc: "Resumo semanal dos melhores lotes.",
+      desc: "Resumo semanal dos melhores lotes do seu radar.",
     },
     {
-      key: "push",
-      title: "Push no navegador",
-      desc: "Alerta imediato quando um novo edital for publicado.",
+      icon: MessageCircle,
+      title: "WhatsApp",
+      desc: "Alerta no celular quando um novo edital for publicado.",
     },
   ];
 
@@ -328,34 +550,60 @@ function TabNotificacoes() {
         style={{
           fontSize: 13,
           color: "var(--t-mid)",
-          marginBottom: 4,
+          marginBottom: 12,
         }}
       >
         Como você quer ser avisado dos editais.
       </div>
-      {rows.map(({ key, title, desc }, i) => (
-        <div
-          key={key}
-          className="row between"
-          style={{
-            padding: "14px 0",
-            borderTop: i === 0 ? "1px solid var(--border)" : "1px solid var(--border)",
-            marginTop: i === 0 ? 12 : 0,
-          }}
-        >
+
+      {/* Canal ativo hoje */}
+      <div
+        className="row between"
+        style={{ padding: "14px 0", borderTop: "1px solid var(--border)" }}
+      >
+        <div className="row" style={{ gap: 11 }}>
+          <span
+            className="inset"
+            aria-hidden="true"
+            style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          >
+            <Bell size={16} style={{ color: "var(--t-mid)" }} />
+          </span>
           <div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
-            <div
-              style={{
-                fontSize: 12.5,
-                color: "var(--t-mid)",
-                marginTop: 2,
-              }}
-            >
-              {desc}
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Avisos no app</div>
+            <div style={{ fontSize: 12.5, color: "var(--t-mid)", marginTop: 2 }}>
+              Mostra novidades e prazos enquanto você navega.
             </div>
           </div>
-          <SwitchToggle on={notif[key]} onToggle={() => toggle(key)} />
+        </div>
+        <SwitchToggle on={inApp} onToggle={() => setInApp((v) => !v)} />
+      </div>
+
+      {/* Canais futuros — honestos */}
+      {soon.map(({ icon: Icon, title, desc }) => (
+        <div
+          key={title}
+          className="row between"
+          style={{ padding: "14px 0", borderTop: "1px solid var(--border)", opacity: 0.72 }}
+        >
+          <div className="row" style={{ gap: 11 }}>
+            <span
+              className="inset"
+              aria-hidden="true"
+              style={{ width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+            >
+              <Icon size={16} style={{ color: "var(--t-mid)" }} />
+            </span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{title}</div>
+              <div style={{ fontSize: 12.5, color: "var(--t-mid)", marginTop: 2 }}>
+                {desc}
+              </div>
+            </div>
+          </div>
+          <span className="badge badge--neutral" style={{ flexShrink: 0 }}>
+            Em breve
+          </span>
         </div>
       ))}
     </div>
@@ -372,20 +620,43 @@ function TabPrivacidade() {
         style={{
           fontSize: 13,
           color: "var(--t-mid)",
-          marginBottom: 20,
+          marginBottom: 16,
         }}
       >
         Gerencie como seus dados são coletados e usados nesta plataforma,
         conforme a LGPD.
       </div>
+
       <button
         type="button"
         className="btn btn--ghost"
         onClick={openCookieSettings}
+        style={{ marginBottom: 18 }}
       >
         <Cookie size={15} aria-hidden="true" />
         Gerenciar cookies
       </button>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <LinkRow
+          icon={Lock}
+          label="Política de privacidade"
+          hint="Como tratamos seus dados pessoais"
+          onClick={() => navigate("/privacidade")}
+        />
+        <LinkRow
+          icon={Cookie}
+          label="Política de cookies"
+          hint="Quais cookies usamos e por quê"
+          onClick={() => navigate("/cookies")}
+        />
+        <LinkRow
+          icon={FileText}
+          label="Termos de uso"
+          hint="Regras de uso da plataforma"
+          onClick={() => navigate("/termos")}
+        />
+      </div>
     </div>
   );
 }
@@ -488,6 +759,119 @@ function TabSeguranca({
   );
 }
 
+// ─── Ajuda ───────────────────────────────────────────────────────────────────
+
+function TabAjuda() {
+  const steps: { n: number; title: string; desc: string }[] = [
+    {
+      n: 1,
+      title: "Edital publicado",
+      desc: "A Receita Federal anuncia o leilão de mercadorias apreendidas e fixa um prazo para lances.",
+    },
+    {
+      n: 2,
+      title: "Habilitação",
+      desc: "Você se cadastra no portal oficial com CPF/CNPJ e certificado digital antes de dar lances.",
+    },
+    {
+      n: 3,
+      title: "Lances",
+      desc: "Os lances são eletrônicos e públicos. Vence quem oferecer o maior valor acima do lance mínimo.",
+    },
+    {
+      n: 4,
+      title: "Pagamento e retirada",
+      desc: "Após arrematar, você paga no prazo do edital e retira a mercadoria no local indicado.",
+    },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Como funciona um leilão da Receita */}
+      <div className="panel" style={{ padding: 24 }}>
+        <div className="row" style={{ gap: 9, marginBottom: 6 }}>
+          <span
+            className="inset"
+            aria-hidden="true"
+            style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <HelpCircle size={17} style={{ color: "var(--brand-ink)" }} />
+          </span>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>
+            Como funciona um leilão da Receita
+          </div>
+        </div>
+        <p
+          style={{
+            fontSize: 13.5,
+            color: "var(--t-mid)",
+            lineHeight: 1.55,
+            margin: "0 0 16px",
+          }}
+        >
+          Um resumo honesto em 4 passos. Sempre confira as regras no edital
+          oficial — os prazos e condições variam de leilão para leilão.
+        </p>
+
+        <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+          {steps.map(({ n, title, desc }) => (
+            <li key={n} className="row" style={{ gap: 12, alignItems: "flex-start" }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 999,
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: "#fff",
+                  background: "linear-gradient(135deg,var(--brand),var(--accent))",
+                }}
+              >
+                {n}
+              </span>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{title}</div>
+                <div style={{ fontSize: 13, color: "var(--t-mid)", lineHeight: 1.5, marginTop: 2 }}>
+                  {desc}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Contato / suporte */}
+      <div className="panel" style={{ padding: 24 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
+          Fale com a gente
+        </div>
+        <p
+          style={{
+            fontSize: 13.5,
+            color: "var(--t-mid)",
+            lineHeight: 1.55,
+            margin: "0 0 14px",
+          }}
+        >
+          Dúvidas, sugestões ou problemas? Respondemos por e-mail.
+        </p>
+        <LinkRow
+          icon={Mail}
+          label="Enviar e-mail para o suporte"
+          hint={SUPPORT_EMAIL}
+          href={`mailto:${SUPPORT_EMAIL}?subject=Suporte%20Fonte.ia`}
+          external
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Sidebar nav ────────────────────────────────────────────────────────────
 
 const TAB_ICONS: Record<TabId, typeof User> = {
@@ -497,6 +881,7 @@ const TAB_ICONS: Record<TabId, typeof User> = {
   notificacoes: Bell,
   privacidade: Cookie,
   seguranca: ShieldCheck,
+  ajuda: HelpCircle,
 };
 
 function SideNav({
@@ -577,6 +962,8 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
             setConfirmDelete={setConfirmDelete}
           />
         );
+      case "ajuda":
+        return <TabAjuda />;
     }
   }
 
