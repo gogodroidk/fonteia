@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Bell,
   CheckCircle2,
+  HelpCircle,
   Mail,
   MessageCircle,
   Search,
@@ -61,7 +62,7 @@ const channels = [
 type GoalId = (typeof goals)[number]["id"];
 type ChannelId = (typeof channels)[number]["id"];
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 const goalLabels: Record<GoalId, string> = {
   comprar: "Arrematar lotes",
@@ -257,8 +258,108 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           </div>
         )}
 
-        {/* ── Step 2: tudo pronto ── */}
+        {/* ── Step 2: como funciona um leilão da Receita ── */}
         {step === 2 && (
+          <div className="onboarding-body rise">
+            <span className="onboarding-eyebrow">
+              <HelpCircle size={13} aria-hidden="true" />
+              Passo 3 de {TOTAL_STEPS}
+            </span>
+
+            <h1 className="onboarding-body-h1">Como funciona um leilão da Receita?</h1>
+            <p className="onboarding-sub">
+              Um resumo honesto em 4 passos — antes de dar o primeiro lance, é
+              bom saber o que esperar. As regras variam por edital, então
+              confirme sempre no edital oficial.
+            </p>
+
+            <ol
+              style={{
+                listStyle: "none",
+                margin: "0 0 28px",
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 16,
+              }}
+            >
+              {(
+                [
+                  {
+                    n: 1,
+                    title: "Edital publicado",
+                    desc: "A Receita Federal anuncia o leilão de mercadorias apreendidas e define o prazo para lances. O Fonte.ia monitora isso pra você.",
+                  },
+                  {
+                    n: 2,
+                    title: "Habilitação no portal oficial",
+                    desc: "Antes de dar lances, você precisa se cadastrar no Sistema de Leilões Eletrônicos (SLE) com CPF ou CNPJ e uma conta gov.br. Esse cadastro é feito uma única vez.",
+                  },
+                  {
+                    n: 3,
+                    title: "Lances eletrônicos",
+                    desc: "Os lances são públicos e feitos online. Vence quem oferecer o maior valor acima do lance mínimo dentro do prazo do edital.",
+                  },
+                  {
+                    n: 4,
+                    title: "Pagamento e retirada",
+                    desc: "Após arrematar, você paga dentro do prazo indicado no edital e retira a mercadoria no local especificado. Prazos e condições variam — sempre confira o edital.",
+                  },
+                ] as const
+              ).map(({ n, title, desc }) => (
+                <li key={n} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 999,
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: "#fff",
+                      background: "linear-gradient(135deg,var(--brand),var(--accent))",
+                    }}
+                  >
+                    {n}
+                  </span>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.3 }}>{title}</div>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        color: "var(--t-mid)",
+                        lineHeight: 1.55,
+                        marginTop: 3,
+                      }}
+                    >
+                      {desc}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            <div className="onboarding-actions">
+              <button type="button" className="link-btn" onClick={() => setStep(1)}>
+                Voltar
+              </button>
+              <button
+                type="button"
+                className="primary-button onboarding-actions-advance"
+                onClick={() => setStep(3)}
+              >
+                Entendi, continuar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: tudo pronto ── */}
+        {step === 3 && (
           <div className="onboarding-body rise">
             <span className="onboarding-eyebrow">
               <Sparkles size={13} aria-hidden="true" />
@@ -308,7 +409,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
             </ul>
 
             <div className="onboarding-actions">
-              <button type="button" className="link-btn" onClick={() => setStep(1)}>
+              <button type="button" className="link-btn" onClick={() => setStep(2)}>
                 Voltar
               </button>
               <button
