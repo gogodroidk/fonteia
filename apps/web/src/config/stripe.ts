@@ -20,7 +20,7 @@ export const STRIPE_PAYMENT_LINKS: Record<string, string> = {
 };
 
 /** URL do Customer Portal do Stripe (gerenciar/cancelar assinatura, trocar cartão). */
-export const STRIPE_CUSTOMER_PORTAL_URL = "";
+export const STRIPE_CUSTOMER_PORTAL_URL: string = "";
 
 /** Retorna o Payment Link do plano, ou null se ainda não configurado. */
 export function stripeLinkFor(planId: string): string | null {

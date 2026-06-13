@@ -15,6 +15,7 @@ import {
 import { openCookieSettings } from "../../lib/consent";
 import { useTheme } from "../../theme/theme-context";
 import type { Theme } from "../../theme/theme-context";
+import { STRIPE_CUSTOMER_PORTAL_URL } from "../../config/stripe";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -192,6 +193,18 @@ function TabAssinatura() {
           Assinar Profissional
         </button>
       </div>
+
+      {STRIPE_CUSTOMER_PORTAL_URL && (
+        <a
+          className="btn btn--ghost btn--block"
+          href={STRIPE_CUSTOMER_PORTAL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ marginBottom: 18 }}
+        >
+          Gerenciar assinatura
+        </a>
+      )}
 
       <TRow label="Método de pagamento" val="Não cadastrado" />
       <TRow label="Próxima cobrança" val="—" />

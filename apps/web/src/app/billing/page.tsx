@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
 import { stripeLinkFor } from "../../config/stripe";
@@ -10,6 +10,12 @@ function precoLabel(preco: number, periodo: string): string {
 
 export function BillingPage() {
   const [chosen, setChosen] = useState<string | null>(null);
+  const [paid, setPaid] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "sucesso") setPaid(true);
+  }, []);
 
   function handleChoose(id: string, nome: string) {
     const link = stripeLinkFor(id);
@@ -22,6 +28,25 @@ export function BillingPage() {
 
   return (
     <section style={{ maxWidth: 1080, margin: "0 auto", padding: "8px 4px 40px" }}>
+      {paid && (
+        <div
+          className="panel elevated"
+          role="status"
+          style={{ padding: 18, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", borderColor: "color-mix(in srgb,var(--accent) 40%,var(--border))" }}
+        >
+          <Check size={20} strokeWidth={2.6} style={{ color: "var(--accent-ink)", flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1 }}>
+            <strong>Pagamento recebido!</strong>{" "}
+            <span className="muted small">
+              Obrigado. Seu acesso ao plano será liberado em instantes. Qualquer coisa, fale com{" "}
+              <a className="link" href="mailto:contato@fontebrasil.online">contato@fontebrasil.online</a>.
+            </span>
+          </div>
+          <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setPaid(false)} aria-label="Fechar">
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {chosen && (
         <div
           className="panel elevated"
