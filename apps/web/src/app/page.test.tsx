@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_MODULES } from "@fonteia/domain";
 import { PLANOS } from "../data/leiloes-seed";
+import { AuthProvider } from "../auth/auth-context";
 import { DashboardPage } from "./page";
 import { BillingPage } from "./billing/page";
 import { ModulesPage } from "./modules/page";
@@ -9,7 +10,11 @@ import { SourceStatusBadge } from "../components/source-status-badge";
 
 describe("Fonte.ia web shell", () => {
   it("renders the dashboard with the active leiloes wedge and evidence promise", () => {
-    const html = renderToStaticMarkup(<DashboardPage />);
+    const html = renderToStaticMarkup(
+      <AuthProvider>
+        <DashboardPage />
+      </AuthProvider>,
+    );
 
     expect(html).toContain("Ultimos lotes publicados");
     expect(html).toContain("Fonte antes de opiniao");
