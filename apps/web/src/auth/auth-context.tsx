@@ -19,6 +19,7 @@ export interface AuthContextValue {
     email: string,
     password: string,
     userData?: SignUpUserData,
+    captchaToken?: string,
   ) => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -124,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     email: string,
     password: string,
     userData?: SignUpUserData,
+    captchaToken?: string,
   ) {
     if (!isSupabaseConfigured || !supabase) {
       if (password.length < 8) {
@@ -134,13 +136,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(demo);
       return { error: null };
     }
-    const signUpArgs: Parameters<typeof supabase.auth.signUp>[0] = userData
-      ? {
-          email,
-          password,
-          options: { data: { full_name: userData.full_name, ...(userData.phone ? { phone: userData.phone } : {}) } },
-        }
-      : { email, password };
+
+    // Build options: merge user data and captchaToken avoiding undefined values
+    // (exactOptionalPropertyTypes: never pass a key set to `undefined`).
+    type SignUpOptions = NonNullable<Parameters<typeof supabase.auth.signUp>[0]["options"]>;
+    const options: SignUpOptions = {};
+    if (userData) {
+      options.data = {
+        full_name: userData.full_name,
+        ...(userData.phone ? { phone: userData.phone } : {}),
+      };
+    }
+    if (captchaToken) {
+      options.captchaToken = captchaToken;
+    }
+
+    const signUpArgs: Parameters<typeof supabase.auth.signUp>[0] = {
+      email,
+      password,
+      ...(Object.keys(options).length > 0 ? { options } : {}),
+    };
+
     const { error } = await supabase.auth.signUp(signUpArgs);
     return { error: error?.message ?? null };
   }
