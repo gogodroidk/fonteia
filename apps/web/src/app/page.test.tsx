@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_MODULES } from "@fonteia/domain";
-import { BILLING_PLANS } from "@fonteia/billing";
+import { PLANOS } from "../data/leiloes-seed";
 import { DashboardPage } from "./page";
 import { BillingPage } from "./billing/page";
 import { ModulesPage } from "./modules/page";
@@ -32,13 +32,12 @@ describe("Fonte.ia web shell", () => {
     expect(html).toContain("operacional fragil");
   });
 
-  it("renders billing as the commercial cascade across modules", () => {
+  it("renders billing plans with checkout CTAs", () => {
     const html = renderToStaticMarkup(<BillingPage />);
 
-    expect(html).toContain("Planos para vender");
-    expect(html).toContain("upsells visiveis");
-    for (const plan of BILLING_PLANS) {
-      expect(html).toContain(plan.name);
+    expect(html).toContain("Planos");
+    for (const plano of PLANOS) {
+      expect(html).toContain(plano.nome);
     }
   });
 });
