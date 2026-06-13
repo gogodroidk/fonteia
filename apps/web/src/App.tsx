@@ -61,6 +61,20 @@ const LegalPage = lazy(() =>
   import("./app/legal/page").then((m) => ({ default: m.LegalPage })),
 );
 
+// --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
+const CalculadoraLancePage = lazy(() =>
+  import("./app/ferramentas/calculadora-lance/page").then((m) => ({ default: m.CalculadoraLancePage })),
+);
+const GuiasPage = lazy(() =>
+  import("./app/guias/page").then((m) => ({ default: m.GuiasPage })),
+);
+const GuiaComoComprarPage = lazy(() =>
+  import("./app/guias/como-comprar-leilao-receita").then((m) => ({ default: m.GuiaComoComprarPage })),
+);
+const GuiaComparacaoPage = lazy(() =>
+  import("./app/guias/leilao-receita-vs-judicial").then((m) => ({ default: m.GuiaComparacaoPage })),
+);
+
 type RouteKey =
   | "painel"
   | "lotes"
@@ -555,15 +569,31 @@ export function App() {
   const legalKind: LegalKind | null =
     path === "/privacidade" ? "privacidade" : path === "/cookies" ? "cookies" : path === "/termos" ? "termos" : null;
 
+  // Rotas públicas de marketing/SEO: renderizam sem login e são indexáveis.
+  const publicMarketing: ReactNode | null =
+    path === "/ferramentas/calculadora-lance" ? <CalculadoraLancePage /> :
+    path === "/guias" ? <GuiasPage /> :
+    path === "/guias/como-comprar-leilao-receita" ? <GuiaComoComprarPage /> :
+    path === "/guias/leilao-receita-vs-judicial" ? <GuiaComparacaoPage /> :
+    null;
+
   const inApp = path.startsWith("/app");
   let content: ReactNode;
 
+  const pageFallback = (
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <span className="muted">Carregando…</span>
+    </div>
+  );
+
   if (legalKind) {
     content = (
-      <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">Carregando…</span></div>}>
+      <Suspense fallback={pageFallback}>
         <LegalPage kind={legalKind} onHome={() => navigate("/")} />
       </Suspense>
     );
+  } else if (publicMarketing) {
+    content = <Suspense fallback={pageFallback}>{publicMarketing}</Suspense>;
   } else if (inApp) {
     if (!user) {
       content = <LoginPage onGoToLanding={() => navigate("/")} />;
