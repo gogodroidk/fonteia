@@ -175,14 +175,20 @@ function WatchlistCard({ lot, score, scoreLabel, onSelect, onRemove }: Watchlist
 
   return (
     <div
-      className="panel"
-      style={{ padding: "16px 20px", display: "flex", gap: 16, alignItems: "center" }}
+      className="panel watchlist-card"
+      style={{
+        padding: "16px 20px",
+        display: "flex",
+        gap: 16,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
     >
       {/* Score ring */}
       <ScoreRing value={score} size={52} />
 
       {/* Main content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
           Lote {lot.lotNumber} — {lot.city}
         </div>
@@ -211,7 +217,7 @@ function WatchlistCard({ lot, score, scoreLabel, onSelect, onRemove }: Watchlist
       </div>
 
       {/* Actions */}
-      <div className="row" style={{ gap: 8, flexShrink: 0 }}>
+      <div className="row watchlist-card-actions" style={{ gap: 8, flexShrink: 0 }}>
         {onSelect !== undefined ? (
           <button
             className="btn btn--soft btn--sm"
@@ -386,14 +392,33 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 360px",
-        gap: 20,
-        alignItems: "start",
-      }}
-    >
+    <div className="alertas-layout">
+      {/* Scoped responsive layout — 2 columns on desktop, stacked on mobile */}
+      <style>{`
+        .alertas-layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 340px;
+          gap: 20px;
+          align-items: start;
+        }
+        /* Collapse early: the app sidebar eats ~280px of width, so a rigid
+           second column gets cramped well before the viewport is "mobile". */
+        @media (max-width: 1000px) {
+          .alertas-layout {
+            grid-template-columns: 1fr;
+          }
+          /* Stacked: the alert-config panel must not stay sticky */
+          .alertas-prefs {
+            position: static !important;
+          }
+        }
+        @media (max-width: 420px) {
+          .watchlist-card-actions {
+            flex: 1 1 100%;
+            justify-content: flex-start;
+          }
+        }
+      `}</style>
       {/* ── Left: Watchlist ───────────────────────────────────────── */}
       <div>
         {/* Header */}
@@ -497,7 +522,7 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
       </div>
 
       {/* ── Right: Alert preferences ──────────────────────────────── */}
-      <div className="panel" style={{ padding: 22, position: "sticky", top: 80 }}>
+      <div className="panel alertas-prefs" style={{ padding: 22, position: "sticky", top: 80 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
           Configurar alertas
         </div>
