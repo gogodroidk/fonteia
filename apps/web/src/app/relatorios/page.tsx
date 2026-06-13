@@ -132,9 +132,10 @@ function EmptyState({ onExplore }: { onExplore?: (() => void) | undefined }) {
             margin: 0,
           }}
         >
-          Relatórios em PDF são gerados a partir de um lote. Abra o <strong>Raio-X</strong> de
-          qualquer lote e clique em <strong>"Gerar relatório PDF"</strong> — o histórico aparece
-          aqui automaticamente.
+          Abra o <strong>Raio-X</strong> de qualquer lote e clique em{" "}
+          <strong>"Gerar relatório PDF"</strong>. O relatório traz os dados do lote, a fonte
+          oficial, a data de coleta e o score de risco — e fica salvo aqui para reimprimir
+          quando quiser.
         </p>
       </div>
 
@@ -282,10 +283,10 @@ function ReportsTable({ reports }: { reports: ReportEntry[] }) {
                     type="button"
                     className="btn btn--soft btn--sm"
                     onClick={() => window.print()}
-                    title="Reimprimir relatório PDF"
+                    title="Imprimir / salvar como PDF"
                   >
                     <Download size={13} aria-hidden="true" />
-                    PDF
+                    Imprimir PDF
                   </button>
                 </div>
               </td>
@@ -309,6 +310,10 @@ function ReportContentsPanel() {
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
         O que cada relatório contém
       </div>
+      <p style={{ fontSize: 12, color: "var(--t-low)", lineHeight: 1.5, marginBottom: 12, marginTop: 0 }}>
+        Gerado no Raio-X do lote e salvo localmente no seu navegador. O PDF é obtido via
+        impressão do navegador (Ctrl+P / ⌘P).
+      </p>
       {REPORT_CONTENTS.map(({ icon: Icon, label, desc }, i) => (
         <div
           key={label}
@@ -398,8 +403,8 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
               lineHeight: 1.5,
             }}
           >
-            Relatórios gerados via o botão "Gerar relatório PDF" no Raio-X de cada lote.
-            Rastreabilidade de fonte incluída.
+            Gerados via <strong>Gerar relatório PDF</strong> no Raio-X de cada lote. Incluem
+            fonte oficial, data de coleta e score de risco. Salvos localmente no navegador.
           </p>
         )}
       </div>
