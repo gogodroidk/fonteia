@@ -232,7 +232,7 @@ function ModuleChip({
           style={{ position: "absolute", top: 10, right: 10, fontSize: 10, padding: "3px 7px" }}
         >
           <Lock size={10} aria-hidden="true" style={{ marginRight: 3 }} />
-          Em breve
+          Roteiro
         </span>
       )}
       {active && (
@@ -294,7 +294,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
     },
     {
       q: "Posso usar para PGFN, SPU, DETRAN e Compras.gov.br além da Receita?",
-      a: "Hoje a plataforma cobre os leilões da Receita Federal (Sistema de Leilão Eletrônico — SLE). A integração com outros órgãos, como PGFN, SPU, DETRAN e Compras.gov.br, está no roteiro e será liberada em breve.",
+      a: "Hoje a plataforma cobre os leilões da Receita Federal (Sistema de Leilão Eletrônico — SLE). A integração com outros órgãos, como PGFN, SPU, DETRAN e Compras.gov.br, está no roteiro de desenvolvimento.",
     },
     {
       q: "Os dados são confiáveis? De onde vêm?",
@@ -414,6 +414,9 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 { label: "Como funciona", href: "#como-funciona" },
                 { label: "Planos", href: "#planos" },
                 { label: "Dúvidas", href: "#faq" },
+                { label: "Para quem", href: "/para-quem" },
+                { label: "Sobre", href: "/sobre" },
+                { label: "Segurança", href: "/seguranca" },
               ].map((link) => (
                 <a
                   key={link.href}
@@ -505,7 +508,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Leilões da Receita Federal · mais órgãos em breve
+                  Leilões da Receita Federal · mais órgãos no roteiro
                 </span>
               </div>
             </Reveal>
@@ -816,6 +819,94 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
 
       </section>
 
+      {/* ── TRACTION STRIP — atividade do dado ────────────────────────── */}
+      <section
+        style={{
+          padding: "28px 24px",
+          background: "var(--surface-2)",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <Reveal>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "18px 36px",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              {(
+                [
+                  { icon: <Database size={15} aria-hidden="true" />, text: "Dados oficiais da Receita Federal (SLE)" },
+                  { icon: <Zap size={15} fill="currentColor" aria-hidden="true" />, text: "Atualizado automaticamente a cada 6 h" },
+                  { icon: <ShieldCheck size={15} aria-hidden="true" />, text: "Rastreável à fonte — link + data de coleta" },
+                  { icon: <Shield size={15} aria-hidden="true" />, text: "Mais de 45 categorias de bens monitoradas" },
+                  { icon: <Check size={15} aria-hidden="true" />, text: "Veículos, eletrônicos, celulares e mais" },
+                ] as const
+              ).map(({ icon, text }) => (
+                <div
+                  key={text}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    color: "var(--t-mid)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  <span style={{ color: "var(--accent-ink)", flexShrink: 0 }}>{icon}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingLeft: 20,
+                  borderLeft: "1px solid var(--border)",
+                  flexShrink: 0,
+                }}
+              >
+                <span className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>
+                  Fonte:
+                </span>
+                {[
+                  { label: "Receita Federal", href: "https://www.gov.br/receitafederal/pt-br/servicos/leilao" },
+                  { label: "gov.br", href: "https://www.gov.br" },
+                  { label: "SLE", href: "https://www.gov.br/receitafederal/pt-br/servicos/leilao" },
+                ].map((src, idx, arr) => (
+                  <span key={src.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <a
+                      href={src.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "var(--accent-ink)",
+                        textDecoration: "none",
+                        borderBottom: "1px solid color-mix(in srgb,var(--accent-ink) 40%,transparent)",
+                      }}
+                    >
+                      {src.label}
+                    </a>
+                    {idx < arr.length - 1 && (
+                      <span className="muted" style={{ fontSize: 12 }}>·</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
       {/* ── FONTES STRIP ───────────────────────────────────────────────── */}
       <section
         style={{
@@ -830,7 +921,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="tiny muted"
               style={{ fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 20 }}
             >
-              Hoje conectado à Receita Federal · mais fontes governamentais em breve
+              Conectado à Receita Federal · mais órgãos no roteiro
             </p>
           </Reveal>
           <Reveal delay={0.05}>
@@ -882,7 +973,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     className={`badge ${active ? "badge--ok" : "badge--neutral"}`}
                     style={{ fontSize: 9, padding: "2px 6px", flexShrink: 0 }}
                   >
-                    {active ? "Ativo" : "Em breve"}
+                    {active ? "Ativo" : "Roteiro"}
                   </span>
                 </div>
                 );
@@ -1056,7 +1147,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 {
                   icon: <Database size={24} color="#fff" aria-hidden="true" />,
                   title: "Acompanhe os leilões da Receita",
-                  desc: "Os lotes do Sistema de Leilão Eletrônico da Receita Federal chegam reunidos em um só lugar — nenhum lote passa despercebido. Mais órgãos em breve.",
+                  desc: "Os lotes do Sistema de Leilão Eletrônico da Receita Federal chegam reunidos em um só lugar — nenhum lote passa despercebido.",
                 },
                 {
                   icon: <Zap size={24} fill="#fff" color="#fff" aria-hidden="true" />,
@@ -1131,32 +1222,35 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           </Reveal>
 
           <Reveal delay={0.05}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "center" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "center", alignItems: "flex-start" }}>
               <ModuleChip
                 label="Leilões Públicos"
                 active={true}
                 icon={<Zap size={20} fill="#fff" color="#fff" />}
               />
-              <ModuleChip
-                label="Licitações"
-                active={false}
-                icon={<Database size={20} />}
-              />
-              <ModuleChip
-                label="Empresas (CNPJ)"
-                active={false}
-                icon={<Database size={20} />}
-              />
-              <ModuleChip
-                label="INPI / Marcas"
-                active={false}
-                icon={<Shield size={20} />}
-              />
-              <ModuleChip
-                label="Ambiental"
-                active={false}
-                icon={<Database size={20} />}
-              />
+              {/* Roadmap compacto — sem "em breve" em destaque */}
+              <div
+                className="card card--pad"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  minWidth: 200,
+                  flex: "1 1 200px",
+                  opacity: 0.7,
+                }}
+              >
+                <span className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
+                  Roteiro
+                </span>
+                {["Licitações", "Empresas (CNPJ)", "INPI / Marcas", "Ambiental"].map((m) => (
+                  <div key={m} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <Lock size={11} color="var(--t-low)" aria-hidden="true" />
+                    <span className="small" style={{ color: "var(--t-low)", fontWeight: 600, fontSize: 13 }}>{m}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </Reveal>
 
@@ -1446,7 +1540,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
       <footer
         style={{
           borderTop: "1px solid var(--border)",
-          padding: "32px 24px",
+          padding: "48px 24px 32px",
           background: "var(--surface)",
         }}
       >
@@ -1454,78 +1548,138 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           style={{
             maxWidth: 1100,
             margin: "0 auto",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "36px 40px",
+          }}
+        >
+          {/* Brand + institutional */}
+          <div style={{ gridColumn: "span 1" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 7,
+                  background: "linear-gradient(135deg,var(--brand),var(--accent))",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  flexShrink: 0,
+                }}
+              >
+                <LogoMark size={18} />
+              </div>
+              <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "-0.025em" }}>
+                Fonte<span style={{ color: "var(--accent-ink)" }}>.ia</span>
+                <span className="muted small" style={{ fontWeight: 400, marginLeft: 6 }}>by Olli</span>
+              </span>
+            </div>
+            <p className="tiny muted" style={{ lineHeight: 1.6, margin: "0 0 10px" }}>
+              Plataforma de inteligência de dados públicos brasileiros. Decisões rastreáveis com IA.
+            </p>
+            <p className="tiny muted" style={{ margin: 0, lineHeight: 1.6 }}>
+              Olli Inteligência Digital Sistemas LTDA<br />
+              CNPJ 65.361.266/0001-05
+            </p>
+          </div>
+
+          {/* Plataforma */}
+          <div>
+            <p className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
+              Plataforma
+            </p>
+            <nav style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-label="Links da plataforma">
+              {[
+                { label: "Como funciona", href: "#como-funciona" },
+                { label: "Planos e preços", href: "#planos" },
+                { label: "Para quem é", href: "/para-quem" },
+                { label: "Segurança dos dados", href: "/seguranca" },
+                { label: "Sobre a Olli", href: "/sobre" },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="link"
+                  style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+
+          {/* Recursos */}
+          <div>
+            <p className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
+              Recursos
+            </p>
+            <nav style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-label="Recursos gratuitos">
+              {[
+                { label: "Leilões da Receita Federal", href: "/leiloes-receita-federal" },
+                { label: "Como comprar na Receita", href: "/guias/como-comprar-leilao-receita" },
+                { label: "Análise de edital com IA", href: "/analise-de-edital-com-ia" },
+                { label: "Guias de leilão", href: "/guias" },
+                { label: "Blog", href: "/blog" },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="link"
+                  style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+
+          {/* Suporte */}
+          <div>
+            <p className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 14 }}>
+              Suporte
+            </p>
+            <nav style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-label="Suporte e legal">
+              {[
+                { label: "Perguntas frequentes", href: "/faq" },
+                { label: "Contato", href: "/contato" },
+                { label: "Privacidade", href: "/privacidade" },
+                { label: "Termos de uso", href: "/termos" },
+                { label: "Cookies", href: "/cookies" },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="link"
+                  style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div
+          style={{
+            maxWidth: 1100,
+            margin: "32px auto 0",
+            paddingTop: 20,
+            borderTop: "1px solid var(--border)",
             display: "flex",
             flexWrap: "wrap",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: 12,
           }}
         >
-          {/* Brand */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                width: 26,
-                height: 26,
-                borderRadius: 7,
-                background: "linear-gradient(135deg,var(--brand),var(--accent))",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                flexShrink: 0,
-              }}
-            >
-              <LogoMark size={18} />
-            </div>
-            <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "-0.025em" }}>
-              Fonte<span style={{ color: "var(--accent-ink)" }}>.ia</span>
-              <span className="muted small" style={{ fontWeight: 400, marginLeft: 6 }}>by Olli</span>
-            </span>
-          </div>
-
-          {/* Recursos gratuitos — links reais p/ SEO e p/ o leigo explorar antes de pagar */}
-          <nav style={{ display: "flex", gap: 20, flexWrap: "wrap" }} aria-label="Recursos gratuitos">
-            {[
-              { label: "Leilões da Receita Federal", href: "/leiloes-receita-federal" },
-              { label: "Calculadora de lance", href: "/ferramentas/calculadora-lance" },
-              { label: "Como comprar na Receita", href: "/guias/como-comprar-leilao-receita" },
-              { label: "Análise de edital com IA", href: "/analise-de-edital-com-ia" },
-              { label: "Perguntas frequentes", href: "/faq" },
-              { label: "Guias de leilão", href: "/guias" },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="link"
-                style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-
-          {/* Legal links */}
-          <nav style={{ display: "flex", gap: 20, flexWrap: "wrap" }} aria-label="Links legais">
-            {[
-              { label: "Privacidade", href: "/privacidade" },
-              { label: "Cookies", href: "/cookies" },
-              { label: "Termos", href: "/termos" },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="link"
-                style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
-              >
-                {link.label}
-              </a>
-            ))}
-          </nav>
-
-          {/* Copyright */}
           <p className="tiny muted" style={{ margin: 0 }}>
-            © {new Date().getFullYear()} Olli. Dados públicos com evidência rastreável.
+            © {new Date().getFullYear()} Olli Inteligência Digital Sistemas LTDA · CNPJ 65.361.266/0001-05
+          </p>
+          <p className="tiny muted" style={{ margin: 0 }}>
+            Dados de fontes oficiais brasileiras com evidência rastreável.
           </p>
         </div>
       </footer>

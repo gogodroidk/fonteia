@@ -113,6 +113,18 @@ const PostErrosIniciantesPage = lazy(() =>
 const PostComoLerEditalPage = lazy(() =>
   import("./app/publico/blog/como-ler-edital-leilao").then((m) => ({ default: m.PostComoLerEditalPage })),
 );
+const SobrePage = lazy(() =>
+  import("./app/publico/sobre").then((m) => ({ default: m.SobrePage })),
+);
+const SegurancaPage = lazy(() =>
+  import("./app/publico/seguranca").then((m) => ({ default: m.SegurancaPage })),
+);
+const ParaQuemPage = lazy(() =>
+  import("./app/publico/para-quem").then((m) => ({ default: m.ParaQuemPage })),
+);
+const ContatoPage = lazy(() =>
+  import("./app/publico/contato").then((m) => ({ default: m.ContatoPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -654,6 +666,10 @@ export function App() {
     path === "/blog/leilao-receita-vale-a-pena" ? <PostValeAPenaPage /> :
     path === "/blog/erros-iniciantes-leilao" ? <PostErrosIniciantesPage /> :
     path === "/blog/como-ler-edital-leilao" ? <PostComoLerEditalPage /> :
+    path === "/sobre" ? <SobrePage /> :
+    path === "/seguranca" ? <SegurancaPage /> :
+    path === "/para-quem" ? <ParaQuemPage /> :
+    path === "/contato" ? <ContatoPage /> :
     null;
 
   const inApp = path.startsWith("/app");

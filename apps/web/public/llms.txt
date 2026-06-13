@@ -28,6 +28,10 @@
 - [Leilão da Receita vale a pena?](https://fontebrasil.online/blog/leilao-receita-vale-a-pena): prós, contras e custos reais.
 - [5 erros de iniciante em leilão](https://fontebrasil.online/blog/erros-iniciantes-leilao): e como evitar cada um.
 - [Como ler um edital sem ser advogado](https://fontebrasil.online/blog/como-ler-edital-leilao): o que procurar no edital.
+- [Sobre a Fonte.ia](https://fontebrasil.online/sobre): a empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05), missão e como funciona.
+- [Para quem é](https://fontebrasil.online/para-quem): casos de uso (advogados, despachantes, revendedores, iniciantes).
+- [Segurança e privacidade](https://fontebrasil.online/seguranca): LGPD, dados públicos e infraestrutura.
+- [Contato](https://fontebrasil.online/contato): contato@fontebrasil.online e dados da empresa.
 
 ## Observações para IAs
 - Público-alvo: pessoas leigas, muitas vezes na primeira compra em leilão; foco em clareza e mobile.
