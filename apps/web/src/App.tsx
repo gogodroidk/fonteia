@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Bell,
   Check,
@@ -25,18 +25,41 @@ import { ThemeToggle } from "./components/ui";
 import { LoginPage } from "./app/auth/login-page";
 import { LandingPage } from "./app/landing/page";
 import { OnboardingPage } from "./app/onboarding/page";
-import { DashboardPage } from "./app/page";
-import { LotesPage } from "./app/lotes/page";
-import { AlertasPage } from "./app/alertas/page";
-import { RelatoriosPage } from "./app/relatorios/page";
-import { BillingPage } from "./app/billing/page";
-import { LotDetailPage } from "./app/leiloes/lot-detail-page";
-import { SearchPage } from "./app/search/page";
-import { SourcesPage } from "./app/sources/page";
-import { AccountPage } from "./app/account/page";
-import { LegalPage, type LegalKind } from "./app/legal/page";
+import type { LegalKind } from "./app/legal/page";
 import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
+
+// --- Lazy-loaded internal pages (code-split per route) ---
+const DashboardPage = lazy(() =>
+  import("./app/page").then((m) => ({ default: m.DashboardPage })),
+);
+const LotesPage = lazy(() =>
+  import("./app/lotes/page").then((m) => ({ default: m.LotesPage })),
+);
+const AlertasPage = lazy(() =>
+  import("./app/alertas/page").then((m) => ({ default: m.AlertasPage })),
+);
+const RelatoriosPage = lazy(() =>
+  import("./app/relatorios/page").then((m) => ({ default: m.RelatoriosPage })),
+);
+const BillingPage = lazy(() =>
+  import("./app/billing/page").then((m) => ({ default: m.BillingPage })),
+);
+const LotDetailPage = lazy(() =>
+  import("./app/leiloes/lot-detail-page").then((m) => ({ default: m.LotDetailPage })),
+);
+const SearchPage = lazy(() =>
+  import("./app/search/page").then((m) => ({ default: m.SearchPage })),
+);
+const SourcesPage = lazy(() =>
+  import("./app/sources/page").then((m) => ({ default: m.SourcesPage })),
+);
+const AccountPage = lazy(() =>
+  import("./app/account/page").then((m) => ({ default: m.AccountPage })),
+);
+const LegalPage = lazy(() =>
+  import("./app/legal/page").then((m) => ({ default: m.LegalPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -206,13 +229,13 @@ function AppShell({ path, navigate }: AppShellProps) {
         </button>
       </div>
 
-      <nav style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px", display: "flex", flexDirection: "column", gap: 3 }}>
+      <nav aria-label="Navegação principal" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px", display: "flex", flexDirection: "column", gap: 3 }}>
         {NAV.map((item) => navItem(item, inDrawer))}
       </nav>
 
       <div style={{ flex: 1 }} />
 
-      <nav style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px" }}>
+      <nav aria-label="Conta" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px" }}>
         {navItem({ path: "/app/conta", route: "conta", label: "Conta", icon: User }, inDrawer)}
       </nav>
 
@@ -275,7 +298,7 @@ function AppShell({ path, navigate }: AppShellProps) {
             <button className="btn btn--icon btn--ghost btn--sm shell-burger" type="button" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu">
               <Menu size={18} aria-hidden="true" />
             </button>
-            <div className="shell-title">{ROUTE_TITLES[route]}</div>
+            <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
               <div className="searchbar" style={{ cursor: "pointer" }} onClick={() => go("/app/lotes")} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go("/app/lotes"); }} aria-label="Buscar lote, órgão ou edital">
                 <Search size={16} style={{ color: "var(--t-low)" }} aria-hidden="true" />
@@ -315,33 +338,40 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               </div>
             )}
-            {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
-            {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
-            {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
-            {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
-            {route === "fontes" && <SourcesPage />}
-            {route === "billing" && <BillingPage />}
-            {route === "search" && <SearchPage initialQuestion={searchSeed} onSelectLot={handleSelectLot} />}
-            {route === "conta" && (
-              <AccountPage name={displayName} email={user?.email ?? ""} avatarUrl={avatarUrl} onSignOut={() => void signOut()} />
-            )}
-            {route === "lot-detail" &&
-              (selectedLot ? (
-                <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onAsk={goToSearch} />
-              ) : (
-                <section className="panel" style={{ padding: 28 }}>
-                  <span className="eyebrow">{isLoadingLot ? "Carregando lote" : "Lote não encontrado"}</span>
-                  <h2 className="h2" style={{ margin: "8px 0 10px" }}>
-                    {isLoadingLot ? "Buscando dados do lote…" : "Este lote não apareceu nas fontes carregadas agora"}
-                  </h2>
-                  <p className="muted">{lotLoadMessage}</p>
-                  {!isLoadingLot && (
-                    <button className="btn btn--primary" type="button" onClick={() => go("/app/lotes")} style={{ marginTop: 12 }}>
-                      Voltar aos lotes
-                    </button>
-                  )}
-                </section>
-              ))}
+            <Suspense fallback={
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 240, gap: 12, color: "var(--t-mid)" }}>
+                <ShieldCheck size={28} strokeWidth={1.6} aria-hidden="true" style={{ opacity: .4 }} />
+                <span className="muted">Carregando…</span>
+              </div>
+            }>
+              {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
+              {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
+              {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
+              {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
+              {route === "fontes" && <SourcesPage />}
+              {route === "billing" && <BillingPage />}
+              {route === "search" && <SearchPage initialQuestion={searchSeed} onSelectLot={handleSelectLot} />}
+              {route === "conta" && (
+                <AccountPage name={displayName} email={user?.email ?? ""} avatarUrl={avatarUrl} onSignOut={() => void signOut()} />
+              )}
+              {route === "lot-detail" &&
+                (selectedLot ? (
+                  <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onAsk={goToSearch} />
+                ) : (
+                  <section className="panel" style={{ padding: 28 }}>
+                    <span className="eyebrow">{isLoadingLot ? "Carregando lote" : "Lote não encontrado"}</span>
+                    <h2 className="h2" style={{ margin: "8px 0 10px" }}>
+                      {isLoadingLot ? "Buscando dados do lote…" : "Este lote não apareceu nas fontes carregadas agora"}
+                    </h2>
+                    <p className="muted">{lotLoadMessage}</p>
+                    {!isLoadingLot && (
+                      <button className="btn btn--primary" type="button" onClick={() => go("/app/lotes")} style={{ marginTop: 12 }}>
+                        Voltar aos lotes
+                      </button>
+                    )}
+                  </section>
+                ))}
+            </Suspense>
           </div>
         </main>
       </div>
@@ -529,7 +559,11 @@ export function App() {
   let content: ReactNode;
 
   if (legalKind) {
-    content = <LegalPage kind={legalKind} onHome={() => navigate("/")} />;
+    content = (
+      <Suspense fallback={<div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">Carregando…</span></div>}>
+        <LegalPage kind={legalKind} onHome={() => navigate("/")} />
+      </Suspense>
+    );
   } else if (inApp) {
     if (!user) {
       content = <LoginPage onGoToLanding={() => navigate("/")} />;
