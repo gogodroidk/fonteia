@@ -91,6 +91,40 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
 
   return (
     <div className="onboarding">
+      {/* Scoped mobile polish (global CSS untouched) */}
+      <style>{`
+        @media (max-width: 560px) {
+          .onboarding { padding: 16px !important; align-items: flex-start !important; }
+          .onboarding-card { padding: 26px 20px !important; }
+        }
+        @media (max-width: 460px) {
+          /* Stack the footer actions so the primary button is full-width and
+             never crowds the back/skip link on small phones. */
+          .onboarding-actions {
+            flex-direction: column-reverse !important;
+            align-items: stretch !important;
+            gap: 12px !important;
+          }
+          .onboarding-actions .primary-button,
+          .onboarding-actions-advance,
+          .onboarding-finish,
+          .btn-primary-full.onboarding-finish {
+            width: 100% !important;
+            min-width: 0 !important;
+            flex: none !important;
+            padding-top: 14px !important;
+            padding-bottom: 14px !important;
+          }
+          .onboarding-actions .link-btn {
+            align-self: center !important;
+            padding: 8px !important;
+          }
+        }
+        @media (max-width: 360px) {
+          .onboarding-body-h1 { font-size: 21px !important; }
+          .onboarding-option { padding: 14px !important; gap: 12px !important; }
+        }
+      `}</style>
       {/* Card */}
       <div className="onboarding-card">
 
