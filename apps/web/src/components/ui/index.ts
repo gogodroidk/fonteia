@@ -1,0 +1,27 @@
+// UI component barrel — Fonte.ia design system primitives
+
+export { Ring } from "./Ring";
+export type { RingProps } from "./Ring";
+
+export { ScoreRing } from "./ScoreRing";
+export type { ScoreRingProps } from "./ScoreRing";
+
+export { Spark } from "./Spark";
+export type { SparkProps } from "./Spark";
+
+export { AreaChart } from "./AreaChart";
+export type { AreaChartProps } from "./AreaChart";
+
+export { CountUp } from "./CountUp";
+export type { CountUpProps } from "./CountUp";
+
+export { Bar } from "./Bar";
+export type { BarProps } from "./Bar";
+
+export { FonteDots } from "./FonteDots";
+export type { FonteDotsProps, FonteItem } from "./FonteDots";
+
+export { ThemeToggle } from "./ThemeToggle";
+
+export { riscoBadge } from "./riscoBadge";
+export type { RiscoBadgeResult, RiscoLevel } from "./riscoBadge";
