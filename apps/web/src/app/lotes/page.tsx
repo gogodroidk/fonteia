@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
-import { Heart, Loader2, Search, Tag } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Layers, LayoutList, Loader2, Search, Tag } from "lucide-react";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
@@ -22,11 +22,23 @@ type SortKey = "score" | "desconto" | "prazo" | "valor";
 type PersonFilter = "todos" | "pf" | "pj";
 type DescontoFilter = "todos" | "30" | "50";
 type StatusFilter = "todos" | "abertos" | "encerrados";
+type ViewMode = "editais" | "lotes";
 
 interface LotView {
   lot: ReceitaLeilaoLot;
   scoring: LeilaoOpportunityScore;
   economia: LotEconomia | null;
+}
+
+interface EditalGroup {
+  edle: string;
+  edital: string;
+  city: string;
+  agency: string;
+  /** Earliest deadline among lots in the group. */
+  earliestDeadline: string;
+  categories: string[];
+  views: LotView[];
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -207,6 +219,16 @@ function SkeletonCard() {
       />
       <div className="skeleton" style={{ height: 12, width: "60%", marginBottom: 8 }} />
       <div className="skeleton" style={{ height: 10, width: "40%" }} />
+    </div>
+  );
+}
+
+function SkeletonEdital() {
+  return (
+    <div className="card card--pad" aria-hidden="true" style={{ padding: "18px 20px" }}>
+      <div className="skeleton" style={{ height: 14, width: "45%", marginBottom: 10 }} />
+      <div className="skeleton" style={{ height: 11, width: "65%", marginBottom: 8 }} />
+      <div className="skeleton" style={{ height: 10, width: "30%" }} />
     </div>
   );
 }
@@ -578,6 +600,307 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
   );
 }
 
+// ─── Edital card ─────────────────────────────────────────────────────────────
+
+interface EditalCardProps {
+  group: EditalGroup;
+  isExpanded: boolean;
+  onToggle: () => void;
+  watchIds: string[];
+  onToggleWatch: (id: string) => void;
+  onSelectLot: ((lot: ReceitaLeilaoLot) => void) | undefined;
+  editalCountMap: ReadonlyMap<string, number>;
+  onFilterByEdital: (edital: string) => void;
+}
+
+function EditalCard({
+  group,
+  isExpanded,
+  onToggle,
+  watchIds,
+  onToggleWatch,
+  onSelectLot,
+  editalCountMap,
+  onFilterByEdital,
+}: EditalCardProps) {
+  const days = daysUntil(group.earliestDeadline);
+  const allEncerrado = group.views.every((v) => daysUntil(v.lot.proposalDeadline) < 0);
+  const watchedCount = group.views.filter((v) => watchIds.includes(v.lot.id)).length;
+
+  return (
+    <div
+      className="card"
+      style={{
+        overflow: "hidden",
+        border: isExpanded
+          ? "1.5px solid color-mix(in srgb, var(--brand-ink) 40%, transparent)"
+          : undefined,
+      }}
+    >
+      {/* Header row — clickable to expand */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? "Recolher" : "Expandir"} edital ${group.edital}`}
+        style={{
+          display: "flex",
+          width: "100%",
+          alignItems: "flex-start",
+          gap: 14,
+          padding: "16px 18px",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          color: "inherit",
+          fontFamily: "inherit",
+        }}
+      >
+        {/* Left: icon area */}
+        <div
+          aria-hidden="true"
+          style={{
+            width: 40,
+            height: 40,
+            flexShrink: 0,
+            borderRadius: "var(--r-md)",
+            background: allEncerrado
+              ? "color-mix(in srgb, var(--danger) 12%, var(--surface))"
+              : "color-mix(in srgb, var(--brand-ink) 12%, var(--surface))",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: allEncerrado ? "var(--danger)" : "var(--brand-ink)",
+          }}
+        >
+          <Layers size={20} />
+        </div>
+
+        {/* Center: text */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: "var(--t-hi)",
+                fontFamily: "monospace",
+              }}
+            >
+              {group.edital}
+            </span>
+            {allEncerrado && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "var(--danger)",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Encerrado
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "var(--t-hi)",
+              marginTop: 2,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {displayCity(group.city)}
+          </div>
+          <div
+            className="tiny muted"
+            style={{
+              marginTop: 1,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {group.agency}
+          </div>
+
+          {/* Meta row */}
+          <div
+            style={{
+              marginTop: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            {/* Lot count badge */}
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "3px 8px",
+                borderRadius: 99,
+                background: "color-mix(in srgb, var(--brand-ink) 12%, transparent)",
+                color: "var(--brand-ink)",
+                fontSize: 11,
+                fontWeight: 700,
+              }}
+            >
+              {group.views.length} {group.views.length === 1 ? "lote" : "lotes"}
+            </span>
+
+            {/* Watchlist count */}
+            {watchedCount > 0 && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "#FF5A7A",
+                }}
+              >
+                <Heart size={11} fill="#FF5A7A" strokeWidth={0} />
+                {watchedCount}
+              </span>
+            )}
+
+            {/* Categories */}
+            {group.categories.slice(0, 3).map((cat) => (
+              <span
+                key={cat}
+                className="badge badge--neutral"
+                style={{ fontSize: 10, textTransform: "capitalize" }}
+              >
+                {cat.toLowerCase()}
+              </span>
+            ))}
+            {group.categories.length > 3 && (
+              <span className="tiny muted">+{group.categories.length - 3}</span>
+            )}
+
+            {/* Deadline */}
+            <span
+              className="tiny"
+              style={{ fontWeight: 600, color: deadlineColor(days), marginLeft: "auto" }}
+            >
+              {deadlineLabel(group.earliestDeadline)}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: chevron */}
+        <div
+          aria-hidden="true"
+          style={{ flexShrink: 0, color: "var(--t-low)", marginTop: 2, transition: "transform .2s" }}
+        >
+          {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        </div>
+      </button>
+
+      {/* Expanded lot grid */}
+      {isExpanded && (
+        <div
+          style={{
+            padding: "0 16px 20px",
+            borderTop: "1px solid color-mix(in srgb, var(--brand-ink) 12%, transparent)",
+          }}
+        >
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+              gap: 14,
+              marginTop: 16,
+            }}
+          >
+            {group.views.map((view) => (
+              <LotCard
+                key={view.lot.id}
+                view={view}
+                watched={watchIds.includes(view.lot.id)}
+                onToggleWatch={() => onToggleWatch(view.lot.id)}
+                onSelect={onSelectLot !== undefined ? () => onSelectLot(view.lot) : undefined}
+                editalCount={editalCountMap.get(view.lot.edital.trim()) ?? 1}
+                onFilterByEdital={onFilterByEdital}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── View mode toggle ─────────────────────────────────────────────────────────
+
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Modo de visualização"
+      style={{
+        display: "inline-flex",
+        borderRadius: "var(--r-md)",
+        border: "1px solid color-mix(in srgb, var(--brand-ink) 20%, transparent)",
+        overflow: "hidden",
+        background: "var(--surface)",
+      }}
+    >
+      {(
+        [
+          ["editais", "Por edital", Layers],
+          ["lotes", "Todos os lotes", LayoutList],
+        ] as const
+      ).map(([value, label, Icon]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={mode === value}
+          onClick={() => onChange(value)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "7px 14px",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 13,
+            fontWeight: 600,
+            transition: "background .15s, color .15s",
+            background:
+              mode === value
+                ? "color-mix(in srgb, var(--brand-ink) 14%, var(--surface))"
+                : "transparent",
+            color: mode === value ? "var(--brand-ink)" : "var(--t-mid)",
+            borderRight: value === "editais"
+              ? "1px solid color-mix(in srgb, var(--brand-ink) 20%, transparent)"
+              : "none",
+          }}
+        >
+          <Icon size={15} aria-hidden="true" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Empty state ─────────────────────────────────────────────────────────────
 
 function EmptyState({ onClear }: { onClear: () => void }) {
@@ -677,6 +1000,11 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   const [desconto, setDesconto] = useState<DescontoFilter>("todos");
   const [status, setStatus] = useState<StatusFilter>("abertos");
   const [sortKey, setSortKey] = useState<SortKey>("score");
+
+  // ── View mode ───────────────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<ViewMode>("editais");
+  // Track which editais are expanded (in "Por edital" mode)
+  const [expandedEditais, setExpandedEditais] = useState<ReadonlySet<string>>(new Set());
 
   // ── Paginação por scroll (cresce sozinha ao rolar, sem clicar) ──────────────
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -789,8 +1117,6 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   }, [views, query, category, city, person, desconto, status, sortKey]);
 
   // Mapa edital → quantidade de lotes no conjunto filtrado atual.
-  // Computado sobre `filtered` inteiro (não só a janela visível) para que o
-  // indicador reflita quantos irmãos existem dentre os resultados do filtro ativo.
   const editalCountMap = useMemo<ReadonlyMap<string, number>>(() => {
     const map = new Map<string, number>();
     for (const { lot } of filtered) {
@@ -798,6 +1124,58 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       map.set(key, (map.get(key) ?? 0) + 1);
     }
     return map;
+  }, [filtered]);
+
+  // ── Edital groups (for "Por edital" mode) ───────────────────────────────────
+  const editalGroups = useMemo<EditalGroup[]>(() => {
+    const map = new Map<string, EditalGroup>();
+
+    for (const view of filtered) {
+      const key = view.lot.edle.trim();
+      const existing = map.get(key);
+
+      if (existing === undefined) {
+        const cats: string[] = [];
+        if (view.lot.category !== undefined && view.lot.category.trim() !== "") {
+          cats.push(view.lot.category.trim());
+        }
+        map.set(key, {
+          edle: view.lot.edle,
+          edital: view.lot.edital,
+          city: view.lot.city,
+          agency: view.lot.agency,
+          earliestDeadline: view.lot.proposalDeadline,
+          categories: cats,
+          views: [view],
+        });
+      } else {
+        // Merge: track earliest deadline
+        const currentMs = new Date(existing.earliestDeadline).getTime();
+        const thisMs = new Date(view.lot.proposalDeadline).getTime();
+        if (!Number.isNaN(thisMs) && (Number.isNaN(currentMs) || thisMs < currentMs)) {
+          existing.earliestDeadline = view.lot.proposalDeadline;
+        }
+        // Accumulate distinct categories
+        if (
+          view.lot.category !== undefined &&
+          view.lot.category.trim() !== "" &&
+          !existing.categories.includes(view.lot.category.trim())
+        ) {
+          existing.categories.push(view.lot.category.trim());
+        }
+        existing.views.push(view);
+      }
+    }
+
+    // Sort groups by earliest deadline ascending (closest first), encerrados last
+    return Array.from(map.values()).sort((a, b) => {
+      const dA = daysUntil(a.earliestDeadline);
+      const dB = daysUntil(b.earliestDeadline);
+      // Encerrados (days < 0) sink to the bottom
+      if (dA < 0 && dB >= 0) return 1;
+      if (dB < 0 && dA >= 0) return -1;
+      return new Date(a.earliestDeadline).getTime() - new Date(b.earliestDeadline).getTime();
+    });
   }, [filtered]);
 
   // Reinicia a janela ao mudar busca/filtros/ordenação.
@@ -820,7 +1198,6 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     observer.observe(node);
     return () => observer.disconnect();
     // Depende só de filtered.length: o observer persiste enquanto a janela cresce
-    // (não recriar a cada visibleCount evita o disparo em cascata).
   }, [filtered.length]);
 
   const visibleViews = filtered.slice(0, visibleCount);
@@ -829,6 +1206,18 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleFilterByEdital(edital: string) {
     setQuery(edital.trim());
+  }
+
+  function handleToggleEdital(edle: string) {
+    setExpandedEditais((prev) => {
+      const next = new Set(prev);
+      if (next.has(edle)) {
+        next.delete(edle);
+      } else {
+        next.add(edle);
+      }
+      return next;
+    });
   }
 
   function clearFilters() {
@@ -964,7 +1353,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
         </div>
       </div>
 
-      {/* Count row */}
+      {/* Count row + view toggle */}
       {!isLoading && errorMessage === null && lots.length > 0 && (
         <div className="row between wrap" style={{ gap: 8 }}>
           <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
@@ -972,7 +1361,18 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
               {filtered.length}
             </b>{" "}
             {filtered.length === 1 ? "lote encontrado" : "lotes encontrados"}
-            {filtered.length > visibleViews.length ? ` · mostrando ${visibleViews.length}` : ""}
+            {viewMode === "editais" && (
+              <>
+                {" · "}
+                <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+                  {editalGroups.length}
+                </b>{" "}
+                {editalGroups.length === 1 ? "edital" : "editais"}
+              </>
+            )}
+            {viewMode === "lotes" && filtered.length > visibleViews.length
+              ? ` · mostrando ${visibleViews.length}`
+              : ""}
             {watchIds.length > 0 && (
               <>
                 {" · "}
@@ -983,7 +1383,8 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
               </>
             )}
           </span>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <ViewToggle mode={viewMode} onChange={setViewMode} />
             {filtered.length > 0 && (
               <button
                 className="btn btn--ghost btn--sm"
@@ -1005,16 +1406,24 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
 
       {/* Grid / states */}
       {isLoading ? (
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
-          aria-busy="true"
-          aria-label="Carregando lotes…"
-        >
-          {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
+        viewMode === "editais" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-busy="true" aria-label="Carregando editais…">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <SkeletonEdital key={i} />
+            ))}
+          </div>
+        ) : (
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
+            aria-busy="true"
+            aria-label="Carregando lotes…"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
+        )
       ) : errorMessage !== null ? null : lots.length === 0 ? (
         <div
           className="panel"
@@ -1035,7 +1444,25 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState onClear={clearFilters} />
+      ) : viewMode === "editais" ? (
+        /* ── Por edital view ── */
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {editalGroups.map((group) => (
+            <EditalCard
+              key={group.edle}
+              group={group}
+              isExpanded={expandedEditais.has(group.edle)}
+              onToggle={() => handleToggleEdital(group.edle)}
+              watchIds={watchIds}
+              onToggleWatch={handleToggleWatch}
+              onSelectLot={onSelectLot}
+              editalCountMap={editalCountMap}
+              onFilterByEdital={handleFilterByEdital}
+            />
+          ))}
+        </div>
       ) : (
+        /* ── Todos os lotes view ── */
         <>
           <div
             className="grid"

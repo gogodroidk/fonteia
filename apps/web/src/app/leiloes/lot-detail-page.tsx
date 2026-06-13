@@ -1318,6 +1318,219 @@ export function LotDetailPage({
             ) : null}
           </section>
 
+          {/* ══════════════════════════════════════════════════════════════════
+              RAIO-X COM IA — card proeminente logo após o hero, visível em
+              destaque antes de qualquer outra seção (desktop e mobile).
+              ══════════════════════════════════════════════════════════════════ */}
+          <section
+            className="lot-detail-header raio-x-featured"
+            aria-label="Assistente Fonte.ia — Raio-X do lote"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
+          >
+            {/* Cabeçalho do card */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--s-3)",
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "var(--r-md)",
+                  background: iaAnswer ? "var(--g-700)" : "linear-gradient(135deg, var(--g-600), var(--g-500))",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  boxShadow: "var(--shadow-sm)",
+                }}
+              >
+                <Sparkles aria-hidden="true" size={20} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong style={{ display: "block", fontSize: "1rem", color: "var(--n-900)", fontWeight: 800 }}>
+                  Assistente Fonte.ia
+                </strong>
+                <span style={{ fontSize: "0.78rem", color: iaAnswer ? "var(--g-700)" : "var(--n-400)", fontWeight: iaAnswer ? 700 : 400 }}>
+                  {iaLoading
+                    ? "Analisando o lote…"
+                    : iaAnswer
+                    ? "Raio-X gerado com IA"
+                    : iaUnavailable
+                    ? "Em ativacao"
+                    : "Raio-X do lote com IA — entenda este lote em segundos"}
+                </span>
+              </div>
+            </div>
+
+            {/* Estado: carregando */}
+            {iaLoading ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "var(--s-2)",
+                  padding: "var(--s-5)",
+                  background: "var(--n-50)",
+                  border: "1px solid var(--n-100)",
+                  borderRadius: "var(--r-md)",
+                  fontSize: "0.85rem",
+                  color: "var(--n-500)",
+                }}
+              >
+                <Loader2 aria-hidden="true" size={18} className="spin" />
+                Lendo os dados oficiais e montando o Raio-X…
+              </div>
+            ) : iaAnswer ? (
+              /* Estado: resposta da IA */
+              <div
+                style={{
+                  background: "var(--g-50)",
+                  border: "1px solid var(--g-200)",
+                  borderLeft: "4px solid var(--g-500)",
+                  borderRadius: "0 var(--r-md) var(--r-md) 0",
+                  padding: "var(--s-4) var(--s-5)",
+                  fontSize: "0.88rem",
+                  lineHeight: 1.65,
+                  color: "var(--n-700)",
+                }}
+              >
+                {iaAnswer.split("\n").map((line, i) =>
+                  line.trim() === "" ? (
+                    <div key={i} style={{ height: "var(--s-2)" }} />
+                  ) : (
+                    <p key={i} style={{ margin: "0 0 var(--s-2)" }}>
+                      {renderInline(line)}
+                    </p>
+                  ),
+                )}
+                {iaDisclaimer ? (
+                  <p
+                    style={{
+                      margin: "var(--s-3) 0 0",
+                      fontSize: "0.72rem",
+                      color: "var(--n-400)",
+                      borderTop: "1px solid var(--n-100)",
+                      paddingTop: "var(--s-2)",
+                    }}
+                  >
+                    {iaDisclaimer}
+                    {iaModel ? ` · Modelo: ${iaModel}` : ""}
+                  </p>
+                ) : null}
+              </div>
+            ) : iaUnavailable ? (
+              /* Estado: IA ainda nao configurada */
+              <div
+                style={{
+                  background: "var(--n-50)",
+                  border: "1px dashed var(--n-200)",
+                  borderRadius: "var(--r-md)",
+                  padding: "var(--s-4)",
+                  fontSize: "0.85rem",
+                  color: "var(--n-500)",
+                  lineHeight: 1.55,
+                  textAlign: "center",
+                }}
+              >
+                <p style={{ margin: "0 0 var(--s-2)" }}>
+                  O assistente de IA ainda nao foi ativado nesta conta.
+                </p>
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--n-400)" }}>
+                  Os dados acima vem direto da fonte oficial. A analise por IA liga assim que a
+                  chave da Anthropic for configurada no servidor.
+                </p>
+              </div>
+            ) : (
+              /* Estado: ocioso — convida a gerar (CTA grande e destacado) */
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s-3)",
+                  padding: "var(--s-4)",
+                  background: "var(--g-50)",
+                  border: "1px solid var(--g-200)",
+                  borderRadius: "var(--r-md)",
+                }}
+              >
+                <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--n-600)", lineHeight: 1.55 }}>
+                  Gere uma leitura em linguagem simples deste lote — o que e, quem pode dar lance,
+                  prazo, valor de partida e o que conferir no edital.
+                </p>
+                <button
+                  className="primary-button raio-x-cta"
+                  onClick={() => { void runRaioX(); }}
+                  type="button"
+                >
+                  <Sparkles aria-hidden="true" size={18} />
+                  Gerar Raio-X com IA
+                </button>
+              </div>
+            )}
+
+            {/* Erro */}
+            {iaError ? (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: "0.78rem",
+                  color: "var(--color-error)",
+                  padding: "var(--s-2) var(--s-3)",
+                  background: "var(--color-error-bg)",
+                  borderRadius: "var(--r-sm)",
+                }}
+              >
+                Nao consegui gerar agora: {iaError}
+              </p>
+            ) : null}
+
+            {/* Pergunta livre — disponivel quando a IA respondeu ao menos uma vez */}
+            {iaAnswer ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!iaLoading && iaQuestion.trim()) {
+                    void runRaioX(iaQuestion);
+                  }
+                }}
+                style={{ display: "flex", gap: "var(--s-2)" }}
+              >
+                <input
+                  type="text"
+                  value={iaQuestion}
+                  onChange={(e) => { setIaQuestion(e.target.value); }}
+                  placeholder="Pergunte algo sobre este lote…"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    padding: "10px var(--s-3)",
+                    fontSize: "0.88rem",
+                    border: "1.5px solid var(--n-200)",
+                    borderRadius: "var(--r-md)",
+                    background: "var(--surface, #fff)",
+                    color: "var(--n-900)",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  className="ghost-button"
+                  type="submit"
+                  disabled={iaLoading || !iaQuestion.trim()}
+                  aria-label="Enviar pergunta"
+                  style={{ flexShrink: 0, minHeight: 44 }}
+                >
+                  <Send aria-hidden="true" size={16} />
+                </button>
+              </form>
+            ) : null}
+          </section>
+
           {/* ── Análise do edital por IA (Pro: Gemini lê o PDF inteiro) ────── */}
           {editalIA || editalIAError || editalIALoading ? (
             <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
@@ -1880,225 +2093,8 @@ export function LotDetailPage({
           </section>
         </div>
 
-        {/* ── Sidebar (sticky) ─────────────────────────────────────────────── */}
-        <div className="evidence-panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
-
-          {/* AI assistant — Raio-X com IA (Claude via Worker fonteia-api) */}
-          <div style={{ padding: "var(--s-4) var(--s-5)" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-3)",
-                marginBottom: "var(--s-3)",
-              }}
-            >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "var(--r-md)",
-                  background: iaAnswer ? "var(--g-50)" : "var(--n-100)",
-                  color: iaAnswer ? "var(--g-600)" : "var(--n-400)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Sparkles aria-hidden="true" size={16} />
-              </div>
-              <div>
-                <strong style={{ display: "block", fontSize: "0.875rem", color: "var(--n-900)" }}>
-                  Assistente Fonte.ia
-                </strong>
-                <span style={{ fontSize: "0.75rem", color: "var(--n-400)" }}>
-                  {iaLoading
-                    ? "Analisando o lote…"
-                    : iaAnswer
-                    ? "Raio-X gerado"
-                    : iaUnavailable
-                    ? "Em ativacao"
-                    : "Raio-X do lote com IA"}
-                </span>
-              </div>
-            </div>
-
-            {/* Estado: carregando */}
-            {iaLoading ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "var(--s-2)",
-                  padding: "var(--s-5)",
-                  background: "var(--n-50)",
-                  border: "1px solid var(--n-100)",
-                  borderRadius: "var(--r-md)",
-                  fontSize: "0.82rem",
-                  color: "var(--n-500)",
-                }}
-              >
-                <Loader2 aria-hidden="true" size={16} className="spin" />
-                Lendo os dados oficiais e montando o Raio-X…
-              </div>
-            ) : iaAnswer ? (
-              /* Estado: resposta da IA */
-              <div
-                style={{
-                  background: "var(--g-50)",
-                  border: "1px solid var(--n-100)",
-                  borderLeft: "3px solid var(--g-500)",
-                  borderRadius: "0 var(--r-md) var(--r-md) 0",
-                  padding: "var(--s-4)",
-                  fontSize: "0.84rem",
-                  lineHeight: 1.6,
-                  color: "var(--n-700)",
-                }}
-              >
-                {iaAnswer.split("\n").map((line, i) =>
-                  line.trim() === "" ? (
-                    <div key={i} style={{ height: "var(--s-2)" }} />
-                  ) : (
-                    <p key={i} style={{ margin: "0 0 var(--s-2)" }}>
-                      {renderInline(line)}
-                    </p>
-                  ),
-                )}
-                {iaDisclaimer ? (
-                  <p
-                    style={{
-                      margin: "var(--s-3) 0 0",
-                      fontSize: "0.7rem",
-                      color: "var(--n-400)",
-                      borderTop: "1px solid var(--n-100)",
-                      paddingTop: "var(--s-2)",
-                    }}
-                  >
-                    {iaDisclaimer}
-                    {iaModel ? ` · Modelo: ${iaModel}` : ""}
-                  </p>
-                ) : null}
-              </div>
-            ) : iaUnavailable ? (
-              /* Estado: IA ainda nao configurada (honesto) */
-              <div
-                style={{
-                  background: "var(--n-50)",
-                  border: "1px dashed var(--n-200)",
-                  borderRadius: "var(--r-md)",
-                  padding: "var(--s-4)",
-                  fontSize: "0.82rem",
-                  color: "var(--n-500)",
-                  lineHeight: 1.55,
-                  textAlign: "center",
-                }}
-              >
-                <p style={{ margin: "0 0 var(--s-2)" }}>
-                  O assistente de IA ainda nao foi ativado nesta conta.
-                </p>
-                <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--n-400)" }}>
-                  Os dados acima vem direto da fonte oficial. A analise por IA liga assim que a
-                  chave da Anthropic for configurada no servidor.
-                </p>
-              </div>
-            ) : (
-              /* Estado: ocioso — convida a gerar */
-              <div
-                style={{
-                  background: "var(--n-50)",
-                  border: "1px solid var(--n-100)",
-                  borderRadius: "var(--r-md)",
-                  padding: "var(--s-4)",
-                  fontSize: "0.82rem",
-                  color: "var(--n-600)",
-                  lineHeight: 1.55,
-                }}
-              >
-                <p style={{ margin: "0 0 var(--s-3)" }}>
-                  Gere uma leitura em linguagem simples deste lote — o que e, quem pode dar lance,
-                  prazo, valor de partida e o que conferir no edital.
-                </p>
-                <button
-                  className="primary-button"
-                  onClick={() => {
-                    void runRaioX();
-                  }}
-                  type="button"
-                  style={{
-                    width: "100%",
-                    justifyContent: "center",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "var(--s-2)",
-                  }}
-                >
-                  <Sparkles aria-hidden="true" size={15} />
-                  Gerar Raio-X com IA
-                </button>
-              </div>
-            )}
-
-            {/* Erro */}
-            {iaError ? (
-              <p
-                style={{
-                  margin: "var(--s-2) 0 0",
-                  fontSize: "0.75rem",
-                  color: "var(--color-error)",
-                }}
-              >
-                Nao consegui gerar agora: {iaError}
-              </p>
-            ) : null}
-
-            {/* Pergunta livre — disponivel quando a IA respondeu ao menos uma vez */}
-            {iaAnswer ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!iaLoading && iaQuestion.trim()) {
-                    void runRaioX(iaQuestion);
-                  }
-                }}
-                style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-3)" }}
-              >
-                <input
-                  type="text"
-                  value={iaQuestion}
-                  onChange={(e) => {
-                    setIaQuestion(e.target.value);
-                  }}
-                  placeholder="Pergunte algo sobre este lote…"
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    padding: "8px 10px",
-                    fontSize: "0.8rem",
-                    border: "1px solid var(--n-200)",
-                    borderRadius: "var(--r-md)",
-                    background: "var(--surface, #fff)",
-                    color: "var(--n-900)",
-                  }}
-                />
-                <button
-                  className="ghost-button"
-                  type="submit"
-                  disabled={iaLoading || !iaQuestion.trim()}
-                  aria-label="Enviar pergunta"
-                  style={{ flexShrink: 0 }}
-                >
-                  <Send aria-hidden="true" size={15} />
-                </button>
-              </form>
-            ) : null}
-          </div>
-
-          {/* Separator */}
-          <hr className="divide" />
-
-          {/* Evidence panel */}
+        {/* ── Sidebar (sticky) — apenas Evidência, Raio-X está no topo da coluna principal ── */}
+        <div className="evidence-panel">
           <EvidencePanel
             evidence={evidenceItems}
             title={`Evidencia — Lote ${lot.displayNumber}`}
