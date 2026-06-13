@@ -1,0 +1,84 @@
+# Fonte.ia — fontebrasil.online
+# Site aberto à indexação e à citação por buscadores e por IAs generativas
+# (ChatGPT, Claude, Perplexity, Gemini, etc.). As páginas públicas (home, guias,
+# ferramentas, FAQ, glossário, comparações) são livres. Apenas o app logado
+# (/app) fica fora do índice — é conteúdo privado atrás de login, sem valor de SEO.
+# Veja também: /llms.txt (resumo do site para IAs).
+
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /conta
+Disallow: /relatorios-privados
+
+# --- Buscadores ---
+User-agent: Googlebot
+Allow: /
+Disallow: /app
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /app
+
+User-agent: Bingbot
+Allow: /
+Disallow: /app
+
+User-agent: Applebot
+Allow: /
+Disallow: /app
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /app
+
+# --- IAs generativas (bem-vindas no conteúdo público) ---
+User-agent: GPTBot
+Allow: /
+Disallow: /app
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /app
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /app
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /app
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /app
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /app
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /app
+
+User-agent: Perplexity-User
+Allow: /
+Disallow: /app
+
+User-agent: CCBot
+Allow: /
+Disallow: /app
+
+User-agent: Google-CloudVertexBot
+Allow: /
+Disallow: /app
+
+User-agent: Amazonbot
+Allow: /
+Disallow: /app
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /app
+
+Sitemap: https://fontebrasil.online/sitemap.xml

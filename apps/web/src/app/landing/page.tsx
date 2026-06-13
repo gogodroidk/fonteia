@@ -1493,6 +1493,27 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             </span>
           </div>
 
+          {/* Recursos gratuitos — links reais p/ SEO e p/ o leigo explorar antes de pagar */}
+          <nav style={{ display: "flex", gap: 20, flexWrap: "wrap" }} aria-label="Recursos gratuitos">
+            {[
+              { label: "Leilões da Receita Federal", href: "/leiloes-receita-federal" },
+              { label: "Calculadora de lance", href: "/ferramentas/calculadora-lance" },
+              { label: "Como comprar na Receita", href: "/guias/como-comprar-leilao-receita" },
+              { label: "Análise de edital com IA", href: "/analise-de-edital-com-ia" },
+              { label: "Perguntas frequentes", href: "/faq" },
+              { label: "Guias de leilão", href: "/guias" },
+            ].map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="link"
+                style={{ fontSize: 13, fontWeight: 500, color: "var(--t-mid)" }}
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
           {/* Legal links */}
           <nav style={{ display: "flex", gap: 20, flexWrap: "wrap" }} aria-label="Links legais">
             {[

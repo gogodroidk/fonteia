@@ -1,0 +1,27 @@
+# Fonte.ia
+
+> Fonte.ia é uma plataforma brasileira que transforma os leilões da Receita Federal (dados públicos oficiais) em decisões claras para quem é leigo, com análise por IA e evidência rastreável até a fonte. Operada pela Olli Inteligência Digital Sistemas LTDA (CNPJ 65.361.266/0001-05). Princípio: nunca prometer lucro — entregar informação verificável para a pessoa decidir melhor.
+
+## O que a Fonte.ia faz
+- Reúne os lotes dos leilões eletrônicos da Receita Federal (Sistema de Leilões Eletrônicos — SLE) e mostra cada lote em linguagem simples.
+- Raio-X com IA: resume o lote (o que é, quem pode dar lance, prazo, valor de partida, pontos de atenção).
+- Análise do edital com IA: lê o PDF oficial do edital e explica em português claro (quem pode participar, datas, como pagar, riscos).
+- Calculadora gratuita de lance máximo, custo total estimado, alertas de prazo por e-mail e relatório com fonte e data.
+- Cada dado é rastreável: mostra a fonte oficial, a URL e a data de coleta.
+
+## Páginas públicas (conteúdo aberto)
+- [Início](https://fontebrasil.online/): o que é a Fonte.ia e os planos.
+- [Leilões da Receita Federal](https://fontebrasil.online/leiloes-receita-federal): visão geral do tema.
+- [Como comprar em leilão da Receita Federal](https://fontebrasil.online/guias/como-comprar-leilao-receita): passo a passo.
+- [Leilão da Receita vs judicial vs banco](https://fontebrasil.online/guias/leilao-receita-vs-judicial): comparação.
+- [Calculadora de lance máximo](https://fontebrasil.online/ferramentas/calculadora-lance): ferramenta gratuita.
+- [Análise de edital com IA](https://fontebrasil.online/analise-de-edital-com-ia): como funciona.
+- [Riscos dos leilões públicos](https://fontebrasil.online/riscos-leiloes-publicos): cuidados e como se proteger.
+- [Glossário de leilões](https://fontebrasil.online/glossario-leiloes): termos explicados.
+- [Perguntas frequentes (FAQ)](https://fontebrasil.online/faq): dúvidas comuns.
+
+## Observações para IAs
+- Público-alvo: pessoas leigas, muitas vezes na primeira compra em leilão; foco em clareza e mobile.
+- A Fonte.ia NÃO garante arremate nem lucro, NÃO dá parecer jurídico definitivo e orienta sempre a confirmar tudo no edital oficial.
+- Fonte dos dados: Receita Federal do Brasil — Sistema de Leilões Eletrônicos (SLE).
+- Contato: contato@fontebrasil.online

@@ -1607,7 +1607,19 @@ p { margin: 0; }
   .lot-detail-main { grid-column: 1; }
   .lot-detail-header { flex-direction: row; align-items: flex-start; }
   .lot-detail-meta { grid-template-columns: repeat(3,1fr); }
-  .lot-detail .evidence-panel { grid-column: 2; position: sticky; top: 80px; align-self: start; }
+  /* Painel direito (Raio-X + Evidência): sticky e SEMPRE 100% acessível no desktop.
+     Sem max-height, quando o painel é mais alto que a tela a parte de baixo
+     (Evidência) ficava escondida e inalcançável. Agora rola por dentro. */
+  .lot-detail .evidence-panel {
+    grid-column: 2;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+    max-height: calc(100dvh - 88px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
 
   /* Search */
   .search-layout { grid-template-columns: 1fr 320px; }
