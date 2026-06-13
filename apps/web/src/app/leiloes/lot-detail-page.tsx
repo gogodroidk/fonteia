@@ -321,15 +321,19 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
   const [active, setActive] = useState(0);
   // Falha de carregamento por índice — cai para o placeholder gracioso.
   const [broken, setBroken] = useState<Record<number, boolean>>({});
+  // Track which images have finished loading (for fade-in).
+  const [loaded, setLoaded] = useState<Record<number, boolean>>({});
 
   // Reseta ao trocar o conjunto de imagens (troca de lote).
   useEffect(() => {
     setActive(0);
     setBroken({});
+    setLoaded({});
   }, [images]);
 
   const current = images[active];
   const showImage = typeof current === "string" && broken[active] !== true;
+  const isLoaded = loaded[active] === true;
   const hasGallery = images.length > 1;
 
   return (
@@ -345,46 +349,60 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
           border: "1px solid var(--n-100)",
         }}
       >
+        {/* Placeholder always visible beneath the image; fades out once image loads */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "var(--s-2)",
+            color: "rgba(255,255,255,0.78)",
+            textAlign: "center",
+            padding: "var(--s-4)",
+            opacity: showImage && isLoaded ? 0 : 1,
+            transition: "opacity 0.3s ease",
+          }}
+        >
+          <ImageOff aria-hidden="true" size={34} />
+          {!showImage && (
+            <>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                Sem foto publicada para este lote
+              </span>
+              <span style={{ fontSize: "0.72rem", opacity: 0.8 }}>
+                A fonte oficial nao disponibilizou imagem.
+              </span>
+            </>
+          )}
+        </div>
+
         {showImage ? (
           <img
             src={current}
             alt={alt}
             loading="lazy"
+            onLoad={() => {
+              setLoaded((prev) => ({ ...prev, [active]: true }));
+            }}
             onError={() => {
               setBroken((prev) => ({ ...prev, [active]: true }));
             }}
             style={{
+              position: "absolute",
+              inset: 0,
               width: "100%",
               height: "100%",
               objectFit: "cover",
               display: "block",
+              opacity: isLoaded ? 1 : 0,
+              transition: "opacity 0.4s ease",
             }}
           />
-        ) : (
-          // Placeholder gracioso (gradiente) quando não há foto utilizável.
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "var(--s-2)",
-              color: "rgba(255,255,255,0.78)",
-              textAlign: "center",
-              padding: "var(--s-4)",
-            }}
-          >
-            <ImageOff aria-hidden="true" size={34} />
-            <span style={{ fontSize: "0.82rem", fontWeight: 600 }}>
-              Sem foto publicada para este lote
-            </span>
-            <span style={{ fontSize: "0.72rem", opacity: 0.8 }}>
-              A fonte oficial nao disponibilizou imagem.
-            </span>
-          </div>
-        )}
+        ) : null}
 
         {overlay ? (
           <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>{overlay}</div>

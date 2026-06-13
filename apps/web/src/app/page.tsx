@@ -431,47 +431,74 @@ export function DashboardPage(props: {
 
       {/* ── KPIs derivados dos lotes reais ───────────────────────── */}
       <section className="kpi-strip">
-        {kpiStrip.map(({ key, label, value, color, money }) => (
-          <div className="card card--pad" key={key}>
-            <div className="row between" style={{ alignItems: "flex-start" }}>
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--t-mid)",
-                  lineHeight: 1.3,
-                }}
-              >
-                {label}
-              </span>
-            </div>
-            <div
-              className="row between"
-              style={{ alignItems: "flex-end", marginTop: 12 }}
-            >
-              <div
-                style={{
-                  fontSize: 28,
-                  fontWeight: 800,
-                  letterSpacing: "-.025em",
-                  color,
-                }}
-              >
-                {isLoading ? (
-                  <span className="muted" style={{ fontSize: 18 }}>—</span>
-                ) : money ? (
-                  <span>{formatBRL(value)}</span>
-                ) : (
-                  <CountUp value={value} decimals={0} />
-                )}
+        {isLoading
+          ? Array.from({ length: 4 }).map((_, i) => (
+              <div className="card card--pad" key={i} aria-hidden="true">
+                <div className="skeleton" style={{ height: 13, width: "60%", marginBottom: 16 }} />
+                <div className="skeleton" style={{ height: 30, width: "45%" }} />
               </div>
-            </div>
-          </div>
-        ))}
+            ))
+          : kpiStrip.map(({ key, label, value, color, money }) => (
+              <div className="card card--pad" key={key}>
+                <div className="row between" style={{ alignItems: "flex-start" }}>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--t-mid)",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {label}
+                  </span>
+                </div>
+                <div
+                  className="row between"
+                  style={{ alignItems: "flex-end", marginTop: 12 }}
+                >
+                  <div
+                    style={{
+                      fontSize: 28,
+                      fontWeight: 800,
+                      letterSpacing: "-.025em",
+                      color,
+                    }}
+                  >
+                    {money ? (
+                      <span>{formatBRL(value)}</span>
+                    ) : (
+                      <CountUp value={value} decimals={0} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
       </section>
 
       {/* ── Spotlight: oportunidade do dia + encerrando em breve ─── */}
-      {featuredEntry ? (
+      {isLoading ? (
+        <section className="dash-spotlight" aria-hidden="true">
+          <div className="panel" style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="skeleton" style={{ height: 20, width: "30%", marginBottom: 4 }} />
+            <div className="skeleton" style={{ height: 26, width: "65%" }} />
+            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="skeleton" style={{ flex: 1, height: 68, borderRadius: "var(--r-md)" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+              <div className="skeleton" style={{ height: 34, width: 90, borderRadius: 999 }} />
+              <div className="skeleton" style={{ height: 34, width: 110, borderRadius: "var(--r-md)" }} />
+            </div>
+          </div>
+          <div className="panel" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="skeleton" style={{ height: 14, width: "55%" }} />
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton" style={{ height: 52, borderRadius: "var(--r-md)" }} />
+            ))}
+          </div>
+        </section>
+      ) : featuredEntry ? (
         <section className="dash-spotlight">
           {/* Oportunidade do dia */}
           <article className="featured-lot panel" style={{ padding: 24 }}>
@@ -725,9 +752,66 @@ export function DashboardPage(props: {
         </div>
 
         {isLoading ? (
-          <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
-            Carregando lotes...
-          </p>
+          <div className="panel" style={{ overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}
+                aria-busy="true"
+                aria-label="Carregando lotes…"
+              >
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                    {["Lote", "Orgao / Cidade", "Lance min.", "Prazo", "Score", ""].map((h, i) => (
+                      <th
+                        key={`${h}-${i}`}
+                        style={{
+                          padding: "12px 16px",
+                          textAlign: i >= 2 ? "right" : "left",
+                          fontWeight: 700,
+                          fontSize: 11.5,
+                          color: "var(--t-low)",
+                          letterSpacing: ".06em",
+                          textTransform: "uppercase",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 8 }).map((_, rowIdx) => (
+                    <tr
+                      key={rowIdx}
+                      style={{ borderTop: rowIdx > 0 ? "1px solid var(--border)" : undefined }}
+                      aria-hidden="true"
+                    >
+                      <td style={{ padding: "14px 16px" }}>
+                        <div className="skeleton" style={{ height: 14, width: "70%", marginBottom: 6 }} />
+                        <div className="skeleton" style={{ height: 11, width: "45%" }} />
+                      </td>
+                      <td style={{ padding: "14px 16px" }}>
+                        <div className="skeleton" style={{ height: 13, width: "80%" }} />
+                      </td>
+                      <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                        <div className="skeleton" style={{ height: 14, width: 80, marginLeft: "auto" }} />
+                      </td>
+                      <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                        <div className="skeleton" style={{ height: 13, width: 64, marginLeft: "auto" }} />
+                      </td>
+                      <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                        <div className="skeleton" style={{ height: 26, width: 36, borderRadius: 999, marginLeft: "auto" }} />
+                      </td>
+                      <td style={{ padding: "14px 14px", textAlign: "right" }}>
+                        <div className="skeleton" style={{ height: 30, width: 72, borderRadius: 8, marginLeft: "auto" }} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : loadError ? (
           <p
             className="muted"
@@ -736,13 +820,83 @@ export function DashboardPage(props: {
             {loadError}
           </p>
         ) : lots.length === 0 ? (
-          <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
-            Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.
-          </p>
+          <div
+            className="panel"
+            style={{
+              padding: 48,
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: "color-mix(in srgb, var(--brand-ink) 10%, var(--surface))",
+                color: "var(--brand-ink)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 26,
+              }}
+            >
+              🏛
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote disponivel agora</div>
+            <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
+              A coleta dos leiloes da Receita roda periodicamente. Novos lotes aparecem a cada sincronizacao.
+            </p>
+          </div>
         ) : sortedEntries.length === 0 ? (
-          <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
-            Nenhum lote encontrado para os filtros aplicados.
-          </p>
+          <div
+            className="panel"
+            style={{
+              padding: 48,
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              aria-hidden="true"
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: "50%",
+                background: "color-mix(in srgb, var(--brand-ink) 10%, var(--surface))",
+                color: "var(--brand-ink)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 26,
+              }}
+            >
+              🔍
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote com esses filtros</div>
+            <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
+              Tente ampliar a busca, trocar a cidade ou reduzir os filtros aplicados.
+            </p>
+            <button
+              className="btn btn--ghost btn--sm"
+              type="button"
+              onClick={() => {
+                setTerm("");
+                setRiskFilter("all");
+                setPersonFilter("all");
+                setSortBy("score");
+              }}
+            >
+              Limpar filtros
+            </button>
+          </div>
         ) : (
           <div className="panel" style={{ overflow: "hidden" }}>
             <div style={{ overflowX: "auto" }}>
