@@ -10,6 +10,7 @@ import {
   Loader2,
   MapPin,
   Package,
+  FileText,
   Printer,
   Send,
   ShieldCheck,
@@ -30,6 +31,7 @@ import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-
 import { ComoDarLance } from "../../components/como-dar-lance";
 import { estimarCustoTotal } from "../../lib/custo-total";
 import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
+import { supabase } from "../../auth/supabase-client";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -709,6 +711,7 @@ export function LotDetailPage({
 
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
+  const [editalLoading, setEditalLoading] = useState(false);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
   const [alertChannel, setAlertChannel] = useState<AlertChannel>("in_app");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -794,28 +797,68 @@ export function LotDetailPage({
     };
   }, []);
 
-  function handleSaveAlert() {
-    // Persiste de verdade neste navegador (radar local) — nada de "falso sucesso".
-    try {
-      const raw = window.localStorage.getItem("fonteia_alerts");
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      const list = Array.isArray(parsed) ? parsed : [];
-      list.push({
-        lotId: lot.id,
-        edital: lot.edital,
-        name: alertName,
-        channel: alertChannel,
-        createdAt: new Date().toISOString(),
-      });
-      window.localStorage.setItem("fonteia_alerts", JSON.stringify(list));
-    } catch {
-      // localStorage indisponível: segue sem quebrar.
-    }
+  async function handleSaveAlert() {
     setAlertOpen(false);
-    setSuccessMessage("✓ Lote salvo no seu radar (neste navegador). Avisos por e-mail/WhatsApp entram em breve.");
+    const email = session?.user?.email ?? "";
+    if (supabase && email) {
+      // Alerta REAL no servidor (RPC create_alert) — dispara e-mail quando o prazo chega.
+      try {
+        const { data, error } = await supabase.rpc("create_alert", {
+          p_lot_id: lot.id,
+          p_lot_label: `Lote ${lot.displayNumber} — ${lot.edital}`,
+          p_edital: lot.edital,
+          p_deadline: lot.proposalDeadline,
+          p_email: email,
+        });
+        const d = (data ?? {}) as { ok?: boolean; message?: string };
+        setSuccessMessage(
+          !error && d.ok
+            ? `✓ ${d.message ?? "Alerta criado!"} (${email})`
+            : d.message ?? "Nao consegui criar o alerta agora. Tente de novo.",
+        );
+      } catch {
+        setSuccessMessage("Nao consegui criar o alerta agora. Tente de novo.");
+      }
+    } else {
+      setSuccessMessage("Entre na sua conta para receber alertas por e-mail deste lote.");
+    }
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
-    }, 4000);
+    }, 5000);
+  }
+
+  async function baixarEdital() {
+    setEditalLoading(true);
+    try {
+      const { url, key } = getSupabasePublicConfig();
+      const res = await fetch(
+        `${trimTrailingSlash(url)}/functions/v1/edital-pdf?edle=${encodeURIComponent(lot.edle)}`,
+        { headers: { apikey: key } },
+      );
+      if (!res.ok) {
+        setSuccessMessage(
+          res.status === 404
+            ? "Este edital ainda nao tem PDF publicado no SLE."
+            : "Nao consegui baixar o edital agora.",
+        );
+        successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+        return;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `edital_${lot.edital.replaceAll("/", "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      setSuccessMessage("Nao consegui baixar o edital agora.");
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+    } finally {
+      setEditalLoading(false);
+    }
   }
 
   // Evidence for EvidencePanel.
@@ -1127,6 +1170,19 @@ export function LotDetailPage({
               >
                 <Bell aria-hidden="true" size={16} />
                 Criar alerta de prazo
+              </button>
+              <button
+                className="ghost-button lot-hero-action"
+                onClick={() => void baixarEdital()}
+                type="button"
+                disabled={editalLoading}
+              >
+                {editalLoading ? (
+                  <Loader2 aria-hidden="true" size={16} className="spin" />
+                ) : (
+                  <FileText aria-hidden="true" size={16} />
+                )}
+                Baixar edital (PDF)
               </button>
               <button
                 className="ghost-button lot-hero-action"
