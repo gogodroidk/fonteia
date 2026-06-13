@@ -17,3 +17,6 @@ ios/
 
 # Claude Code local state (worktrees + symlinks de skills)
 .claude/
+
+# Wrangler local dev cache/temp (gerado por `wrangler dev`)
+.wrangler/
