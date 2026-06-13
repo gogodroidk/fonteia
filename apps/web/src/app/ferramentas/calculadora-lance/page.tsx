@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calculator, Gavel, Info, ArrowRight } from "lucide-react";
+import { Calculator, Gavel, Info, ArrowRight, Mail, CheckCircle } from "lucide-react";
 import { LogoMark } from "../../../components/ui/logo-mark";
 import {
   useSeo,
@@ -7,6 +7,8 @@ import {
   breadcrumbJsonLd,
   SITE_URL,
 } from "../../../lib/seo";
+import { getSupabasePublicConfig, trimTrailingSlash } from "../../../lib/api-client";
+
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function brl(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -22,6 +24,10 @@ function parseBRL(raw: string): number {
   const cleaned = raw.replace(/\./g, "").replace(",", ".");
   const n = parseFloat(cleaned);
   return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 }
 
 /* ─── Linha de detalhamento ─────────────────────────────────────────────── */
@@ -176,6 +182,224 @@ function Campo({
         )}
       </div>
     </div>
+  );
+}
+
+/* ─── Captura de e-mail ──────────────────────────────────────────────────── */
+type LeadStatus = "idle" | "sending" | "ok" | "error";
+
+function CapturaEmail({
+  valorMercado,
+  lanceMaximo,
+  comissao,
+  margem,
+}: {
+  valorMercado: number;
+  lanceMaximo: number;
+  comissao: number;
+  margem: number;
+}) {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState<LeadStatus>("idle");
+  const [emailError, setEmailError] = useState("");
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setEmailError("");
+
+    const trimmed = email.trim();
+    if (!isValidEmail(trimmed)) {
+      setEmailError("Digite um e-mail válido.");
+      return;
+    }
+
+    setStatus("sending");
+
+    try {
+      const { url, key } = getSupabasePublicConfig();
+      const endpoint = `${trimTrailingSlash(url)}/rest/v1/rpc/capture_lead`;
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          p_email: trimmed,
+          p_source: "calculadora",
+          p_payload: {
+            valorMercado,
+            lanceMaximo,
+            comissao,
+            margem,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      setStatus("ok");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  if (status === "ok") {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "18px 20px",
+          borderRadius: 12,
+          background: "color-mix(in srgb, #22c55e 8%, transparent)",
+          border: "1px solid color-mix(in srgb, #22c55e 25%, transparent)",
+        }}
+      >
+        <CheckCircle size={20} style={{ color: "#22c55e", flexShrink: 0 }} aria-hidden="true" />
+        <p style={{ margin: 0, fontSize: 14, color: "var(--t-hi)", fontWeight: 500 }}>
+          Pronto! Você vai receber por e-mail.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        padding: "22px 20px",
+        borderRadius: 14,
+        background: "color-mix(in srgb, var(--border) 20%, transparent)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Mail size={16} style={{ color: "var(--accent-ink)", flexShrink: 0 }} aria-hidden="true" />
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--t-hi)" }}>
+          Receber este cálculo e alertas de lotes na minha faixa
+        </p>
+      </div>
+      <p className="muted" style={{ fontSize: 12.5, margin: "0 0 14px", lineHeight: 1.5 }}>
+        Opcional · sem spam · cancele quando quiser
+      </p>
+
+      <form
+        onSubmit={(e) => { void handleSubmit(e); }}
+        noValidate
+        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
+      >
+        <div style={{ flex: "1 1 220px", display: "flex", flexDirection: "column", gap: 4 }}>
+          <input
+            type="email"
+            name="email"
+            autoComplete="email"
+            placeholder="seu@email.com"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError("");
+              if (status === "error") setStatus("idle");
+            }}
+            disabled={status === "sending"}
+            aria-label="Seu e-mail"
+            aria-describedby={emailError ? "email-captura-erro" : undefined}
+            style={{
+              border: emailError ? "1px solid #f97316" : "1px solid var(--border)",
+              borderRadius: 10,
+              background: "var(--surface)",
+              padding: "0 14px",
+              fontSize: 15,
+              color: "var(--t-hi)",
+              fontFamily: "var(--font)",
+              minHeight: 46,
+              outline: "none",
+              width: "100%",
+            }}
+          />
+          {emailError && (
+            <span
+              id="email-captura-erro"
+              role="alert"
+              style={{ fontSize: 12, color: "#f97316", paddingLeft: 2 }}
+            >
+              {emailError}
+            </span>
+          )}
+          {status === "error" && (
+            <span
+              role="alert"
+              style={{ fontSize: 12, color: "#f97316", paddingLeft: 2 }}
+            >
+              Não consegui agora, tente de novo.
+            </span>
+          )}
+        </div>
+
+        <button
+          type="submit"
+          disabled={status === "sending"}
+          className="btn btn--accent"
+          style={{
+            minHeight: 46,
+            paddingLeft: 18,
+            paddingRight: 18,
+            fontSize: 14,
+            fontWeight: 700,
+            flexShrink: 0,
+            opacity: status === "sending" ? 0.65 : 1,
+            cursor: status === "sending" ? "wait" : "pointer",
+          }}
+        >
+          {status === "sending" ? "Enviando…" : "Receber alertas"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* ─── CTA imediato colado ao resultado ──────────────────────────────────── */
+function CtaImediato({ lanceMaximo }: { lanceMaximo: number }) {
+  const lanceFmt = brl(lanceMaximo);
+  return (
+    <a
+      href="/entrar"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 16,
+        padding: "20px 22px",
+        borderRadius: 14,
+        background: "var(--accent-ink, #2563eb)",
+        color: "#fff",
+        textDecoration: "none",
+        boxShadow: "0 4px 20px color-mix(in srgb, var(--accent-ink, #2563eb) 30%, transparent)",
+        transition: "filter .15s, transform .15s",
+      }}
+      onMouseEnter={(e) => {
+        (e.currentTarget as HTMLAnchorElement).style.filter = "brightness(1.08)";
+        (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-1px)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLAnchorElement).style.filter = "";
+        (e.currentTarget as HTMLAnchorElement).style.transform = "";
+      }}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.3 }}>
+          Veja lotes reais da Receita abaixo de {lanceFmt} →
+        </span>
+        <span style={{ fontSize: 13, opacity: 0.88, fontWeight: 500 }}>
+          Criar conta grátis · 7 dias sem cartão
+        </span>
+      </div>
+      <ArrowRight size={20} aria-hidden="true" style={{ flexShrink: 0, opacity: 0.9 }} />
+    </a>
   );
 }
 
@@ -613,6 +837,25 @@ export function CalculadoraLancePage() {
                   label={`Folga / lucro embutido (${margem}% do valor de mercado)`}
                   value={brl(folga > 0 ? folga : 0)}
                   emphasis
+                />
+              </div>
+            )}
+
+            {/* ── CTA imediato colado ao resultado ── */}
+            {temEntrada && !lanceNegativo && (
+              <div style={{ marginTop: 24 }}>
+                <CtaImediato lanceMaximo={lanceMaximo} />
+              </div>
+            )}
+
+            {/* ── Captura de e-mail ── */}
+            {temEntrada && (
+              <div style={{ marginTop: 16 }}>
+                <CapturaEmail
+                  valorMercado={vm}
+                  lanceMaximo={lanceMaximo}
+                  comissao={comissao}
+                  margem={margem}
                 />
               </div>
             )}

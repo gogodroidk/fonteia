@@ -32,6 +32,10 @@ import { BlogIndexPage } from "../src/app/publico/blog/page";
 import { PostValeAPenaPage } from "../src/app/publico/blog/leilao-receita-vale-a-pena";
 import { PostErrosIniciantesPage } from "../src/app/publico/blog/erros-iniciantes-leilao";
 import { PostComoLerEditalPage } from "../src/app/publico/blog/como-ler-edital-leilao";
+import { SobrePage } from "../src/app/publico/sobre";
+import { SegurancaPage } from "../src/app/publico/seguranca";
+import { ParaQuemPage } from "../src/app/publico/para-quem";
+import { ContatoPage } from "../src/app/publico/contato";
 
 export interface PrerenderRoute {
   /** Caminho da rota, exatamente como em App.tsx (sem barra final). */
@@ -175,6 +179,34 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     description:
       "O que procurar num edital de leilão da Receita Federal: datas, forma de pagamento, condição do bem e restrições. Em linguagem simples, com a IA da Fonte.ia ajudando.",
     Component: PostComoLerEditalPage,
+  },
+  {
+    path: "/sobre",
+    title: "Sobre a Fonte.ia e a Olli Inteligência Digital | empresa e missão",
+    description:
+      "Quem opera a Fonte.ia: Olli Inteligência Digital Sistemas LTDA (CNPJ 65.361.266/0001-05). Missão, o que fazemos com dados públicos e por que confiar.",
+    Component: SobrePage,
+  },
+  {
+    path: "/para-quem",
+    title: "Para quem é a Fonte.ia: advogados, despachantes, revendedores e iniciantes",
+    description:
+      "Casos de uso da Fonte.ia em leilões da Receita Federal — escritórios, importadores, revendedores e quem está começando. Veja se faz sentido para você.",
+    Component: ParaQuemPage,
+  },
+  {
+    path: "/seguranca",
+    title: "Segurança e privacidade (LGPD) — Fonte.ia",
+    description:
+      "Como a Fonte.ia trata dados (LGPD), por que os dados de leilão são públicos (Lei de Acesso à Informação) e a infraestrutura de segurança (Supabase, Cloudflare, Stripe).",
+    Component: SegurancaPage,
+  },
+  {
+    path: "/contato",
+    title: "Contato — Fonte.ia | fale com a Olli Inteligência Digital",
+    description:
+      "Fale com a Fonte.ia: contato@fontebrasil.online. Dados da empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05) e canais de atendimento.",
+    Component: ContatoPage,
   },
 ];
 

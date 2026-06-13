@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase-client";
 
+export interface SignUpUserData {
+  full_name: string;
+  phone?: string;
+}
+
 export interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -10,7 +15,11 @@ export interface AuthContextValue {
   demoMode: boolean;
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    userData?: SignUpUserData,
+  ) => Promise<{ error: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -111,17 +120,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }
 
-  async function signUpWithEmail(email: string, password: string) {
+  async function signUpWithEmail(
+    email: string,
+    password: string,
+    userData?: SignUpUserData,
+  ) {
     if (!isSupabaseConfigured || !supabase) {
       if (password.length < 8) {
         return { error: "A senha precisa ter ao menos 8 caracteres." };
       }
-      const demo = buildDemoUser(email);
+      const demo = buildDemoUser(email, userData?.full_name);
       saveDemoUser(demo);
       setUser(demo);
       return { error: null };
     }
-    const { error } = await supabase.auth.signUp({ email, password });
+    const signUpArgs: Parameters<typeof supabase.auth.signUp>[0] = userData
+      ? {
+          email,
+          password,
+          options: { data: { full_name: userData.full_name, ...(userData.phone ? { phone: userData.phone } : {}) } },
+        }
+      : { email, password };
+    const { error } = await supabase.auth.signUp(signUpArgs);
     return { error: error?.message ?? null };
   }
 
