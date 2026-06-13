@@ -957,9 +957,48 @@ p { margin: 0; }
 /* ── Lot detail ── */
 .lot-detail { display: flex; flex-direction: column; gap: var(--s-4); }
 .lot-detail-main { display: flex; flex-direction: column; gap: var(--s-4); }
-/* Mobile: o Raio-X (sidebar) sobe pro topo, logo no começo. No desktop volta pra coluna 2. */
-.lot-detail .evidence-panel { order: -1; }
 .lot-back-button { align-self: flex-start; }
+
+/* Card do Raio-X com IA — destaque visual para chamar o clique */
+.raio-x-featured {
+  border: 2px solid var(--g-400) !important;
+  background: linear-gradient(160deg, var(--g-50) 0%, var(--white) 60%) !important;
+  box-shadow: 0 0 0 1px var(--g-200), var(--shadow-md) !important;
+  position: relative;
+}
+.raio-x-featured::before {
+  content: "★ Diferencial Fonte.ia";
+  position: absolute;
+  top: -12px;
+  left: var(--s-5);
+  background: var(--g-700);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+}
+/* CTA do Raio-X — botão grande e destacado */
+.raio-x-cta {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  width: 100%;
+  padding: 14px var(--s-5) !important;
+  font-size: 1rem !important;
+  background: linear-gradient(135deg, var(--g-700), var(--g-600)) !important;
+  border-color: var(--g-700) !important;
+  box-shadow: var(--shadow-sm);
+  min-height: 52px;
+}
+.raio-x-cta:hover {
+  background: linear-gradient(135deg, var(--g-600), var(--g-500)) !important;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
 .lot-detail-header {
   display: flex;
   flex-direction: column;
@@ -1609,9 +1648,7 @@ p { margin: 0; }
   .lot-detail-main { grid-column: 1; }
   .lot-detail-header { flex-direction: row; align-items: flex-start; }
   .lot-detail-meta { grid-template-columns: repeat(3,1fr); }
-  /* Painel direito (Raio-X + Evidência): sticky e SEMPRE 100% acessível no desktop.
-     Sem max-height, quando o painel é mais alto que a tela a parte de baixo
-     (Evidência) ficava escondida e inalcançável. Agora rola por dentro. */
+  /* Painel direito (Evidência): sticky, coluna 2 no desktop. */
   .lot-detail .evidence-panel {
     grid-column: 2;
     order: 0;

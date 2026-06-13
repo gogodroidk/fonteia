@@ -134,7 +134,7 @@ async function callGemini(model: string, apiKey: string, userText: string): Prom
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: FONTEIA_SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+      generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
     }),
   });
 }
@@ -222,7 +222,7 @@ async function analyzeEditalWithGemini(
                 ],
               },
             ],
-            generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+            generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
           }),
         },
       );
