@@ -74,6 +74,27 @@ const GuiaComoComprarPage = lazy(() =>
 const GuiaComparacaoPage = lazy(() =>
   import("./app/guias/leilao-receita-vs-judicial").then((m) => ({ default: m.GuiaComparacaoPage })),
 );
+const LeiloesReceitaFederalPage = lazy(() =>
+  import("./app/publico/leiloes-receita-federal").then((m) => ({ default: m.LeiloesReceitaFederalPage })),
+);
+const AnaliseEditalIAPage = lazy(() =>
+  import("./app/publico/analise-de-edital-com-ia").then((m) => ({ default: m.AnaliseEditalIAPage })),
+);
+const GlossarioLeiloesPage = lazy(() =>
+  import("./app/publico/glossario-leiloes").then((m) => ({ default: m.GlossarioLeiloesPage })),
+);
+const FaqPage = lazy(() =>
+  import("./app/publico/faq").then((m) => ({ default: m.FaqPage })),
+);
+const RiscosLeiloesPage = lazy(() =>
+  import("./app/publico/riscos-leiloes-publicos").then((m) => ({ default: m.RiscosLeiloesPage })),
+);
+const FonteiaVsPlanilhaPage = lazy(() =>
+  import("./app/publico/fonteia-vs-planilha").then((m) => ({ default: m.FonteiaVsPlanilhaPage })),
+);
+const FonteiaVsManualPage = lazy(() =>
+  import("./app/publico/fonteia-vs-analise-manual").then((m) => ({ default: m.FonteiaVsManualPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -575,6 +596,13 @@ export function App() {
     path === "/guias" ? <GuiasPage /> :
     path === "/guias/como-comprar-leilao-receita" ? <GuiaComoComprarPage /> :
     path === "/guias/leilao-receita-vs-judicial" ? <GuiaComparacaoPage /> :
+    path === "/leiloes-receita-federal" ? <LeiloesReceitaFederalPage /> :
+    path === "/analise-de-edital-com-ia" ? <AnaliseEditalIAPage /> :
+    path === "/glossario-leiloes" ? <GlossarioLeiloesPage /> :
+    path === "/faq" ? <FaqPage /> :
+    path === "/riscos-leiloes-publicos" ? <RiscosLeiloesPage /> :
+    path === "/fonteia-vs-planilha" ? <FonteiaVsPlanilhaPage /> :
+    path === "/fonteia-vs-analise-manual" ? <FonteiaVsManualPage /> :
     null;
 
   const inApp = path.startsWith("/app");

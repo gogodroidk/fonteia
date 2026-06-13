@@ -43,9 +43,16 @@ export async function fetchJsonFromApi<T>(path: string, fetcher: typeof fetch = 
     throw new Error(`API URL is not configured for ${path}`);
   }
 
+  // A Edge Function exige o header `apikey` (chave pública). Sem ele, todo GET
+  // tomava 401 ("apikey ausente") — por isso os dados nunca vinham do backend.
+  const { key } = getSupabasePublicConfig();
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const response = await fetcher(`${trimTrailingSlash(apiUrl)}${normalizedPath}`, {
-    headers: { accept: "application/json" },
+    headers: {
+      accept: "application/json",
+      apikey: key,
+      authorization: `Bearer ${key}`,
+    },
   });
 
   if (!response.ok) {
