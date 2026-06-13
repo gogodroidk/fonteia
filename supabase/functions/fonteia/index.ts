@@ -43,6 +43,15 @@ interface ReceitaLeilaoLot {
 // renomeação de modelo pelo Google. Sobrescreva com o secret GEMINI_MODEL.
 const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 
+const SLE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
+const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
+
+const EDITAL_SYSTEM_PROMPT = [
+  "Você é o assistente da Fonte.ia. Recebe o PDF de um edital de leilão da Receita Federal e o explica para um comprador leigo, em português claro.",
+  "Regras: use SÓ o que está no PDF; nunca invente; se algo não estiver no edital, escreva 'não consta no edital'. Não dê parecer jurídico definitivo.",
+  "Formato (markdown curto): **Resumo** (2-3 linhas) · **Quem pode participar** · **Datas e prazos** (visitação, propostas, pagamento, retirada) · **Como pagar** · **Riscos e pontos de atenção** · **O que conferir antes de dar lance**.",
+].join("\n");
+
 const FONTEIA_SYSTEM_PROMPT = [
   "Você é o assistente da Fonte.ia, especialista em leilões da Receita Federal do Brasil.",
   "Explique para um comprador leigo, em português claro e direto, SEM jargão.",
@@ -138,6 +147,76 @@ async function analyzeLotWithGemini(
   throw new Error(lastError);
 }
 
+async function fetchEditalBase64(edle: string): Promise<string | null> {
+  const parts = edle.split(/[/-]/).filter((p) => p.length > 0);
+  if (parts.length < 3) return null;
+  const [u, n, e] = parts;
+  if (!u || !n || !e) return null;
+  const url = `${SLE}/api/edital/${u.padStart(7, "0")}/${n.padStart(6, "0")}/${e}/edital-completo`;
+  const res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA } });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { data?: string };
+  return typeof data.data === "string" ? data.data : null;
+}
+
+async function analyzeEditalWithGemini(
+  edle: string,
+  question: string | undefined,
+): Promise<{ answer: string; model: string } | { notConfigured: true } | { noPdf: true }> {
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) return { notConfigured: true };
+  const b64 = await fetchEditalBase64(edle);
+  if (!b64) return { noPdf: true };
+
+  const configured = (Deno.env.get("GEMINI_MODEL") ?? "").trim();
+  const models = configured ? [configured] : DEFAULT_MODELS;
+  const userText = question
+    ? `Pergunta do usuário sobre este edital: ${question}`
+    : "Analise este edital de leilão e gere o resumo no formato pedido.";
+
+  let lastError = "nenhum modelo respondeu";
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: EDITAL_SYSTEM_PROMPT }] },
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  { inlineData: { mimeType: "application/pdf", data: b64 } },
+                  { text: userText },
+                ],
+              },
+            ],
+            generationConfig: { temperature: 0.2, maxOutputTokens: 2000 },
+          }),
+        },
+      );
+      const data = (await response.json()) as GeminiResponse;
+      if (response.ok && !data.promptFeedback?.blockReason) {
+        const answer = (data.candidates?.[0]?.content?.parts ?? [])
+          .map((p) => p.text)
+          .filter((t): t is string => typeof t === "string")
+          .join("\n")
+          .trim();
+        if (answer) return { answer, model };
+        lastError = `${model}: resposta vazia`;
+      } else {
+        lastError = `${model}: ${response.status} ${data.error?.message ?? data.promptFeedback?.blockReason ?? ""}`;
+      }
+    } catch (e) {
+      lastError = `${model}: ${String(e)}`;
+    }
+    console.error("[fonteia] edital gemini falhou:", lastError);
+  }
+  throw new Error(lastError);
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -150,6 +229,33 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const { pathname } = new URL(request.url);
+
+  // Análise do EDITAL por IA: Gemini lê o PDF inteiro do SLE.
+  if (request.method === "POST" && pathname.endsWith("/ia/edital")) {
+    let parsed: { edle?: string; question?: string };
+    try {
+      parsed = (await request.json()) as { edle?: string; question?: string };
+    } catch {
+      return json({ error: "Corpo invalido: envie JSON com { edle }." }, 400);
+    }
+    if (!parsed.edle) return json({ error: "Campo 'edle' ausente." }, 400);
+    try {
+      const result = await analyzeEditalWithGemini(parsed.edle, parsed.question);
+      if ("notConfigured" in result) {
+        return json({ error: "ia_nao_configurada", message: "Configure o secret GEMINI_API_KEY." }, 503);
+      }
+      if ("noPdf" in result) {
+        return json({ error: "edital_sem_pdf", message: "Este edital nao tem PDF publicado no SLE." }, 404);
+      }
+      return json({
+        answer: result.answer,
+        model: result.model,
+        disclaimer: "Analise do edital por IA. Confirme tudo no edital oficial antes de dar lance.",
+      });
+    } catch (error) {
+      return json({ error: "Falha ao analisar o edital.", detail: String(error) }, 502);
+    }
+  }
 
   // Raio-X: aceita POST em /ia/raio-x e na raiz (/fonteia, p/ supabase.functions.invoke).
   if (request.method === "POST" && (pathname.endsWith("/ia/raio-x") || pathname.endsWith("/fonteia"))) {

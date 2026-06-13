@@ -71,8 +71,10 @@ export function BillingPage() {
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <span className="eyebrow">Planos</span>
         <h2 className="h1" style={{ marginTop: 8 }}>Escolha seu plano. Cancele quando quiser.</h2>
-        <p className="muted" style={{ maxWidth: 520, margin: "10px auto 0", lineHeight: 1.6 }}>
-          Acesso completo aos leiloes da Receita, mes a mes. 7 dias de garantia — nao gostou, devolvemos 100%.
+        <p className="muted" style={{ maxWidth: 560, margin: "10px auto 0", lineHeight: 1.6 }}>
+          Acesso completo aos leilões da Receita Federal: Raio-X com IA, análise do edital, alertas por e-mail
+          e relatório PDF com rastreabilidade de fonte. Tudo pago, sem plano grátis.
+          7 dias de garantia — não gostou, devolvemos 100%.
         </p>
       </div>
 
@@ -134,7 +136,8 @@ export function BillingPage() {
       <div className="inset" style={{ marginTop: 16, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
         <ShieldCheck size={17} style={{ color: "var(--accent-ink)" }} aria-hidden="true" />
         <span className="small muted">
-          <strong className="t-hi">Garantia de 7 dias.</strong> Nao gostou, devolvemos 100%. Pagamento seguro via Stripe (cartao e Pix).
+          <strong className="t-hi">Garantia de 7 dias.</strong> Não gostou, devolvemos 100%. Pagamento seguro via Stripe (cartão e Pix).
+          Não prometemos arremates ou lucro — entregamos informação rastreável para você decidir melhor.
         </span>
       </div>
     </section>
