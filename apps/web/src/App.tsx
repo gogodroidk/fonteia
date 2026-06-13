@@ -9,6 +9,7 @@ import {
   Gavel,
   HelpCircle,
   LayoutGrid,
+  Landmark,
   LogOut,
   Menu,
   Search,
@@ -37,6 +38,9 @@ const DashboardPage = lazy(() =>
 );
 const LotesPage = lazy(() =>
   import("./app/lotes/page").then((m) => ({ default: m.LotesPage })),
+);
+const LicitacoesPage = lazy(() =>
+  import("./app/licitacoes/page").then((m) => ({ default: m.LicitacoesPage })),
 );
 const AlertasPage = lazy(() =>
   import("./app/alertas/page").then((m) => ({ default: m.AlertasPage })),
@@ -131,6 +135,7 @@ const ContatoPage = lazy(() =>
 type RouteKey =
   | "painel"
   | "lotes"
+  | "licitacoes"
   | "alertas"
   | "relatorios"
   | "fontes"
@@ -142,6 +147,7 @@ type RouteKey =
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
   { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
+  { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
   { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
@@ -150,6 +156,7 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
 const ROUTE_TITLES: Record<RouteKey, string> = {
   painel: "Painel",
   lotes: "Lotes",
+  licitacoes: "Licitações",
   alertas: "Alertas",
   relatorios: "Relatórios",
   fontes: "Fontes & Rastreabilidade",
@@ -162,6 +169,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
 function pathToRoute(path: string): RouteKey {
   if (/^\/app\/(?:lotes|leiloes)\/[^/]+/.test(path)) return "lot-detail";
   if (path.startsWith("/app/lotes")) return "lotes";
+  if (path.startsWith("/app/licitacoes")) return "licitacoes";
   if (path.startsWith("/app/alertas")) return "alertas";
   if (path.startsWith("/app/relatorios")) return "relatorios";
   if (path.startsWith("/app/fontes")) return "fontes";
@@ -473,6 +481,7 @@ function AppShell({ path, navigate }: AppShellProps) {
             }>
               {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
               {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
+              {route === "licitacoes" && <LicitacoesPage />}
               {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
               {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
               {route === "fontes" && <SourcesPage />}
