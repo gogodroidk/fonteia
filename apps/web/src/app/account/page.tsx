@@ -26,14 +26,31 @@ import { readWatchlist, subscribeWatchlist } from "../../lib/watchlist";
 import { useTheme } from "../../theme/theme-context";
 import type { Theme } from "../../theme/theme-context";
 import { STRIPE_CUSTOMER_PORTAL_URL } from "../../config/stripe";
+import { getMyTrial } from "../../features/billing/coupon-api";
+import { CouponRedeem } from "../../components/coupon-redeem";
 
 // ─── Constants (honest, no backend) ───────────────────────────────────────────
 
 /** Contato de suporte do produto (público, honesto). */
 const SUPPORT_EMAIL = "contato@fontebrasil.online";
 
-/** Cota do plano de avaliação — estática e honesta enquanto não há billing real. */
-const FREE_ANALYSES_TOTAL = 5;
+/** Resumo honesto do acesso atual: teste por cupom (se houver) ou sem assinatura. */
+function describeAccess(trialUntil: string | null): { active: boolean; label: string; until: string } {
+  if (!trialUntil) return { active: false, label: "Sem assinatura ativa", until: "" };
+  const date = new Date(trialUntil);
+  const active = !Number.isNaN(date.getTime()) && date.getTime() > Date.now();
+  if (!active) return { active: false, label: "Sem assinatura ativa", until: "" };
+  return {
+    active: true,
+    label: "Teste ativo",
+    until: date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "long",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
 
 /**
  * Navegação SPA via History API (mesmo esquema do App: pushState + popstate).
@@ -235,8 +252,10 @@ function TabPerfil({
   name,
   email,
   avatarUrl,
-}: Pick<AccountPageProps, "name" | "email" | "avatarUrl">) {
+  trialUntil,
+}: Pick<AccountPageProps, "name" | "email" | "avatarUrl"> & { trialUntil: string | null }) {
   const watchCount = useWatchlistCount();
+  const access = describeAccess(trialUntil);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -273,14 +292,14 @@ function TabPerfil({
               <Mail size={13} aria-hidden="true" style={{ flexShrink: 0 }} />
               {email}
             </div>
-            <span className="badge badge--accent" style={{ marginTop: 8 }}>
-              Avaliação gratuita
+            <span className={`badge ${access.active ? "badge--accent" : "badge--neutral"}`} style={{ marginTop: 8 }}>
+              {access.active ? "Teste ativo" : "Sem assinatura"}
             </span>
           </div>
         </div>
         <TRow label="Membro desde" val="Junho 2026" />
-        <TRow label="Plano atual" val="Avaliação gratuita" />
-        <TRow label="Análises grátis" val={`${FREE_ANALYSES_TOTAL} incluídas`} />
+        <TRow label="Plano atual" val={access.active ? `Teste — ate ${access.until}` : "Sem assinatura ativa"} />
+        <TRow label="Garantia" val="7 dias, reembolso integral" />
       </div>
 
       {/* Meu radar — watchlist local */}
@@ -345,7 +364,7 @@ function TabPerfil({
       >
         <div className="row" style={{ gap: 8, marginBottom: 6 }}>
           <Sparkles size={17} aria-hidden="true" />
-          <strong style={{ fontSize: 15 }}>Quer mais que 5 análises?</strong>
+          <strong style={{ fontSize: 15 }}>Desbloqueie o acesso completo</strong>
         </div>
         <p
           style={{
@@ -356,7 +375,7 @@ function TabPerfil({
           }}
         >
           Análises ilimitadas, alertas de novos editais e relatórios com
-          rastreabilidade completa.
+          rastreabilidade completa. 7 dias de garantia — reembolso integral.
         </p>
         <button
           type="button"
@@ -364,14 +383,15 @@ function TabPerfil({
           onClick={() => navigate("/app/planos")}
         >
           <Zap size={15} aria-hidden="true" />
-          Ampliar acesso
+          Assinar agora
         </button>
       </div>
     </div>
   );
 }
 
-function TabAssinatura() {
+function TabAssinatura({ trialUntil }: { trialUntil: string | null }) {
+  const access = describeAccess(trialUntil);
   return (
     <div className="panel" style={{ padding: 26 }}>
       <div
@@ -379,14 +399,19 @@ function TabAssinatura() {
         style={{ marginBottom: 18 }}
       >
         <div style={{ fontWeight: 700, fontSize: 15 }}>Plano atual</div>
-        <span className="badge badge--accent">Avaliação gratuita</span>
+        <span className={`badge ${access.active ? "badge--accent" : "badge--neutral"}`}>
+          {access.active ? "Teste ativo" : "Sem assinatura"}
+        </span>
       </div>
 
-      <div className="bar" style={{ marginBottom: 8 }}>
-        <i style={{ width: "0%" }} />
+      <div style={{ fontSize: 13, color: "var(--t-mid)", marginBottom: 18 }}>
+        {access.active
+          ? `Acesso de teste ativo até ${access.until}. Assine para manter sem interrupção.`
+          : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo."}
       </div>
-      <div style={{ fontSize: 13, color: "var(--t-mid)", marginBottom: 22 }}>
-        {FREE_ANALYSES_TOTAL} análises grátis disponíveis nesta avaliação.
+
+      <div style={{ marginBottom: 18 }}>
+        <CouponRedeem compact />
       </div>
 
       <div
@@ -419,7 +444,7 @@ function TabAssinatura() {
           style={{ marginTop: 14 }}
         >
           <Zap size={15} aria-hidden="true" />
-          Ampliar acesso
+          Assinar agora
         </button>
       </div>
 
@@ -941,13 +966,18 @@ function SideNav({
 export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPageProps) {
   const [activeTab, setActiveTab] = useState<TabId>("perfil");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [trialUntil, setTrialUntil] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getMyTrial().then(setTrialUntil);
+  }, []);
 
   function renderPanel() {
     switch (activeTab) {
       case "perfil":
-        return <TabPerfil name={name} email={email} avatarUrl={avatarUrl} />;
+        return <TabPerfil name={name} email={email} avatarUrl={avatarUrl} trialUntil={trialUntil} />;
       case "assinatura":
-        return <TabAssinatura />;
+        return <TabAssinatura trialUntil={trialUntil} />;
       case "aparencia":
         return <TabAparencia />;
       case "notificacoes":

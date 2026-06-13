@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
-import { Heart, Search, Tag } from "lucide-react";
+import { Heart, Loader2, Search, Tag } from "lucide-react";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
 import { readWatchlist, subscribeWatchlist, toggleWatchlist } from "../../lib/watchlist";
+import { displayCity, normalizeForSearch } from "../../lib/receita-localidades";
+
+// Quantos lotes renderizar por vez (o scroll carrega mais automaticamente).
+const PAGE_SIZE = 24;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -96,16 +100,26 @@ function confidenceBadge(label: LeilaoOpportunityScore["label"]): {
   return { className: "badge--neutral", text: "Avaliar com cautela" };
 }
 
+/**
+ * Busca tolerante a acento e por múltiplos termos (AND): todos os termos digitados
+ * precisam aparecer em algum campo (cidade limpa, órgão, edital, categoria, número).
+ */
 function matchesSearch(lot: ReceitaLeilaoLot, q: string): boolean {
-  if (q === "") return true;
-  const needle = q.toLowerCase();
-  return (
-    lot.city.toLowerCase().includes(needle) ||
-    lot.agency.toLowerCase().includes(needle) ||
-    lot.edital.toLowerCase().includes(needle) ||
-    (lot.category ?? "").toLowerCase().includes(needle) ||
-    lot.id.toLowerCase().includes(needle)
+  const query = normalizeForSearch(q);
+  if (query === "") return true;
+  const haystack = normalizeForSearch(
+    [
+      displayCity(lot.city),
+      lot.city,
+      lot.agency,
+      lot.edital,
+      lot.category ?? "",
+      lot.displayNumber,
+      lot.lotNumber,
+      lot.id,
+    ].join(" "),
   );
+  return query.split(/\s+/).every((term) => haystack.includes(term));
 }
 
 // ─── Skeleton card ───────────────────────────────────────────────────────────
@@ -181,7 +195,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
   const { lot, scoring, economia } = view;
   const badge = confidenceBadge(scoring.label);
   const days = daysUntil(lot.proposalDeadline);
-  const cardLabel = `Lote ${lot.displayNumber} — ${lot.agency}, ${lot.city}`;
+  const cardLabel = `Lote ${lot.displayNumber} — ${lot.agency}, ${displayCity(lot.city)}`;
 
   return (
     <article
@@ -275,7 +289,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
                 textOverflow: "ellipsis",
               }}
             >
-              {lot.city}
+              {displayCity(lot.city)}
             </div>
             <div
               className="tiny muted"
@@ -448,6 +462,10 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   const [desconto, setDesconto] = useState<DescontoFilter>("todos");
   const [sortKey, setSortKey] = useState<SortKey>("score");
 
+  // ── Paginação por scroll (cresce sozinha ao rolar, sem clicar) ──────────────
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
   // ── Watchlist state (kept in sync with localStorage + other views) ──────────
   const [watchIds, setWatchIds] = useState<string[]>(() => readWatchlist());
 
@@ -505,10 +523,15 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   }, [lots]);
 
   const cityOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
-    const distinct = Array.from(
-      new Set(lots.map((lot) => lot.city.trim()).filter((c) => c.length > 0)),
-    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return [["todas", "Todas"], ...distinct.map((c) => [c, c] as const)];
+    // value = cidade crua (o filtro compara com lot.city); label = cidade limpa
+    // (Superintendência Regional vira "Cidade/UF"). Ordena pelo rótulo amigável.
+    const seen = new Map<string, string>();
+    for (const lot of lots) {
+      const raw = lot.city.trim();
+      if (raw.length > 0 && !seen.has(raw)) seen.set(raw, displayCity(raw));
+    }
+    const entries = Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+    return [["todas", "Todas"], ...entries.map(([raw, label]) => [raw, label] as const)];
   }, [lots]);
 
   const hasAnyEconomia = useMemo(() => views.some((v) => v.economia !== null), [views]);
@@ -542,6 +565,30 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       return a.lot.minimumBidCents - b.lot.minimumBidCents;
     });
   }, [views, query, category, city, person, desconto, sortKey]);
+
+  // Reinicia a janela ao mudar busca/filtros/ordenação.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [query, category, city, person, desconto, sortKey]);
+
+  // Carrega mais lotes automaticamente quando o sentinela entra na viewport.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCount((current) => Math.min(current + PAGE_SIZE, filtered.length));
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filtered.length, visibleCount]);
+
+  const visibleViews = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function clearFilters() {
@@ -677,6 +724,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
               {filtered.length}
             </b>{" "}
             {filtered.length === 1 ? "lote encontrado" : "lotes encontrados"}
+            {filtered.length > visibleViews.length ? ` · mostrando ${visibleViews.length}` : ""}
             {watchIds.length > 0 && (
               <>
                 {" · "}
@@ -728,20 +776,40 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       ) : filtered.length === 0 ? (
         <EmptyState onClear={clearFilters} />
       ) : (
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
-        >
-          {filtered.map((view) => (
-            <LotCard
-              key={view.lot.id}
-              view={view}
-              watched={watchIds.includes(view.lot.id)}
-              onToggleWatch={() => handleToggleWatch(view.lot.id)}
-              onSelect={onSelectLot !== undefined ? () => onSelectLot(view.lot) : undefined}
-            />
-          ))}
-        </div>
+        <>
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
+          >
+            {visibleViews.map((view) => (
+              <LotCard
+                key={view.lot.id}
+                view={view}
+                watched={watchIds.includes(view.lot.id)}
+                onToggleWatch={() => handleToggleWatch(view.lot.id)}
+                onSelect={onSelectLot !== undefined ? () => onSelectLot(view.lot) : undefined}
+              />
+            ))}
+          </div>
+          {hasMore && (
+            <div
+              ref={sentinelRef}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: 20,
+                color: "var(--t-mid)",
+                fontSize: 13,
+              }}
+              aria-hidden="true"
+            >
+              <Loader2 size={16} className="spin" />
+              Carregando mais lotes…
+            </div>
+          )}
+        </>
       )}
     </div>
   );

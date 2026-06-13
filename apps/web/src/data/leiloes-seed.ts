@@ -307,22 +307,6 @@ export const DEPOIMENTOS: Depoimento[] = [
 
 export const PLANOS: Plano[] = [
   {
-    id: "free",
-    nome: "Avaliação",
-    preco: 0,
-    periodo: "",
-    tagline: "Conheça a profundidade da análise",
-    destaque: false,
-    cta: "Começar avaliação",
-    feats: [
-      "5 análises completas de lote",
-      "Score de oportunidade e rastreabilidade",
-      "Acesso aos leilões da Receita Federal",
-      "Sem cartão de crédito",
-    ],
-    limite: "5 análises",
-  },
-  {
     id: "pro",
     nome: "Profissional",
     preco: 197,
@@ -335,7 +319,7 @@ export const PLANOS: Plano[] = [
       "Alertas de novos editais em tempo real",
       "Relatórios PDF com selo de fonte oficial",
       "Watchlist e comparador de lotes",
-      "Suporte prioritário",
+      "7 dias de garantia — reembolso integral",
     ],
     limite: "Ilimitado",
   },
