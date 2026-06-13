@@ -10,6 +10,7 @@ import {
   Loader2,
   MapPin,
   Package,
+  FileText,
   Printer,
   Send,
   ShieldCheck,
@@ -710,6 +711,7 @@ export function LotDetailPage({
 
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
+  const [editalLoading, setEditalLoading] = useState(false);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
   const [alertChannel, setAlertChannel] = useState<AlertChannel>("in_app");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -823,6 +825,40 @@ export function LotDetailPage({
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
     }, 5000);
+  }
+
+  async function baixarEdital() {
+    setEditalLoading(true);
+    try {
+      const { url, key } = getSupabasePublicConfig();
+      const res = await fetch(
+        `${trimTrailingSlash(url)}/functions/v1/edital-pdf?edle=${encodeURIComponent(lot.edle)}`,
+        { headers: { apikey: key } },
+      );
+      if (!res.ok) {
+        setSuccessMessage(
+          res.status === 404
+            ? "Este edital ainda nao tem PDF publicado no SLE."
+            : "Nao consegui baixar o edital agora.",
+        );
+        successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+        return;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `edital_${lot.edital.replaceAll("/", "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      setSuccessMessage("Nao consegui baixar o edital agora.");
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+    } finally {
+      setEditalLoading(false);
+    }
   }
 
   // Evidence for EvidencePanel.
@@ -1134,6 +1170,19 @@ export function LotDetailPage({
               >
                 <Bell aria-hidden="true" size={16} />
                 Criar alerta de prazo
+              </button>
+              <button
+                className="ghost-button lot-hero-action"
+                onClick={() => void baixarEdital()}
+                type="button"
+                disabled={editalLoading}
+              >
+                {editalLoading ? (
+                  <Loader2 aria-hidden="true" size={16} className="spin" />
+                ) : (
+                  <FileText aria-hidden="true" size={16} />
+                )}
+                Baixar edital (PDF)
               </button>
               <button
                 className="ghost-button lot-hero-action"
