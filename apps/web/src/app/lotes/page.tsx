@@ -295,6 +295,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
   const days = daysUntil(lot.proposalDeadline);
   const isEncerrado = days < 0;
   const cardLabel = `Lote ${lot.displayNumber} — ${lot.agency}, ${displayCity(lot.city)}`;
+  const [imgLoaded, setImgLoaded] = useState(false);
 
   return (
     <article
@@ -319,22 +320,21 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
       <div
         style={{
           height: 132,
-          background: lot.imageUrl
-            ? "linear-gradient(135deg, #1a2e52, #0c1c3a)"
-            : "linear-gradient(135deg, #1a2e52, #0c1c3a)",
+          background: "linear-gradient(135deg, #1a2e52, #0c1c3a)",
           position: "relative",
           display: "flex",
           alignItems: "flex-end",
           padding: "10px 12px",
         }}
       >
-        {/* Lazy-loaded cover image — rendered as <img> for native browser lazy-load */}
+        {/* Lazy-loaded cover image — fade in once loaded */}
         {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
           <img
             src={lot.imageUrl}
             alt=""
             loading="lazy"
             decoding="async"
+            onLoad={() => setImgLoaded(true)}
             style={{
               position: "absolute",
               inset: 0,
@@ -342,7 +342,8 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
               height: "100%",
               objectFit: "cover",
               display: "block",
-              // Ensure overlays sit above this image via stacking context on parent
+              opacity: imgLoaded ? 1 : 0,
+              transition: "opacity 0.4s ease",
             }}
           />
         )}
