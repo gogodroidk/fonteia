@@ -312,8 +312,9 @@ export function normalizeEditalLot(
   if (loteRaw.situacaoLote !== undefined) {
     lot.lotSituacao = loteRaw.situacaoLote;
   }
-  if (images.length > 0) {
-    lot.imageUrl = images[0];
+  const firstImage = images[0];
+  if (firstImage) {
+    lot.imageUrl = firstImage;
     lot.imageUrls = images;
   }
 
