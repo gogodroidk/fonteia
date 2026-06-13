@@ -45,6 +45,35 @@ const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-f
 
 const SLE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
+// Chave pública do projeto (vai no bundle do front — pública por design). Usada
+// como apikey ao consultar my_plan em nome do usuário (gating no servidor).
+const PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
+
+// Gating no servidor: confere o plano do usuário (via token de sessão) chamando a
+// RPC my_plan. Só libera recursos pagos quando plan = pro/corporativo (ou teste por cupom).
+async function isProUser(request: Request): Promise<boolean> {
+  const auth = request.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token || token === PUBLISHABLE_KEY) return false; // sem token de usuário
+  try {
+    const base = Deno.env.get("SUPABASE_URL");
+    if (!base) return false;
+    const res = await fetch(`${base}/rest/v1/rpc/my_plan`, {
+      method: "POST",
+      headers: {
+        apikey: PUBLISHABLE_KEY,
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: "{}",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { plan?: string };
+    return data.plan === "pro" || data.plan === "corporativo";
+  } catch {
+    return false;
+  }
+}
 
 const EDITAL_SYSTEM_PROMPT = [
   "Você é o assistente da Fonte.ia. Recebe o PDF de um edital de leilão da Receita Federal e o explica para um comprador leigo, em português claro.",
@@ -239,6 +268,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
       return json({ error: "Corpo invalido: envie JSON com { edle }." }, 400);
     }
     if (!parsed.edle) return json({ error: "Campo 'edle' ausente." }, 400);
+    // Gating no servidor: a análise de edital é recurso PAGO (Profissional).
+    if (!(await isProUser(request))) {
+      return json(
+        {
+          error: "plano_requerido",
+          message: "A analise do edital por IA e do plano Profissional. Assine ou use o cupom de teste.",
+        },
+        403,
+      );
+    }
     try {
       const result = await analyzeEditalWithGemini(parsed.edle, parsed.question);
       if ("notConfigured" in result) {

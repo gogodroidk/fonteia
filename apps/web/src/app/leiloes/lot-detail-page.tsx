@@ -886,10 +886,19 @@ export function LotDetailPage({
       const { key } = getSupabasePublicConfig();
       const res = await fetch(`${trimTrailingSlash(base)}/ia/edital`, {
         method: "POST",
-        headers: { "content-type": "application/json", apikey: key },
+        // Manda o token da sessão: o backend confere o plano (my_plan) antes de gastar IA.
+        headers: {
+          "content-type": "application/json",
+          apikey: key,
+          authorization: `Bearer ${session?.access_token ?? key}`,
+        },
         body: JSON.stringify({ edle: lot.edle }),
       });
       const data = (await res.json()) as { answer?: string; error?: string; message?: string };
+      if (res.status === 403) {
+        setEditalIAError("A analise do edital por IA e do plano Profissional. Assine (ou use o cupom de teste) para destravar.");
+        return;
+      }
       if (res.status === 404) {
         setEditalIAError("Este edital ainda nao tem PDF publicado no SLE.");
         return;

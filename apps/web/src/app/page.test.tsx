@@ -38,7 +38,11 @@ describe("Fonte.ia web shell", () => {
   });
 
   it("renders billing plans with checkout CTAs", () => {
-    const html = renderToStaticMarkup(<BillingPage />);
+    const html = renderToStaticMarkup(
+      <AuthProvider>
+        <BillingPage />
+      </AuthProvider>,
+    );
 
     expect(html).toContain("Planos");
     for (const plano of PLANOS) {
