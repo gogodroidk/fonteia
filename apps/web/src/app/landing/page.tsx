@@ -261,23 +261,23 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
   const FAQ_ITEMS = [
     {
       q: "O que é um leilão da Receita Federal e como funciona?",
-      a: "A Receita Federal leiloa mercadorias apreendidas (eletrônicos, veículos, bebidas) e abandonadas em alfândegas. O lance mínimo costuma ser 45% do valor de avaliação oficial — a Fonte.ia mostra exatamente o valor de avaliação, o mínimo, e cruza com tributos e laudos para que você saiba o que está comprando.",
+      a: "A Receita Federal leiloa mercadorias apreendidas (eletrônicos, veículos, bebidas) e abandonadas em alfândegas. A Fonte.ia mostra exatamente os dados publicados na fonte oficial — número do lote, edital, lance mínimo, prazo e quem pode participar (PF/PJ) — sem estimativas ou complementos.",
     },
     {
-      q: "Como a Fonte.ia calcula o score de risco de um lote?",
-      a: "O score (0–100) combina quatro dimensões: documentação e laudo técnico, carga tributária estimada, liquidez de revenda e situação de ocupação do bem. Cada ponto tem a fonte oficial vinculada — você vê por que o lote tirou 94 ou 55.",
+      q: "Como a Fonte.ia calcula o score de oportunidade de um lote?",
+      a: "O score (0–100) é calculado por regras fixas a partir dos dados publicados na fonte: quem pode participar (PF/PJ), prazo disponível para análise, acessibilidade do valor mínimo e se o lote tem imagem. É um apoio de decisão calculado por regra — não é opinião de IA nem análise humana, e não substitui a leitura do edital.",
     },
     {
-      q: "Posso usar para PGFN e SPU além da Receita?",
-      a: "Sim. A plataforma já monitora editais da Receita Federal (SLE), da Procuradoria-Geral da Fazenda Nacional (PGFN) e da Secretaria de Patrimônio da União (SPU), além do DETRAN e do Compras.gov.br.",
+      q: "Posso usar para PGFN, SPU, DETRAN e Compras.gov.br além da Receita?",
+      a: "Hoje a plataforma cobre os leilões da Receita Federal (Sistema de Leilão Eletrônico — SLE). A integração com outros órgãos, como PGFN, SPU, DETRAN e Compras.gov.br, está no roteiro e será liberada em breve.",
     },
     {
       q: "Os dados são confiáveis? De onde vêm?",
-      a: "Cada dado exibido tem fonte oficial, data de coleta e hash SHA-256. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
+      a: "Cada dado exibido vem direto da fonte oficial, com a URL e a data de coleta registradas para você conferir na origem. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
     },
     {
       q: "Quanto tempo leva para analisar um lote?",
-      a: "Entre 30 e 60 segundos após o carregamento. A plataforma cruza o edital com CNPJ do leiloeiro, situação tributária, laudo técnico e demais documentos disponíveis nos órgãos oficiais — tudo automaticamente.",
+      a: "Os dados oficiais do lote são exibidos imediatamente. Quando o assistente de IA está ativo, ele gera uma leitura em linguagem simples do lote em segundos, sempre a partir dos dados publicados na fonte.",
     },
     {
       q: "Posso cancelar quando quiser?",
@@ -444,7 +444,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Leilões públicos · Receita Federal · PGFN · SPU
+                  Leilões da Receita Federal · mais órgãos em breve
                 </span>
               </div>
             </Reveal>
@@ -481,9 +481,9 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   maxWidth: 520,
                 }}
               >
-                A Fonte.ia cruza cada lote de leilão da Receita Federal, PGFN e SPU com
-                editais, laudos e tributos em segundos — e entrega{" "}
-                <strong style={{ color: "var(--t-hi)" }}>score de risco, economia potencial e rastreabilidade</strong>{" "}
+                A Fonte.ia organiza cada lote de leilão da Receita Federal com os dados
+                oficiais — lance mínimo, prazo, quem pode participar — e entrega{" "}
+                <strong style={{ color: "var(--t-hi)" }}>score de oportunidade por regra e rastreabilidade até a fonte</strong>{" "}
                 para você decidir com fundamento, não com intuição.
               </p>
             </Reveal>
@@ -572,7 +572,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                       />
                     ))}
                     <span className="kbd" style={{ marginLeft: 10, fontSize: 10 }}>
-                      fonte.ia/lotes/RFB-0042-87
+                      fonte.ia/lotes · exemplo ilustrativo
                     </span>
                   </div>
 
@@ -589,42 +589,28 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                       }}
                     >
                       <div>
-                        <span className="badge badge--accent" style={{ marginBottom: 8, fontSize: 10 }}>
-                          Análise concluída · RFB
+                        <span className="badge badge--neutral" style={{ marginBottom: 8, fontSize: 10 }}>
+                          Exemplo ilustrativo · RFB
                         </span>
                         <div className="h3" style={{ lineHeight: 1.25, fontSize: 14 }}>
-                          Lote 42 — Eletrônicos
+                          Lote de eletrônicos
                         </div>
                         <div className="small muted" style={{ marginTop: 2, fontWeight: 500, fontSize: 12 }}>
                           Alfândega de Santos · SP
                         </div>
                       </div>
-                      <ScoreRing value={94} size={54} />
+                      <ScoreRing value={82} size={54} />
                     </div>
 
                     {/* Stats grid */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
                       <div className="inset" style={{ padding: 11 }}>
-                        <div className="tiny muted">Lance mínimo</div>
+                        <div className="tiny muted">Lance mínimo (fonte)</div>
                         <div className="num" style={{ fontWeight: 800, fontSize: 15 }}>R$ 414.000</div>
                       </div>
-                      <div
-                        style={{
-                          padding: 11,
-                          borderRadius: "var(--r-md)",
-                          background: "color-mix(in srgb,var(--accent) 12%,transparent)",
-                          border: "1px solid color-mix(in srgb,var(--accent) 26%,transparent)",
-                        }}
-                      >
-                        <div className="tiny" style={{ color: "var(--accent-ink)", fontWeight: 700 }}>
-                          Economia potencial
-                        </div>
-                        <div
-                          className="num"
-                          style={{ fontWeight: 800, fontSize: 15, color: "var(--accent-ink)" }}
-                        >
-                          R$ 506.000
-                        </div>
+                      <div className="inset" style={{ padding: 11 }}>
+                        <div className="tiny muted">Quem pode participar</div>
+                        <div className="num" style={{ fontWeight: 800, fontSize: 15 }}>PF e PJ</div>
                       </div>
                     </div>
 
@@ -632,9 +618,9 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                       {(
                         [
-                          ["Documentação e laudo", 96, "var(--ok)"],
-                          ["Tributos e custos", 90, "var(--accent-ink)"],
-                          ["Liquidez de revenda", 90, "var(--brand-ink)"],
+                          ["Quem pode participar (PF/PJ)", 90, "var(--ok)"],
+                          ["Prazo para análise", 85, "var(--accent-ink)"],
+                          ["Acessibilidade do valor mínimo", 88, "var(--brand-ink)"],
                         ] as const
                       ).map(([lb, v, c]) => (
                         <div key={lb}>
@@ -668,7 +654,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <FonteDots fontes={heroFontItems} size={20} />
-                        <span className="tiny muted">3 fontes oficiais</span>
+                        <span className="tiny muted">Fonte oficial: Receita Federal</span>
                       </div>
                       <span className="badge badge--ok" style={{ fontSize: 10 }}>
                         <ShieldCheck size={10} aria-hidden="true" style={{ marginRight: 3 }} />
@@ -707,8 +693,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                       <Zap size={15} fill="#fff" color="#fff" />
                     </div>
                     <div>
-                      <div className="tiny muted">Análise em</div>
-                      <div className="num" style={{ fontWeight: 800, fontSize: 14 }}>32 segundos</div>
+                      <div className="tiny muted">Dados</div>
+                      <div className="num" style={{ fontWeight: 800, fontSize: 14 }}>direto da fonte</div>
                     </div>
                   </div>
                 </div>
@@ -734,7 +720,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                         className="num"
                         style={{ fontWeight: 800, fontSize: 14, color: "var(--accent-ink)" }}
                       >
-                        RFB · PGFN
+                        Receita Federal
                       </div>
                     </div>
                   </div>
@@ -756,8 +742,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   }}
                   aria-hidden="true"
                 >
-                  <span style={{ color: "var(--brand-ink)" }}>↗</span>
-                  <span className="num small" style={{ fontWeight: 800 }}>-55%</span>
+                  <span style={{ color: "var(--brand-ink)" }}>★</span>
+                  <span className="num small" style={{ fontWeight: 800 }}>Score 82</span>
                 </div>
               </div>
             </div>
@@ -780,7 +766,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="tiny muted"
               style={{ fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 20 }}
             >
-              Conectado às fontes governamentais que sustentam a decisão
+              Hoje conectado à Receita Federal · mais fontes governamentais em breve
             </p>
           </Reveal>
           <Reveal delay={0.05}>
@@ -792,7 +778,9 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 justifyContent: "center",
               }}
             >
-              {FONTES.map((f) => (
+              {FONTES.map((f) => {
+                const active = f.id === "rfb";
+                return (
                 <div
                   key={f.id}
                   className="card"
@@ -801,6 +789,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     display: "flex",
                     alignItems: "center",
                     gap: 10,
+                    opacity: active ? 1 : 0.55,
                   }}
                 >
                   <div
@@ -825,8 +814,15 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   <span className="small" style={{ fontWeight: 600, color: "var(--t-mid)" }}>
                     {f.nome.split("—")[0]?.trim() ?? f.nome}
                   </span>
+                  <span
+                    className={`badge ${active ? "badge--ok" : "badge--neutral"}`}
+                    style={{ fontSize: 9, padding: "2px 6px", flexShrink: 0 }}
+                  >
+                    {active ? "Ativo" : "Em breve"}
+                  </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </Reveal>
         </div>
@@ -937,11 +933,11 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 </div>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 14 }}>
                   {[
-                    "Todos os órgãos monitorados em uma única plataforma",
-                    "Score de risco com cada ponto rastreado à fonte oficial",
-                    "Tributos, laudos e situação do bem consolidados em segundos",
-                    "Alerta imediato assim que o órgão publica o edital",
-                    "Relatório PDF com hash SHA-256 para apresentar ao cliente",
+                    "Lotes da Receita Federal reunidos em uma única plataforma",
+                    "Score de oportunidade por regra, com cada lote rastreado à fonte oficial",
+                    "Lance mínimo, prazo e elegibilidade (PF/PJ) lidos direto da fonte",
+                    "Alerta de prazo para não perder a data do leilão",
+                    "Relatório PDF com link e data de coleta da fonte oficial",
                   ].map((t) => (
                     <li key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
                       <Check
@@ -995,18 +991,18 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               [
                 {
                   icon: <Database size={24} color="#fff" aria-hidden="true" />,
-                  title: "Monitore os órgãos oficiais",
-                  desc: "Configure quais órgãos e regiões acompanhar. Novos editais da Receita, PGFN e SPU chegam automaticamente — nenhum lote passa despercebido.",
+                  title: "Acompanhe os leilões da Receita",
+                  desc: "Os lotes do Sistema de Leilão Eletrônico da Receita Federal chegam reunidos em um só lugar — nenhum lote passa despercebido. Mais órgãos em breve.",
                 },
                 {
                   icon: <Zap size={24} fill="#fff" color="#fff" aria-hidden="true" />,
-                  title: "A IA analisa o lote",
-                  desc: "Score de risco, tributos, laudos e rastreabilidade da fonte em segundos. Cada informação tem o documento oficial vinculado. Pergunte em português, receba com prova.",
+                  title: "Veja o lote com rastreabilidade",
+                  desc: "Lance mínimo, prazo, elegibilidade (PF/PJ) e score de oportunidade por regra — cada dado vinculado à fonte oficial. Pergunte em português ao assistente, receba com prova.",
                 },
                 {
                   icon: <ShieldCheck size={24} color="#fff" aria-hidden="true" />,
                   title: "Decida com fundamento",
-                  desc: "Relatório com selo de fonte oficial, margem calculada e evidência rastreável. Apresente ao cliente com total segurança jurídica.",
+                  desc: "Relatório com link e data de coleta da fonte oficial e evidência rastreável. O score é apoio de decisão — confirme sempre no edital antes de propor.",
                 },
               ] as const
             ).map((step, i) => (
@@ -1114,8 +1110,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   gap: 12,
                 }}
               >
-                <span className="h3" style={{ fontSize: 14 }}>Lotes em destaque — Receita Federal & PGFN</span>
-                <span className="badge badge--accent" style={{ fontSize: 10 }}>Ao vivo</span>
+                <span className="h3" style={{ fontSize: 14 }}>Lotes em destaque — Receita Federal</span>
+                <span className="badge badge--neutral" style={{ fontSize: 10 }}>Exemplo ilustrativo</span>
               </div>
               <div>
                 {heroLotes.map((lote, i) => {
@@ -1369,7 +1365,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               </span>
             </h2>
             <p className="muted" style={{ fontSize: 16, marginBottom: 36, lineHeight: 1.6 }}>
-              Acesse os editais da Receita Federal, PGFN e SPU, passe qualquer lote no Raio-X
+              Acesse os leilões da Receita Federal, passe qualquer lote no Raio-X
               e decida antes do concorrente saber que ele existe.
             </p>
             <button
