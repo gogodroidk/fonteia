@@ -13,6 +13,31 @@ export interface LeilaoOpportunityScore {
   maxSuggestedBidCents: number;
 }
 
+export interface LotEconomia {
+  avaliacaoCents: number;
+  economiaCents: number;
+  /** Desconto sobre a avaliação oficial, 0–100. */
+  descontoPct: number;
+}
+
+/**
+ * Economia REAL = avaliação oficial − lance mínimo, quando a avaliação existe.
+ * É o número que dá o "uau" sem custo de IA. Retorna null se não há avaliação
+ * confiável (ausente, ≤ 0, ou ≤ o lance mínimo).
+ */
+export function lotEconomia(lot: ReceitaLeilaoLot): LotEconomia | null {
+  const avaliacao = lot.valorAvaliacaoCents;
+  if (typeof avaliacao !== "number" || avaliacao <= 0 || avaliacao <= lot.minimumBidCents) {
+    return null;
+  }
+  const economiaCents = avaliacao - lot.minimumBidCents;
+  return {
+    avaliacaoCents: avaliacao,
+    economiaCents,
+    descontoPct: Math.round((economiaCents / avaliacao) * 100),
+  };
+}
+
 function clampScore(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -109,6 +134,35 @@ export function scoreReceitaLeilaoLot(lot: ReceitaLeilaoLot, now = new Date()): 
       impact: "negative",
       points: -25,
     });
+  }
+
+  // Desconto real sobre a avaliação oficial (só quando há avaliação no lote).
+  const economia = lotEconomia(lot);
+  if (economia) {
+    if (economia.descontoPct >= 50) {
+      score += 15;
+      factors.push({
+        id: "desconto-alto",
+        label: `Desconto de ${economia.descontoPct}% sobre a avaliacao oficial.`,
+        impact: "positive",
+        points: 15,
+      });
+    } else if (economia.descontoPct >= 30) {
+      score += 8;
+      factors.push({
+        id: "desconto-medio",
+        label: `Desconto de ${economia.descontoPct}% sobre a avaliacao oficial.`,
+        impact: "positive",
+        points: 8,
+      });
+    } else {
+      factors.push({
+        id: "desconto-informativo",
+        label: `Desconto de ${economia.descontoPct}% sobre a avaliacao oficial.`,
+        impact: "neutral",
+        points: 0,
+      });
+    }
   }
 
   const finalScore = clampScore(score);

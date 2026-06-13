@@ -193,10 +193,8 @@ export interface ReceitaPdfEnvelope {
 // ---------------------------------------------------------------------------
 
 export interface ReceitaCatalogLot extends Omit<ReceitaLeilaoLot, "raw"> {
-  valorAvaliacaoCents?: number;
-  category?: string;
+  // valorAvaliacaoCents, category e imageUrls são herdados de ReceitaLeilaoLot.
   lotSituacao?: number;
-  imageUrls?: string[];
   raw: ReceitaEditalLoteRaw;
 }
 

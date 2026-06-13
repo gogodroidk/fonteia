@@ -38,6 +38,12 @@ export interface ReceitaLeilaoLot {
   proposalDeadline: string;
   eligiblePersonTypes: Array<"pf" | "pj">;
   imageUrl?: string;
+  /** Campos ricos do catálogo (preenchidos pela ingestão completa; opcionais no destaque). */
+  imageUrls?: string[];
+  /** Valor de avaliação oficial em centavos — base da "economia real" (avaliação − mínimo). */
+  valorAvaliacaoCents?: number;
+  /** Categoria/natureza do bem (ex.: "VEÍCULO", "PRODUTO MINERAL"). */
+  category?: string;
   sourceUrl: string;
   collectedAt: string;
   raw: ReceitaLeiloesDestaqueRaw;
