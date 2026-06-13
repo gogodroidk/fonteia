@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import { Bar, CountUp, FonteDots, ScoreRing } from "../components/ui";
 import { listLeilaoLots } from "../features/leiloes/leiloes-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
+import { displayCity } from "../lib/receita-localidades";
+
+// Linhas por vez na tabela do painel (o scroll carrega mais sozinho, sem clicar).
+const ROWS_PER_PAGE = 25;
 
 // The single FonteItem for Receita Federal — used in every lot row
 const RFB_FONTE = {
@@ -165,7 +169,7 @@ export function DashboardPage(props: {
   const filteredEntries = useMemo(() => {
     return scoredLots.filter(({ lot, scoring }) => {
       const text =
-        `${lot.edital} ${lot.displayNumber} ${lot.city} ${lot.agency} ${lot.category ?? ""}`.toLowerCase();
+        `${lot.edital} ${lot.displayNumber} ${lot.city} ${displayCity(lot.city)} ${lot.agency} ${lot.category ?? ""}`.toLowerCase();
       const matchesTerm =
         term.trim().length === 0 || text.includes(term.trim().toLowerCase());
       const matchesRisk =
@@ -190,6 +194,31 @@ export function DashboardPage(props: {
     });
     return list;
   }, [filteredEntries, sortBy]);
+
+  // ── Paginação por scroll da tabela (cresce sozinha ao rolar) ────────────────
+  const [visibleRows, setVisibleRows] = useState(ROWS_PER_PAGE);
+  const tableSentinelRef = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    setVisibleRows(ROWS_PER_PAGE);
+  }, [term, riskFilter, personFilter, sortBy]);
+
+  useEffect(() => {
+    const node = tableSentinelRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleRows((current) => Math.min(current + ROWS_PER_PAGE, sortedEntries.length));
+        }
+      },
+      { rootMargin: "500px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [sortedEntries.length, visibleRows]);
+
+  const visibleEntries = sortedEntries.slice(0, visibleRows);
 
   // KPIs derived from real lots
   const kpiLotesDisponiveis = lots.length;
@@ -430,7 +459,7 @@ export function DashboardPage(props: {
                   Oportunidade do dia
                 </span>
                 <h2 style={{ fontSize: 18, marginTop: 4 }}>
-                  Lote {featuredEntry.lot.lotNumber} — {featuredEntry.lot.city}
+                  Lote {featuredEntry.lot.lotNumber} — {displayCity(featuredEntry.lot.city)}
                 </h2>
                 <div
                   className="row"
@@ -564,7 +593,7 @@ export function DashboardPage(props: {
                             textOverflow: "ellipsis",
                           }}
                         >
-                          Lote {lot.lotNumber} · {lot.city}
+                          Lote {lot.lotNumber} · {displayCity(lot.city)}
                         </div>
                         <div
                           className="num"
@@ -709,7 +738,7 @@ export function DashboardPage(props: {
                 </tr>
               </thead>
               <tbody>
-                {sortedEntries.map(({ lot, scoring }, rowIdx) => {
+                {visibleEntries.map(({ lot, scoring }, rowIdx) => {
                   const days = daysUntil(lot.proposalDeadline);
                   const eco = lotEconomia(lot);
                   const isClickable = onSelectLot !== undefined;
@@ -772,7 +801,7 @@ export function DashboardPage(props: {
                         >
                           <FonteDots fontes={[RFB_FONTE]} size={20} />
                           <span style={{ fontSize: 12.5, color: "var(--t-mid)" }}>
-                            {lot.city}
+                            {displayCity(lot.city)}
                           </span>
                         </div>
                       </td>
@@ -859,6 +888,16 @@ export function DashboardPage(props: {
                     </tr>
                   );
                 })}
+                {visibleRows < sortedEntries.length ? (
+                  <tr ref={tableSentinelRef}>
+                    <td
+                      colSpan={6}
+                      style={{ padding: "16px", textAlign: "center", color: "var(--t-mid)", fontSize: 12.5 }}
+                    >
+                      Carregando mais lotes… ({visibleRows} de {sortedEntries.length})
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
             </div>

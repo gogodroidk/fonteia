@@ -306,7 +306,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
     },
     {
       q: "Posso cancelar quando quiser?",
-      a: "Sim, sem contrato e sem multa. Você mantém o acesso até o fim do período já pago. O plano Avaliação é permanentemente gratuito.",
+      a: "Sim, sem contrato e sem multa. Você mantém o acesso até o fim do período já pago — e ainda tem 7 dias de garantia com reembolso integral.",
     },
   ];
 
@@ -452,8 +452,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 onClick={onLogin}
               >
                 <Zap size={14} fill="currentColor" aria-hidden="true" />
-                <span className="lp-nav-cta-full">Começar grátis</span>
-                <span className="lp-nav-cta-short" aria-hidden="true">Grátis</span>
+                <span className="lp-nav-cta-full">Começar agora</span>
+                <span className="lp-nav-cta-short" aria-hidden="true">Entrar</span>
               </button>
             </div>
           </div>
@@ -560,7 +560,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   onClick={onLogin}
                 >
                   <Zap size={18} fill="currentColor" aria-hidden="true" />
-                  Iniciar avaliação gratuita
+                  Começar agora
                 </button>
                 <a
                   href="#como-funciona"
@@ -1413,7 +1413,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           <Reveal>
             <div className="badge badge--accent" style={{ marginBottom: 20, padding: "7px 14px" }}>
               <span className="dot pulse" style={{ background: "var(--accent-ink)", marginRight: 6 }} aria-hidden="true" />
-              5 análises gratuitas · Sem cartão de crédito
+              7 dias de garantia · Cancele quando quiser
             </div>
             <h2
               className="display"
@@ -1439,7 +1439,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               style={{ fontSize: 16, padding: "15px 32px" }}
             >
               <Zap size={18} fill="currentColor" aria-hidden="true" />
-              Iniciar avaliação gratuita
+              Começar agora
             </button>
             <p className="tiny muted" style={{ marginTop: 16 }}>
               Sem contrato · Cancele quando quiser · Dados de fontes oficiais

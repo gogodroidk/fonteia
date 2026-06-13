@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
 import { stripeLinkFor } from "../../config/stripe";
+import { CouponRedeem } from "../../components/coupon-redeem";
 
 function precoLabel(preco: number, periodo: string): string {
   if (preco === 0) return "R$ 0";
@@ -69,9 +70,9 @@ export function BillingPage() {
 
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <span className="eyebrow">Planos</span>
-        <h2 className="h1" style={{ marginTop: 8 }}>Comece gratis. Pague quando ja estiver ganhando.</h2>
+        <h2 className="h1" style={{ marginTop: 8 }}>Escolha seu plano. Cancele quando quiser.</h2>
         <p className="muted" style={{ maxWidth: 520, margin: "10px auto 0", lineHeight: 1.6 }}>
-          5 analises gratis pra sentir o poder. Sem cartao. Quando destravar, e mes a mes — cancela quando quiser.
+          Acesso completo aos leiloes da Receita, mes a mes. 7 dias de garantia — nao gostou, devolvemos 100%.
         </p>
       </div>
 
@@ -126,7 +127,11 @@ export function BillingPage() {
         })}
       </div>
 
-      <div className="inset" style={{ marginTop: 22, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ maxWidth: 460, margin: "22px auto 0" }}>
+        <CouponRedeem />
+      </div>
+
+      <div className="inset" style={{ marginTop: 16, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
         <ShieldCheck size={17} style={{ color: "var(--accent-ink)" }} aria-hidden="true" />
         <span className="small muted">
           <strong className="t-hi">Garantia de 7 dias.</strong> Nao gostou, devolvemos 100%. Pagamento seguro via Stripe (cartao e Pix).

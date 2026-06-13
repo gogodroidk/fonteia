@@ -24,6 +24,9 @@ import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
 import { Bar, FonteDots, riscoBadge } from "../../components/ui";
 import { getConfiguredApiUrl, trimTrailingSlash } from "../../lib/api-client";
+import { displayCity } from "../../lib/receita-localidades";
+import { useAuth } from "../../auth/auth-context";
+import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-detalhe-api";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -592,9 +595,42 @@ export function LotDetailPage({
   );
   const riskBars = buildRiskBars(scoring, lot);
 
-  const images = useMemo(() => collectImages(lot), [lot]);
-  const itensInfo = useMemo(() => extractLotItens(lot), [lot]);
+  // Detalhe rico do lote (descrição dos bens, quantidade, recinto, avisos, fotos):
+  // o catálogo não traz isso, então buscamos sob demanda do SLE via Edge Function.
+  const { session } = useAuth();
+  const [detalhe, setDetalhe] = useState<LoteDetalhe | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setDetalhe(null);
+    void fetchLoteDetalhe(lot, session?.access_token).then((d) => {
+      if (!cancelled) setDetalhe(d);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lot.id, lot.edle, lot.lotNumber, session?.access_token]);
+
+  const images = useMemo(() => {
+    const base = collectImages(lot);
+    if (base.length > 0) return base;
+    return detalhe?.imagens ?? [];
+  }, [lot, detalhe]);
+
+  // Prefere os itens ricos do SLE (com descrição + quantidade); cai para o que o
+  // payload base eventualmente tiver. Some inteiro quando não há nada honesto a mostrar.
+  const itensInfo = useMemo<LotItensInfo | null>(() => {
+    if (detalhe && detalhe.itens.length > 0) {
+      return { recinto: detalhe.recinto ?? undefined, itens: detalhe.itens };
+    }
+    return extractLotItens(lot);
+  }, [lot, detalhe]);
+
   const lotTitle = `Edital ${lot.edital} — Lote ${lot.displayNumber}`;
+  const itemTitle = detalhe?.titulo ?? null;
+  const cityLabel = displayCity(lot.city);
+  const avisos = detalhe?.avisos ?? [];
 
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
@@ -809,8 +845,18 @@ export function LotDetailPage({
               </span>
             </div>
 
-            {/* Título */}
-            <h2 style={{ margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{lotTitle}</h2>
+            {/* Título — o que é o lote (descrição real dos bens), com o edital de subtítulo */}
+            {itemTitle ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-1)" }}>
+                <span className="section-label">O que e este lote</span>
+                <h2 style={{ margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{itemTitle}</h2>
+                <span style={{ fontSize: "0.8rem", color: "var(--n-400)", fontFamily: "monospace" }}>
+                  {lotTitle}
+                </span>
+              </div>
+            ) : (
+              <h2 style={{ margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{lotTitle}</h2>
+            )}
 
             {/* Órgão + cidade */}
             <div
@@ -829,9 +875,37 @@ export function LotDetailPage({
               </span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)" }}>
                 <MapPin aria-hidden="true" size={14} />
-                {lot.city}
+                {cityLabel}
               </span>
             </div>
+
+            {/* Avisos oficiais do lote (ex.: bens em outra unidade) — só quando a fonte traz */}
+            {avisos.length > 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s-2)",
+                  padding: "var(--s-3) var(--s-4)",
+                  borderRadius: "var(--r-md)",
+                  background: "var(--color-warning-bg)",
+                  border: "1px solid var(--color-warning)",
+                }}
+              >
+                <span
+                  className="section-label"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)", color: "var(--color-warning)" }}
+                >
+                  <ShieldCheck aria-hidden="true" size={13} />
+                  Avisos da fonte oficial
+                </span>
+                {avisos.map((aviso, i) => (
+                  <p key={i} style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.5, color: "var(--n-700)" }}>
+                    {aviso}
+                  </p>
+                ))}
+              </div>
+            ) : null}
 
             {/* Bloco de valor — lance mínimo + economia (quando houver) */}
             <div
@@ -1084,7 +1158,7 @@ export function LotDetailPage({
                 O lote <strong>{lot.displayNumber}</strong> faz parte do edital{" "}
                 <strong>{lot.edital}</strong> conduzido por{" "}
                 <strong>{lot.agency}</strong>, com sede em{" "}
-                <strong>{lot.city}</strong>.{" "}
+                <strong>{cityLabel}</strong>.{" "}
                 {lot.category ? (
                   <>
                     Categoria do bem: <strong>{lot.category}</strong>.{" "}
