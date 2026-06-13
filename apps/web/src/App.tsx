@@ -242,12 +242,12 @@ function AppShell({ path, navigate }: AppShellProps) {
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--t-hi)" }}>
-      <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="shell-root" style={{ background: "var(--bg)", color: "var(--t-hi)" }}>
+      <div className="shell-layout">
         {/* sidebar desktop */}
         <aside
           className="shell-sidebar-desktop"
-          style={{ width: sidebarWidth, flex: "0 0 auto", borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, transition: "width .2s", overflow: "hidden", zIndex: 20 }}
+          style={{ width: sidebarWidth, flex: "0 0 auto", borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", height: "100dvh", position: "sticky", top: 0, transition: "width .2s", overflow: "hidden", zIndex: 20 }}
         >
           {sidebarInner(false)}
         </aside>
@@ -255,9 +255,9 @@ function AppShell({ path, navigate }: AppShellProps) {
         {/* sidebar drawer mobile */}
         {sidebarOpen && (
           <>
-            <div onClick={() => setSidebarOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, background: "rgba(4,8,18,.5)", zIndex: 40 }} />
-            <aside className="shell-sidebar-drawer" style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: 248, background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", zIndex: 50 }}>
-              <div className="row between" style={{ padding: "12px 12px 0" }}>
+            <div className="shell-scrim" onClick={() => setSidebarOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, background: "rgba(4,8,18,.5)", zIndex: 40 }} />
+            <aside className="shell-sidebar-drawer" style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "min(86vw, 300px)", maxHeight: "100dvh", overflowY: "auto", paddingLeft: "env(safe-area-inset-left)", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", zIndex: 50, boxShadow: "var(--shadow-xl)" }}>
+              <div className="row between" style={{ padding: "calc(12px + env(safe-area-inset-top)) 12px 0" }}>
                 <span />
                 <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setSidebarOpen(false)} aria-label="Fechar menu">
                   <X size={16} aria-hidden="true" />
@@ -269,37 +269,35 @@ function AppShell({ path, navigate }: AppShellProps) {
         )}
 
         {/* main */}
-        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <header
-            className="no-print"
-            style={{ height: 62, borderBottom: "1px solid var(--border)", background: "var(--glass)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)", position: "sticky", top: 0, zIndex: 15, display: "flex", alignItems: "center", gap: 12, padding: "0 16px" }}
-          >
+        <main className="shell-main" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <header className="shell-topbar no-print">
             <button className="btn btn--icon btn--ghost btn--sm shell-burger" type="button" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu">
               <Menu size={18} aria-hidden="true" />
             </button>
-            <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-.01em" }}>{ROUTE_TITLES[route]}</div>
-            <div style={{ flex: 1, maxWidth: 420, marginLeft: "auto" }} className="shell-search">
-              <div className="searchbar" style={{ cursor: "pointer" }} onClick={() => go("/app/lotes")}>
+            <div className="shell-title">{ROUTE_TITLES[route]}</div>
+            <div className="shell-search">
+              <div className="searchbar" style={{ cursor: "pointer" }} onClick={() => go("/app/lotes")} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go("/app/lotes"); }} aria-label="Buscar lote, órgão ou edital">
                 <Search size={16} style={{ color: "var(--t-low)" }} aria-hidden="true" />
-                <input placeholder="Buscar lote, órgão ou edital…" readOnly style={{ cursor: "pointer", fontSize: 13.5 }} />
+                <input placeholder="Buscar lote, órgão ou edital…" readOnly tabIndex={-1} style={{ cursor: "pointer", fontSize: 13.5 }} />
                 <span className="kbd">⌘K</span>
               </div>
             </div>
-            <div className="row" style={{ gap: 6, marginLeft: "auto" }}>
+            <div className="shell-actions">
               <ThemeToggle />
-              <button className="btn btn--icon btn--ghost" type="button" onClick={() => go("/app/alertas")} title="Alertas" style={{ position: "relative" }}>
+              <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
                 <Bell size={18} aria-hidden="true" />
               </button>
-              <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")}>
-                <Zap size={14} fill="currentColor" aria-hidden="true" />Upgrade
+              <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")} aria-label="Ampliar acesso">
+                <Zap size={14} fill="currentColor" aria-hidden="true" />
+                <span className="shell-upgrade-label">Upgrade</span>
               </button>
-              <button type="button" onClick={() => go("/app/conta")} title="Conta" className="avatar" style={{ width: 36, height: 36, fontSize: 13, border: 0, cursor: "pointer" }}>
-                {avatarUrl ? <img src={avatarUrl} alt={displayName} style={{ width: "100%", height: "100%", borderRadius: "50%" }} /> : initialsOf(displayName)}
+              <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
+                {avatarUrl ? <img src={avatarUrl} alt={displayName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
               </button>
             </div>
           </header>
 
-          <div style={{ padding: "22px clamp(16px,3vw,28px)", flex: 1 }}>
+          <div className="shell-content">
             {checkoutOk && (
               <div
                 className="panel elevated"
@@ -353,24 +351,116 @@ function AppShell({ path, navigate }: AppShellProps) {
           const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
           const Icon = item.icon;
           return (
-            <button key={item.route} type="button" onClick={() => go(item.path)} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: 0, cursor: "pointer", color: active ? "var(--brand-ink)" : "var(--t-mid)", fontSize: 10.5, fontWeight: active ? 700 : 500, flex: 1, padding: "8px 0" }}>
-              <Icon size={20} aria-hidden="true" />
-              {item.label}
+            <button
+              key={item.route}
+              type="button"
+              onClick={() => go(item.path)}
+              className="shell-bottomnav-item"
+              aria-current={active ? "page" : undefined}
+              style={{ color: active ? "var(--brand-ink)" : "var(--t-mid)", fontWeight: active ? 700 : 500 }}
+            >
+              <Icon size={21} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+              <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
       <style>{`
+        /* =========================================================
+           Fonte.ia — App Shell, responsive system
+           ONE coherent set of breakpoints:
+             • desktop  > 900px  → fixed sidebar, full topbar
+             • mobile  <= 900px  → burger + drawer + bottom nav
+             • compact <= 560px  → condensed topbar (icon-only upgrade)
+           No horizontal scroll. Safe-area aware. Touch targets >= 44px.
+           ========================================================= */
+        .shell-root{min-height:100svh;overflow-x:clip}
+        .shell-layout{display:flex;min-height:100dvh}
+
+        /* ---- Topbar ---- */
+        .shell-topbar{
+          height:62px;flex:0 0 auto;
+          border-bottom:1px solid var(--border);
+          background:var(--glass);
+          backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);
+          position:sticky;top:0;z-index:15;
+          display:flex;align-items:center;gap:12px;
+          padding:0 clamp(12px,3vw,20px);
+          padding-top:env(safe-area-inset-top);
+          padding-right:max(clamp(12px,3vw,20px),env(safe-area-inset-right));
+        }
+        .shell-title{
+          font-size:clamp(15px,1.4vw,17px);font-weight:700;letter-spacing:-.01em;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;
+        }
+        .shell-search{flex:1 1 auto;max-width:420px;margin-left:auto;min-width:0}
+        .shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+        .shell-upgrade-label{display:inline}
+        .shell-avatar{width:36px;height:36px;font-size:13px;flex:0 0 auto}
+
+        /* ---- Main content ---- */
+        .shell-content{flex:1 1 auto;min-width:0;padding:22px clamp(16px,3vw,28px)}
+
+        /* ---- Burger + bottom nav: hidden on desktop ---- */
         .shell-burger{display:none}
         .shell-bottomnav{display:none}
-        @media (max-width:860px){
+
+        /* ---- Drawer / scrim entrance ---- */
+        .shell-scrim{animation:shellFade .18s ease}
+        .shell-sidebar-drawer{animation:shellSlideIn .24s cubic-bezier(.2,.7,.3,1)}
+        @keyframes shellFade{from{opacity:0}to{opacity:1}}
+        @keyframes shellSlideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+        @media (prefers-reduced-motion:reduce){
+          .shell-scrim,.shell-sidebar-drawer{animation:none}
+        }
+
+        /* =========================================================
+           MOBILE — <= 900px
+           ========================================================= */
+        @media (max-width:900px){
           .shell-sidebar-desktop{display:none!important}
           .shell-burger{display:inline-flex!important}
           .shell-search{display:none}
-          .shell-bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+          /* clear the fixed bottom nav so content is never hidden behind it */
+          .shell-content{padding-bottom:calc(64px + env(safe-area-inset-bottom) + 16px)}
+          .shell-bottomnav{
+            display:flex;
+            position:fixed;left:0;right:0;bottom:0;z-index:30;
+            background:var(--glass);
+            backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3);
+            border-top:1px solid var(--border);
+            padding:0 max(0px,env(safe-area-inset-left)) env(safe-area-inset-bottom) max(0px,env(safe-area-inset-right));
+            box-shadow:0 -6px 18px rgba(0,0,0,.10);
+          }
+          .shell-bottomnav-item{
+            flex:1 1 0;min-width:0;min-height:56px;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+            background:none;border:0;cursor:pointer;
+            font-size:10.5px;font-family:inherit;line-height:1.1;
+            padding:8px 2px;
+            -webkit-tap-highlight-color:transparent;
+            transition:color .15s;
+          }
+          .shell-bottomnav-item span{
+            max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+          }
+          .shell-bottomnav-item:active{transform:scale(.94)}
         }
-        @media (max-width:520px){ .shell-upgrade .btn-label,.shell-upgrade span{ } }
+
+        /* =========================================================
+           COMPACT — <= 560px  (small phones)
+           ========================================================= */
+        @media (max-width:560px){
+          .shell-topbar{gap:8px;height:58px}
+          /* icon-only upgrade button to free horizontal space */
+          .shell-upgrade-label{display:none}
+          .shell-upgrade{padding:0;width:36px;height:36px;border-radius:11px}
+        }
+        @media (max-width:380px){
+          /* ultra-narrow: drop the standalone bell (alerts still reachable via bottom nav) */
+          .shell-bell{display:none}
+        }
       `}</style>
     </div>
   );
@@ -389,7 +479,7 @@ export function App() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: "var(--bg)", color: "var(--t-hi)" }}>
+      <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: "var(--bg)", color: "var(--t-hi)" }}>
         <span style={{ width: 44, height: 44, borderRadius: 13, background: "linear-gradient(135deg,var(--brand),var(--accent))", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 22 }}>F</span>
         <span className="muted">Carregando…</span>
       </div>

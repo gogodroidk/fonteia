@@ -2228,7 +2228,7 @@ p { margin: 0; }
    Cookies LGPD + Páginas legais + Conta
    ========================================================= */
 
-/* Banner de cookies */
+/* Banner de cookies — usa tokens do design system (tema claro/escuro) */
 .cookie-banner {
   position: fixed;
   left: 0;
@@ -2236,6 +2236,8 @@ p { margin: 0; }
   bottom: 0;
   z-index: 200;
   padding: var(--s-4);
+  padding-left: max(var(--s-4), env(safe-area-inset-left));
+  padding-right: max(var(--s-4), env(safe-area-inset-right));
   padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
   display: flex;
   justify-content: center;
@@ -2245,21 +2247,21 @@ p { margin: 0; }
   pointer-events: auto;
   width: 100%;
   max-width: 640px;
-  background: var(--white);
-  border: 1px solid var(--n-100);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: 0 18px 50px rgba(4, 21, 16, 0.22);
+  box-shadow: var(--shadow-xl);
   padding: var(--s-5);
 }
 .cookie-banner-head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  color: var(--g-700);
+  color: var(--accent-ink);
   margin-bottom: var(--s-2);
 }
-.cookie-banner-head strong { color: var(--n-900); font-size: 15px; }
-.cookie-banner-inner > p { margin: 0 0 var(--s-4); color: var(--n-500); font-size: 14px; line-height: 1.5; }
+.cookie-banner-head strong { color: var(--t-hi); font-size: 15px; }
+.cookie-banner-inner > p { margin: 0 0 var(--s-4); color: var(--t-mid); font-size: 14px; line-height: 1.5; }
 .cookie-options { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-4); }
 .cookie-option {
   display: flex;
@@ -2267,15 +2269,31 @@ p { margin: 0; }
   justify-content: space-between;
   gap: var(--s-4);
   padding: var(--s-3);
-  border: 1px solid var(--n-100);
+  border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
-.cookie-option strong { display: block; font-size: 14px; color: var(--n-900); }
-.cookie-option small { display: block; color: var(--n-500); font-size: 12px; }
-.cookie-option input { width: 20px; height: 20px; accent-color: var(--g-600); flex-shrink: 0; }
-.cookie-option-locked { background: var(--n-50); }
+.cookie-option strong { display: block; font-size: 14px; color: var(--t-hi); }
+.cookie-option small { display: block; color: var(--t-mid); font-size: 12px; }
+.cookie-option input { width: 20px; height: 20px; accent-color: var(--brand); flex-shrink: 0; }
+.cookie-option-locked { background: var(--surface-2); }
 .cookie-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .cookie-actions-main { display: flex; gap: var(--s-2); margin-left: auto; }
+/* Banner buttons inherit the theme (scoped so global landing/auth buttons stay intact) */
+.cookie-banner .ghost-button {
+  background: var(--surface);
+  color: var(--t-hi);
+  border: 1px solid var(--border);
+  min-height: 40px;
+}
+.cookie-banner .ghost-button:hover { background: var(--surface-2); border-color: var(--border-2); }
+.cookie-banner .primary-button {
+  background: linear-gradient(180deg, var(--brand-2), var(--brand));
+  color: #fff;
+  border: 1px solid transparent;
+  min-height: 40px;
+}
+.cookie-banner .primary-button:hover { filter: brightness(1.05); }
+.cookie-banner .link-btn { color: var(--brand-ink); }
 
 /* Páginas legais */
 .legal-page { min-height: 100vh; background: var(--white); color: var(--n-800); }

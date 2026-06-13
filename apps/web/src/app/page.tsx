@@ -163,7 +163,62 @@ export function DashboardPage(props: {
   ] as const;
 
   return (
-    <div className="dashboard-grid">
+    <div className="dashboard-page">
+      {/*
+        Scoped layout: this dashboard has no evidence sidebar, so it must stay a
+        single-column stack at every breakpoint (the global .dashboard-grid turns
+        into a 2-column grid on desktop, which would break this page).
+      */}
+      <style>{`
+        .dashboard-page {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .dashboard-page .dash-greeting {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .dashboard-page .kpi-strip {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+        .dashboard-page .leiloes-filter-row {
+          display: grid;
+          grid-template-columns: 1.4fr 1fr 1fr;
+          gap: 10px;
+        }
+        .dashboard-page .leiloes-filter-row input,
+        .dashboard-page .leiloes-filter-row select {
+          width: 100%;
+          min-width: 0;
+          font-family: var(--font, inherit);
+          font-size: 14px;
+          color: var(--t-hi);
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--r-md, 10px);
+          padding: 10px 12px;
+          outline: none;
+        }
+        .dashboard-page .leiloes-filter-row input:focus,
+        .dashboard-page .leiloes-filter-row select:focus {
+          border-color: var(--brand-ink);
+          box-shadow: 0 0 0 3px var(--ring);
+        }
+        @media (max-width: 640px) {
+          .dashboard-page .kpi-strip {
+            grid-template-columns: 1fr 1fr;
+          }
+          .dashboard-page .leiloes-filter-row {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
 
       {/* ── Saudação ─────────────────────────────────────────────── */}
       <section className="dash-greeting">
@@ -226,8 +281,11 @@ export function DashboardPage(props: {
       {/* ── Oportunidade do dia ──────────────────────────────────── */}
       {featuredEntry ? (
         <section className="featured-lot panel" style={{ padding: 24 }}>
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <div>
+          <div
+            className="row between"
+            style={{ marginBottom: 16, gap: 14, flexWrap: "wrap" }}
+          >
+            <div style={{ flex: "1 1 220px", minWidth: 0 }}>
               <span className="badge badge--accent" style={{ marginBottom: 8 }}>
                 Oportunidade do dia
               </span>
@@ -244,7 +302,7 @@ export function DashboardPage(props: {
           <div
             className="grid"
             style={{
-              gridTemplateColumns: "repeat(3, 1fr)",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
               gap: 12,
               marginBottom: 16,
             }}
@@ -277,7 +335,7 @@ export function DashboardPage(props: {
             </div>
           </div>
 
-          <div className="row between">
+          <div className="row between" style={{ gap: 12, flexWrap: "wrap" }}>
             <FonteDots fontes={[RFB_FONTE]} />
             <div className="row" style={{ gap: 8 }}>
               <span
@@ -364,11 +422,13 @@ export function DashboardPage(props: {
           </p>
         ) : (
           <div className="panel" style={{ overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
             <table
               style={{
                 width: "100%",
                 borderCollapse: "collapse",
                 fontFamily: "inherit",
+                minWidth: 560,
               }}
             >
               <thead>
@@ -507,6 +567,7 @@ export function DashboardPage(props: {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </section>

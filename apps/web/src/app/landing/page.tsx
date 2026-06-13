@@ -69,6 +69,8 @@ function useScrolled(threshold = 32) {
 }
 
 // ─── Mouse-parallax for Hero card ───────────────────────────────────────────
+// Pointer-only and disabled on touch / small / reduced-motion devices so the
+// hero never repaints on scroll-heavy phones and the card can't drift offscreen.
 
 function useMouse() {
   const [pos, setPos] = useState({ x: 0, y: 0 });
@@ -79,8 +81,31 @@ function useMouse() {
     });
   }, []);
   useEffect(() => {
-    window.addEventListener("mousemove", onMove, { passive: true });
-    return () => window.removeEventListener("mousemove", onMove);
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    // Only fine pointers (real mouse) on wide screens, respecting reduced motion.
+    const finePointer = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const wide = window.matchMedia("(min-width: 920px)");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const enabled = () => finePointer.matches && wide.matches && !reduce.matches;
+    let attached = false;
+    const attach = () => {
+      if (enabled() && !attached) {
+        window.addEventListener("mousemove", onMove, { passive: true });
+        attached = true;
+      } else if (!enabled() && attached) {
+        window.removeEventListener("mousemove", onMove);
+        attached = false;
+        setPos({ x: 0, y: 0 });
+      }
+    };
+    attach();
+    wide.addEventListener("change", attach);
+    reduce.addEventListener("change", attach);
+    return () => {
+      wide.removeEventListener("change", attach);
+      reduce.removeEventListener("change", attach);
+      if (attached) window.removeEventListener("mousemove", onMove);
+    };
   }, [onMove]);
   return pos;
 }
@@ -286,7 +311,42 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
   ];
 
   return (
-    <div style={{ background: "var(--bg)", color: "var(--t-hi)", minHeight: "100vh" }}>
+    <div className="lp-root" style={{ background: "var(--bg)", color: "var(--t-hi)", minHeight: "100vh", overflowX: "hidden" }}>
+
+      {/* ── Responsive rules (scoped; global CSS untouched) ───────────── */}
+      <style>{`
+        .lp-root { width: 100%; }
+        /* CTA shows full label by default; a compact label kicks in on tiny screens. */
+        .lp-nav-cta-short { display: none; }
+        /* ── Below the hero breakpoint: stack hero, calm the mock card ── */
+        @media (max-width: 920px) {
+          .lp-hero-grid {
+            grid-template-columns: 1fr !important;
+            gap: 36px !important;
+          }
+          .lp-hero-scene { transform: scale(.9); transform-origin: top center; }
+        }
+        /* ── Phones: hide secondary nav, shrink padding, drop heavy mock ── */
+        @media (max-width: 720px) {
+          .lp-nav-links { display: none !important; }
+          .lp-nav-inner { padding: 11px 18px !important; gap: 10px !important; }
+          /* Tighten the generous 24px gutters to 18px on every section/footer.
+             Structural + !important so it beats the inline padding. */
+          .lp-root > section { padding-left: 18px !important; padding-right: 18px !important; }
+          .lp-root > section { padding-top: 64px !important; padding-bottom: 64px !important; }
+          .lp-root > footer { padding-left: 18px !important; padding-right: 18px !important; }
+          #inicio { padding-top: 112px !important; padding-bottom: 64px !important; }
+          .lp-hero-grid { padding-left: 18px !important; padding-right: 18px !important; }
+          /* The 3D parallax mock is decorative — remove it on phones so nothing
+             can overflow and the hero copy + CTAs lead. */
+          .lp-hero-scene-wrap { display: none !important; }
+        }
+        @media (max-width: 420px) {
+          .lp-nav-signin { display: none !important; }
+          .lp-nav-cta-full { display: none !important; }
+          .lp-nav-cta-short { display: inline !important; }
+        }
+      `}</style>
 
       {/* ── NAV ────────────────────────────────────────────────────────── */}
       <header
@@ -307,6 +367,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           }}
         >
           <div
+            className="lp-nav-inner"
             style={{
               maxWidth: 1200,
               margin: "0 auto",
@@ -319,7 +380,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             {/* Logo */}
             <a
               href="#inicio"
-              style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}
+              style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none", flexShrink: 0 }}
               aria-label="Fonte.ia — página inicial"
             >
               <div
@@ -349,6 +410,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
 
             {/* Nav links */}
             <nav
+              className="lp-nav-links"
               style={{ display: "flex", alignItems: "center", gap: 22, marginLeft: 24 }}
               aria-label="Menu principal"
             >
@@ -375,22 +437,23 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             </nav>
 
             {/* Right actions */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
               <ThemeToggle />
               <button
                 type="button"
-                className="btn btn--ghost btn--sm"
+                className="btn btn--ghost btn--sm lp-nav-signin"
                 onClick={onLogin}
               >
                 Entrar
               </button>
               <button
                 type="button"
-                className="btn btn--accent btn--sm"
+                className="btn btn--accent btn--sm lp-nav-cta"
                 onClick={onLogin}
               >
                 <Zap size={14} fill="currentColor" aria-hidden="true" />
-                Começar grátis
+                <span className="lp-nav-cta-full">Começar grátis</span>
+                <span className="lp-nav-cta-short" aria-hidden="true">Grátis</span>
               </button>
             </div>
           </div>
@@ -423,6 +486,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
         />
 
         <div
+          className="lp-hero-grid"
           style={{
             maxWidth: 1180,
             margin: "0 auto",
@@ -510,8 +574,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           </div>
 
           {/* Right: 3D mock card */}
-          <Reveal delay={0.08}>
-            <div className="scene" style={{ position: "relative", paddingTop: 40, paddingBottom: 40 }}>
+          <Reveal delay={0.08} className="lp-hero-scene-wrap">
+            <div className="scene lp-hero-scene" style={{ position: "relative", paddingTop: 40, paddingBottom: 40 }}>
               {/* Ambient orbs */}
               <div
                 aria-hidden="true"
