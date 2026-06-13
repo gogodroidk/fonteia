@@ -1,23 +1,11 @@
 import { ArrowRight, BookOpen, CheckCircle2, XCircle } from "lucide-react";
+import { LogoMark } from "../../components/ui/logo-mark";
 import {
   useSeo,
   articleJsonLd,
   breadcrumbJsonLd,
   SITE_URL,
 } from "../../lib/seo";
-
-/* ── LogoMark ────────────────────────────────────────────────────────────── */
-function LogoMark({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <rect x="16" y="15" width="7.6" height="34" rx="3.8" fill="currentColor" />
-      <rect x="16" y="15" width="25" height="7.6" rx="3.8" fill="currentColor" />
-      <rect x="16" y="28.6" width="17.5" height="7.6" rx="3.8" fill="currentColor" />
-      <circle cx="47" cy="18.8" r="5" style={{ fill: "var(--accent-ink)" }} />
-    </svg>
-  );
-}
-
 /* ── Primitivos de texto ─────────────────────────────────────────────────── */
 function P({ children }: { children: React.ReactNode }) {
   return (
@@ -247,7 +235,7 @@ const JSON_LD = [
   }),
   breadcrumbJsonLd([
     { name: "Início", url: SITE_URL },
-    { name: "Comparações", url: `${SITE_URL}/comparacoes` },
+    { name: "Guias", url: `${SITE_URL}/guias` },
     { name: "Fonte.ia vs Análise Manual", url: `${SITE_URL}${CANONICAL}` },
   ]),
 ] as const;

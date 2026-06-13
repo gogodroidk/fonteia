@@ -25,3 +25,5 @@ export { ThemeToggle } from "./ThemeToggle";
 
 export { riscoBadge } from "./riscoBadge";
 export type { RiscoBadgeResult, RiscoLevel } from "./riscoBadge";
+
+export { LogoMark } from "./logo-mark";

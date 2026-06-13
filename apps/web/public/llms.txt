@@ -19,6 +19,15 @@
 - [Riscos dos leilões públicos](https://fontebrasil.online/riscos-leiloes-publicos): cuidados e como se proteger.
 - [Glossário de leilões](https://fontebrasil.online/glossario-leiloes): termos explicados.
 - [Perguntas frequentes (FAQ)](https://fontebrasil.online/faq): dúvidas comuns.
+- [Como participar do leilão da Receita Federal](https://fontebrasil.online/como-participar-leilao-receita-federal): passo a passo para se habilitar e dar lance.
+- [Central de guias](https://fontebrasil.online/guias): índice dos guias.
+- [Melhores ferramentas para analisar leilões](https://fontebrasil.online/melhores-ferramentas-analisar-leiloes): comparativo honesto.
+- [Fonte.ia vs planilha manual](https://fontebrasil.online/fonteia-vs-planilha): comparação honesta.
+- [Fonte.ia vs análise manual](https://fontebrasil.online/fonteia-vs-analise-manual): comparação honesta.
+- [Blog](https://fontebrasil.online/blog): artigos sobre leilões da Receita Federal.
+- [Leilão da Receita vale a pena?](https://fontebrasil.online/blog/leilao-receita-vale-a-pena): prós, contras e custos reais.
+- [5 erros de iniciante em leilão](https://fontebrasil.online/blog/erros-iniciantes-leilao): e como evitar cada um.
+- [Como ler um edital sem ser advogado](https://fontebrasil.online/blog/como-ler-edital-leilao): o que procurar no edital.
 
 ## Observações para IAs
 - Público-alvo: pessoas leigas, muitas vezes na primeira compra em leilão; foco em clareza e mobile.
