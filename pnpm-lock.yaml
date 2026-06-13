@@ -245,6 +245,12 @@ importers:
 
   services/search-indexer: {}
 
+  services/stripe-webhook:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
 packages:
 
   '@acemir/cssom@0.9.31':

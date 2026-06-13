@@ -1,0 +1,9 @@
+name = "fonteia-stripe-webhook"
+main = "src/worker.ts"
+compatibility_date = "2026-06-10"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (NUNCA versionar — configurar via `wrangler secret put`):
+#   STRIPE_WEBHOOK_SECRET      (whsec_...)
+#   SUPABASE_URL               (https://pwiuiihsyazghdsrpshg.supabase.co)
+#   SUPABASE_SERVICE_ROLE_KEY  (service_role JWT)
