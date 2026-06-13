@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
-import { Bar, CountUp, FonteDots, ScoreRing, riscoBadge } from "../components/ui";
+import { Bar, CountUp, FonteDots, ScoreRing } from "../components/ui";
 import { listLeilaoLots } from "../features/leiloes/leiloes-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
 
@@ -11,6 +11,30 @@ const RFB_FONTE = {
   cor: "#1D5FE0",
   nome: "Receita Federal do Brasil",
 } as const;
+
+// O `label` do scoring é CONFIANÇA DA OPORTUNIDADE ("alto" = melhor), não risco.
+// `riscoBadge` pintaria os melhores lotes de vermelho ("Risco alto") — semântica
+// invertida. Este helper local devolve um selo POSITIVO de confiança.
+type OpportunityLabel = "baixo" | "medio" | "alto";
+
+interface ConfidenceBadge {
+  className: string;
+  label: string;
+}
+
+function confiancaBadge(label: OpportunityLabel): ConfidenceBadge {
+  if (label === "alto") return { className: "badge--ok", label: "Confiança alta" };
+  if (label === "medio") return { className: "badge--warn", label: "Confiança média" };
+  return { className: "badge--neutral", label: "Cautela" };
+}
+
+// Cor (CSS var) coerente com a confiança — usada para colorir o número do score
+// na tabela. Score alto = verde, médio = âmbar, baixo = neutro (nunca vermelho).
+function confiancaColor(label: OpportunityLabel): string {
+  if (label === "alto") return "var(--ok)";
+  if (label === "medio") return "var(--warn)";
+  return "var(--t-mid)";
+}
 
 function daysUntil(value: string): number {
   const deadline = new Date(value).getTime();
@@ -22,6 +46,21 @@ function formatDeadline(value: string): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value.slice(0, 10);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Texto curto de prazo para a lista compacta ("encerra hoje", "em 3 dias"…)
+function deadlineHint(days: number): string {
+  if (days < 0) return "encerrado";
+  if (days === 0) return "encerra hoje";
+  if (days === 1) return "encerra amanhã";
+  return `em ${days} dias`;
+}
+
+// Cor do prazo conforme urgência (≤3d perigo, ≤7d alerta)
+function deadlineColor(days: number): string {
+  if (days <= 3) return "var(--danger)";
+  if (days <= 7) return "var(--warn)";
+  return "var(--t-mid)";
 }
 
 // Derive a risk distribution (percent) from scored lots
@@ -112,11 +151,21 @@ export function DashboardPage(props: {
     );
   }, [scoredLots]);
 
+  // Encerrando em breve: lotes com prazo válido e ainda aberto, do mais próximo
+  // ao mais distante (exclui o destaque para não repetir o mesmo lote).
+  const closingSoon = useMemo(() => {
+    return scoredLots
+      .map((entry) => ({ ...entry, days: daysUntil(entry.lot.proposalDeadline) }))
+      .filter((entry) => entry.days >= 0 && entry.lot.id !== featuredEntry?.lot.id)
+      .sort((a, b) => a.days - b.days)
+      .slice(0, 4);
+  }, [scoredLots, featuredEntry]);
+
   // Filtered list for table
   const filteredEntries = useMemo(() => {
     return scoredLots.filter(({ lot, scoring }) => {
       const text =
-        `${lot.edital} ${lot.displayNumber} ${lot.city} ${lot.agency}`.toLowerCase();
+        `${lot.edital} ${lot.displayNumber} ${lot.city} ${lot.agency} ${lot.category ?? ""}`.toLowerCase();
       const matchesTerm =
         term.trim().length === 0 || text.includes(term.trim().toLowerCase());
       const matchesRisk =
@@ -186,7 +235,8 @@ export function DashboardPage(props: {
       {/*
         Scoped layout: this dashboard has no evidence sidebar, so it must stay a
         single-column stack at every breakpoint (the global .dashboard-grid turns
-        into a 2-column grid on desktop, which would break this page).
+        into a 2-column grid on desktop, which would break this page). Internally,
+        the "spotlight" área usa duas colunas no desktop para ocupar a largura.
       */}
       <style>{`
         .dashboard-page {
@@ -205,6 +255,68 @@ export function DashboardPage(props: {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 12px;
+        }
+        /* Spotlight: oportunidade do dia + encerrando em breve lado a lado no desktop. */
+        .dashboard-page .dash-spotlight {
+          display: grid;
+          grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+          gap: 16px;
+          align-items: stretch;
+        }
+        .dashboard-page .featured-lot {
+          display: flex;
+          flex-direction: column;
+        }
+        .dashboard-page .closing-soon {
+          display: flex;
+          flex-direction: column;
+          padding: 20px;
+        }
+        .dashboard-page .closing-soon-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          margin-top: 12px;
+        }
+        .dashboard-page .closing-soon-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          text-align: left;
+          background: transparent;
+          border: 1px solid transparent;
+          border-radius: var(--r-md, 12px);
+          padding: 9px 10px;
+          min-height: 44px;
+          cursor: pointer;
+          font-family: var(--font, inherit);
+          color: var(--t-hi);
+          transition: background .16s, border-color .16s, transform .16s;
+        }
+        .dashboard-page .closing-soon-row:hover,
+        .dashboard-page .closing-soon-row:focus-visible {
+          background: var(--surface-2);
+          border-color: var(--border);
+          outline: none;
+        }
+        .dashboard-page .closing-soon-row:active {
+          transform: translateY(1px);
+        }
+        .dashboard-page .lot-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          color: var(--t-mid);
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: .02em;
+          text-transform: uppercase;
+          white-space: nowrap;
         }
         .dashboard-page .leiloes-filter-row {
           display: grid;
@@ -228,6 +340,11 @@ export function DashboardPage(props: {
         .dashboard-page .leiloes-filter-row select:focus {
           border-color: var(--brand-ink);
           box-shadow: 0 0 0 3px var(--ring);
+        }
+        @media (max-width: 920px) {
+          .dashboard-page .dash-spotlight {
+            grid-template-columns: 1fr;
+          }
         }
         @media (max-width: 640px) {
           .dashboard-page .kpi-strip {
@@ -258,7 +375,7 @@ export function DashboardPage(props: {
         ) : null}
       </section>
 
-      {/* ── 3 KPIs derivados dos lotes reais ─────────────────────── */}
+      {/* ── KPIs derivados dos lotes reais ───────────────────────── */}
       <section className="kpi-strip">
         {kpiStrip.map(({ key, label, value, color, money }) => (
           <div className="card card--pad" key={key}>
@@ -299,99 +416,188 @@ export function DashboardPage(props: {
         ))}
       </section>
 
-      {/* ── Oportunidade do dia ──────────────────────────────────── */}
+      {/* ── Spotlight: oportunidade do dia + encerrando em breve ─── */}
       {featuredEntry ? (
-        <section className="featured-lot panel" style={{ padding: 24 }}>
-          <div
-            className="row between"
-            style={{ marginBottom: 16, gap: 14, flexWrap: "wrap" }}
-          >
-            <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-              <span className="badge badge--accent" style={{ marginBottom: 8 }}>
-                Oportunidade do dia
-              </span>
-              <h2 style={{ fontSize: 18, marginTop: 4 }}>
-                Lote {featuredEntry.lot.lotNumber} — {featuredEntry.lot.city}
-              </h2>
-              <p className="small muted" style={{ marginTop: 4 }}>
-                {featuredEntry.lot.agency} · Edital {featuredEntry.lot.edital}
-              </p>
-            </div>
-            <ScoreRing value={featuredEntry.scoring.score} size={96} />
-          </div>
-
-          <div
-            className="grid"
-            style={{
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <div className="inset" style={{ padding: 14 }}>
-              <div className="tiny muted" style={{ marginBottom: 4 }}>
-                Lance minimo
-              </div>
-              <div className="num" style={{ fontWeight: 800, fontSize: 18 }}>
-                {formatBRL(featuredEntry.lot.minimumBidCents / 100)}
-              </div>
-            </div>
-            <div className="inset" style={{ padding: 14 }}>
-              <div className="tiny muted" style={{ marginBottom: 4 }}>
-                Prazo
-              </div>
-              <div className="num" style={{ fontWeight: 700, fontSize: 18 }}>
-                {formatDeadline(featuredEntry.lot.proposalDeadline)}
-              </div>
-            </div>
-            <div className="inset" style={{ padding: 14 }}>
-              <div className="tiny muted" style={{ marginBottom: 4 }}>
-                Elegibilidade
-              </div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>
-                {featuredEntry.lot.eligiblePersonTypes.includes("pf")
-                  ? "PF e PJ"
-                  : "PJ"}
-              </div>
-            </div>
-            {(() => {
-              const eco = lotEconomia(featuredEntry.lot);
-              return eco ? (
-                <div className="inset" style={{ padding: 14 }}>
-                  <div className="tiny muted" style={{ marginBottom: 4 }}>
-                    Economia estimada
-                  </div>
-                  <div
-                    className="num"
-                    style={{ fontWeight: 800, fontSize: 18, color: "var(--accent-ink)" }}
-                  >
-                    {formatBRL(eco.economiaCents / 100)}{" "}
-                    <span style={{ fontSize: 12, fontWeight: 700 }}>−{eco.descontoPct}%</span>
-                  </div>
-                </div>
-              ) : null;
-            })()}
-          </div>
-
-          <div className="row between" style={{ gap: 12, flexWrap: "wrap" }}>
-            <FonteDots fontes={[RFB_FONTE]} />
-            <div className="row" style={{ gap: 8 }}>
-              <span
-                className={`badge num ${riscoBadge(featuredEntry.scoring.label).className}`}
-              >
-                {riscoBadge(featuredEntry.scoring.label).label}
-              </span>
-              {onSelectLot ? (
-                <button
-                  className="btn btn--primary btn--sm"
-                  type="button"
-                  onClick={() => onSelectLot(featuredEntry.lot)}
+        <section className="dash-spotlight">
+          {/* Oportunidade do dia */}
+          <article className="featured-lot panel" style={{ padding: 24 }}>
+            <div
+              className="row between"
+              style={{ marginBottom: 16, gap: 14, flexWrap: "wrap" }}
+            >
+              <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+                <span className="badge badge--accent" style={{ marginBottom: 8 }}>
+                  Oportunidade do dia
+                </span>
+                <h2 style={{ fontSize: 18, marginTop: 4 }}>
+                  Lote {featuredEntry.lot.lotNumber} — {featuredEntry.lot.city}
+                </h2>
+                <div
+                  className="row"
+                  style={{ gap: 8, marginTop: 6, flexWrap: "wrap", alignItems: "center" }}
                 >
-                  Analisar lote
-                </button>
-              ) : null}
+                  {featuredEntry.lot.category ? (
+                    <span className="lot-chip">{featuredEntry.lot.category}</span>
+                  ) : null}
+                  <span className="small muted">
+                    {featuredEntry.lot.agency} · Edital {featuredEntry.lot.edital}
+                  </span>
+                </div>
+              </div>
+              <ScoreRing value={featuredEntry.scoring.score} size={96} />
             </div>
-          </div>
+
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div className="inset" style={{ padding: 14 }}>
+                <div className="tiny muted" style={{ marginBottom: 4 }}>
+                  Lance minimo
+                </div>
+                <div className="num" style={{ fontWeight: 800, fontSize: 18 }}>
+                  {formatBRL(featuredEntry.lot.minimumBidCents / 100)}
+                </div>
+              </div>
+              <div className="inset" style={{ padding: 14 }}>
+                <div className="tiny muted" style={{ marginBottom: 4 }}>
+                  Prazo
+                </div>
+                <div className="num" style={{ fontWeight: 700, fontSize: 18 }}>
+                  {formatDeadline(featuredEntry.lot.proposalDeadline)}
+                </div>
+              </div>
+              <div className="inset" style={{ padding: 14 }}>
+                <div className="tiny muted" style={{ marginBottom: 4 }}>
+                  Elegibilidade
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>
+                  {featuredEntry.lot.eligiblePersonTypes.includes("pf")
+                    ? "PF e PJ"
+                    : "PJ"}
+                </div>
+              </div>
+              {(() => {
+                const eco = lotEconomia(featuredEntry.lot);
+                return eco ? (
+                  <div className="inset" style={{ padding: 14 }}>
+                    <div className="tiny muted" style={{ marginBottom: 4 }}>
+                      Economia estimada
+                    </div>
+                    <div
+                      className="num"
+                      style={{ fontWeight: 800, fontSize: 18, color: "var(--accent-ink)" }}
+                    >
+                      {formatBRL(eco.economiaCents / 100)}{" "}
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>−{eco.descontoPct}%</span>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+            </div>
+
+            <div
+              className="row between"
+              style={{ gap: 12, flexWrap: "wrap", marginTop: "auto" }}
+            >
+              <FonteDots fontes={[RFB_FONTE]} />
+              <div className="row" style={{ gap: 8 }}>
+                <span
+                  className={`badge ${confiancaBadge(featuredEntry.scoring.label).className}`}
+                >
+                  {confiancaBadge(featuredEntry.scoring.label).label}
+                </span>
+                {onSelectLot ? (
+                  <button
+                    className="btn btn--primary btn--sm"
+                    type="button"
+                    onClick={() => onSelectLot(featuredEntry.lot)}
+                  >
+                    Analisar lote
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </article>
+
+          {/* Encerrando em breve (lista compacta) */}
+          <aside className="closing-soon panel">
+            <div className="row between" style={{ alignItems: "baseline" }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Encerrando em breve</div>
+              <span className="tiny muted">prazo de proposta</span>
+            </div>
+            {closingSoon.length > 0 ? (
+              <div className="closing-soon-list">
+                {closingSoon.map(({ lot, scoring, days }) => {
+                  const isClickable = onSelectLot !== undefined;
+                  const handleOpen = () => onSelectLot?.(lot);
+                  return (
+                    <div
+                      key={lot.id}
+                      className="closing-soon-row"
+                      role={isClickable ? "button" : undefined}
+                      tabIndex={isClickable ? 0 : undefined}
+                      onClick={isClickable ? handleOpen : undefined}
+                      onKeyDown={
+                        isClickable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleOpen();
+                              }
+                            }
+                          : undefined
+                      }
+                    >
+                      <ScoreRing value={scoring.score} size={36} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          Lote {lot.lotNumber} · {lot.city}
+                        </div>
+                        <div
+                          className="num"
+                          style={{ fontSize: 11.5, color: "var(--t-mid)", marginTop: 1 }}
+                        >
+                          {formatBRL(lot.minimumBidCents / 100)}
+                        </div>
+                      </div>
+                      <span
+                        className="num"
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: deadlineColor(days),
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {deadlineHint(days)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p
+                className="muted"
+                style={{ fontSize: 13, marginTop: 14, lineHeight: 1.5 }}
+              >
+                Nenhum outro lote com prazo aberto agora. Novos leilões entram a cada coleta.
+              </p>
+            )}
+          </aside>
         </section>
       ) : null}
 
@@ -419,14 +625,14 @@ export function DashboardPage(props: {
             onChange={(e) => setTerm(e.target.value)}
           />
           <select
-            aria-label="Filtrar risco"
+            aria-label="Filtrar confiança"
             value={riskFilter}
             onChange={(e) => setRiskFilter(e.target.value)}
           >
-            <option value="all">Todos os riscos</option>
-            <option value="alto">Oportunidade alta</option>
-            <option value="medio">Risco medio</option>
-            <option value="baixo">Risco baixo</option>
+            <option value="all">Toda confiança</option>
+            <option value="alto">Confiança alta</option>
+            <option value="medio">Confiança média</option>
+            <option value="baixo">Cautela</option>
           </select>
           <select
             aria-label="Filtrar pessoa"
@@ -504,8 +710,8 @@ export function DashboardPage(props: {
               </thead>
               <tbody>
                 {sortedEntries.map(({ lot, scoring }, rowIdx) => {
-                  const badge = riscoBadge(scoring.label);
                   const days = daysUntil(lot.proposalDeadline);
+                  const eco = lotEconomia(lot);
                   const isClickable = onSelectLot !== undefined;
                   return (
                     <tr
@@ -530,8 +736,20 @@ export function DashboardPage(props: {
                       }
                     >
                       <td style={{ padding: "14px 16px" }}>
-                        <div style={{ fontWeight: 600, fontSize: 13.5 }}>
-                          Lote {lot.lotNumber}
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <span style={{ fontWeight: 600, fontSize: 13.5 }}>
+                            Lote {lot.lotNumber}
+                          </span>
+                          {lot.category ? (
+                            <span className="lot-chip">{lot.category}</span>
+                          ) : null}
                         </div>
                         <div
                           style={{
@@ -562,25 +780,38 @@ export function DashboardPage(props: {
                         style={{
                           padding: "14px 16px",
                           textAlign: "right",
-                          fontWeight: 700,
-                          fontVariantNumeric: "tabular-nums",
-                          fontSize: 13.5,
                           whiteSpace: "nowrap",
                         }}
                       >
-                        {formatBRL(lot.minimumBidCents / 100)}
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            fontSize: 13.5,
+                          }}
+                        >
+                          {formatBRL(lot.minimumBidCents / 100)}
+                        </div>
+                        {eco ? (
+                          <div
+                            className="num"
+                            style={{
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              color: "var(--accent-ink)",
+                              marginTop: 2,
+                            }}
+                          >
+                            −{eco.descontoPct}% · {formatBRL(eco.economiaCents / 100)}
+                          </div>
+                        ) : null}
                       </td>
                       <td
                         style={{
                           padding: "14px 16px",
                           textAlign: "right",
                           fontSize: 13,
-                          color:
-                            days <= 3
-                              ? "var(--danger)"
-                              : days <= 7
-                                ? "var(--warn)"
-                                : "var(--t-mid)",
+                          color: deadlineColor(days),
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -588,8 +819,23 @@ export function DashboardPage(props: {
                       </td>
                       <td style={{ padding: "14px 16px", textAlign: "right" }}>
                         <span
-                          className={`badge num ${badge.className}`}
-                          style={{ fontSize: 12 }}
+                          className="num"
+                          title={confiancaBadge(scoring.label).label}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minWidth: 30,
+                            padding: "3px 9px",
+                            borderRadius: 999,
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: confiancaColor(scoring.label),
+                            background:
+                              scoring.label === "baixo"
+                                ? "var(--surface-2)"
+                                : `color-mix(in srgb, ${confiancaColor(scoring.label)} 15%, transparent)`,
+                          }}
                         >
                           {scoring.score}
                         </span>
@@ -620,27 +866,27 @@ export function DashboardPage(props: {
         )}
       </section>
 
-      {/* ── Distribuição de risco dos lotes reais ───────────────── */}
+      {/* ── Distribuição de confiança dos lotes reais ───────────── */}
       {scoredLots.length > 0 ? (
         <section className="panel" style={{ padding: 22 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
-            Distribuicao de risco
+            Distribuicao de confianca
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <Bar
-              label="Oportunidade alta"
+              label="Confiança alta"
               value={dist.baixo}
               color="var(--ok)"
             />
             <Bar
-              label="Risco medio"
+              label="Confiança média"
               value={dist.medio}
               color="var(--warn)"
             />
             <Bar
-              label="Risco alto"
+              label="Cautela"
               value={dist.alto}
-              color="var(--danger)"
+              color="var(--t-mid)"
             />
           </div>
         </section>
