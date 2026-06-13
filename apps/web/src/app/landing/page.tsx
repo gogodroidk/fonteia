@@ -306,7 +306,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
     },
     {
       q: "Posso cancelar quando quiser?",
-      a: "Sim, sem contrato e sem multa. Você mantém o acesso até o fim do período já pago — e ainda tem 7 dias de garantia com reembolso integral.",
+      a: "Sim, sem contrato e sem multa. Os planos começam com 7 dias grátis — você só é cobrado depois e pode cancelar a qualquer momento; cancelando durante o teste, não paga nada.",
     },
   ];
 
@@ -1413,7 +1413,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           <Reveal>
             <div className="badge badge--accent" style={{ marginBottom: 20, padding: "7px 14px" }}>
               <span className="dot pulse" style={{ background: "var(--accent-ink)", marginRight: 6 }} aria-hidden="true" />
-              7 dias de garantia · Cancele quando quiser
+              7 dias grátis · Cancele quando quiser
             </div>
             <h2
               className="display"

@@ -248,7 +248,7 @@ function AppShell({ path, navigate }: AppShellProps) {
           <div className="inset" style={{ padding: 13 }}>
             <div className="row between" style={{ marginBottom: 7 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)" }}>Fonte.ia Pro</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-ink)" }}>7 dias de garantia</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-ink)" }}>7 dias grátis</span>
             </div>
             <button className="btn btn--accent btn--sm btn--block" type="button" onClick={() => go("/app/planos")} style={{ fontSize: 12 }}>
               <Zap size={13} fill="currentColor" aria-hidden="true" />Assinar agora

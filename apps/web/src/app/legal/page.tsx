@@ -548,10 +548,11 @@ function Termos() {
           mensalmente via cartão ou Pix; o plano Avaliação é gratuito. O cancelamento pode ser
           feito a qualquer momento no painel da conta, sem multa ou fidelidade.
         </P>
-        <Sub title="4.3 Garantia de 7 dias" />
+        <Sub title="4.3 Teste gratuito de 7 dias" />
         <P>
-          Planos pagos contam com garantia incondicional de devolução em 7 dias corridos a partir
-          da primeira cobrança. Solicitações:{" "}
+          Os planos pagos começam com 7 dias de teste gratuito: você não é cobrado nos primeiros
+          7 dias e pode cancelar a qualquer momento durante esse período, sem nenhum custo. Após o
+          teste, a cobrança mensal é iniciada automaticamente. Dúvidas:{" "}
           <a href="mailto:financeiro@olli.com.br" className="link">financeiro@olli.com.br</a>.
         </P>
         <Sub title="4.4 Alterações de preço" />

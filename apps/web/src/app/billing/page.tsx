@@ -74,7 +74,7 @@ export function BillingPage() {
         <p className="muted" style={{ maxWidth: 560, margin: "10px auto 0", lineHeight: 1.6 }}>
           Acesso completo aos leilões da Receita Federal: Raio-X com IA, análise do edital, alertas por e-mail
           e relatório PDF com rastreabilidade de fonte. Tudo pago, sem plano grátis.
-          7 dias de garantia — não gostou, devolvemos 100%.
+          Comece com 7 dias grátis — só cobramos depois, cancele antes e não paga nada.
         </p>
       </div>
 
@@ -136,7 +136,7 @@ export function BillingPage() {
       <div className="inset" style={{ marginTop: 16, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
         <ShieldCheck size={17} style={{ color: "var(--accent-ink)" }} aria-hidden="true" />
         <span className="small muted">
-          <strong className="t-hi">Garantia de 7 dias.</strong> Não gostou, devolvemos 100%. Pagamento seguro via Stripe (cartão e Pix).
+          <strong className="t-hi">7 dias grátis.</strong> Você só é cobrado após o período de teste; cancele antes e não paga nada. Pagamento seguro via Stripe (cartão e Pix).
           Não prometemos arremates ou lucro — entregamos informação rastreável para você decidir melhor.
         </span>
       </div>
