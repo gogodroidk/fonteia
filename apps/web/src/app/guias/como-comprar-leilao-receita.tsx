@@ -17,6 +17,7 @@ function P({ children }: { children: React.ReactNode }) {
         lineHeight: 1.75,
         color: "var(--t-mid)",
         marginBottom: "16px",
+        maxWidth: "68ch",
       }}
     >
       {children}
@@ -119,11 +120,11 @@ function Passo({
       <div style={{ flex: 1 }}>
         <h3
           style={{
-            fontSize: "17px",
-            fontWeight: 700,
+            fontSize: "20px",
+            fontWeight: 800,
             color: "var(--t-hi)",
             marginBottom: "10px",
-            lineHeight: 1.35,
+            lineHeight: 1.3,
           }}
         >
           {titulo}

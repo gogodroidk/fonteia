@@ -94,6 +94,11 @@ const TERMOS: TermoGlossario[] = [
   },
 ];
 
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+function termoSlug(termo: string): string {
+  return `termo-${termo.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 /* ── Página ──────────────────────────────────────────────────────────────── */
 export function GlossarioLeiloesPage() {
   const faqItems = TERMOS.map((t) => ({
@@ -133,6 +138,44 @@ export function GlossarioLeiloesPage() {
           .gloss-main   { padding-left: 20px !important; padding-right: 20px !important; }
           .gloss-footer { padding-left: 20px !important; padding-right: 20px !important; }
           .gloss-header nav { display: none !important; }
+          .gloss-jump-nav { column-count: 2 !important; }
+        }
+        @media (max-width: 420px) {
+          .gloss-jump-nav { column-count: 1 !important; }
+        }
+        .gloss-jump-link {
+          display: block;
+          min-height: 44px;
+          padding: 10px 12px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--t-mid);
+          text-decoration: none;
+          line-height: 1.3;
+          break-inside: avoid;
+          transition: background 0.12s, color 0.12s;
+        }
+        .gloss-jump-link:hover,
+        .gloss-jump-link:focus-visible {
+          background: color-mix(in srgb, var(--accent) 10%, transparent);
+          color: var(--accent-ink);
+          outline: 2px solid var(--accent);
+          outline-offset: 0px;
+        }
+        .gloss-term-card {
+          padding: 24px 24px 24px 20px;
+          border-radius: 10px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          border-left: 4px solid var(--border);
+          scroll-margin-top: 80px;
+          transition: border-left-color 0.15s;
+        }
+        .gloss-term-card:target,
+        .gloss-term-card:focus-within {
+          border-left-color: var(--accent);
+          outline: none;
         }
       `}</style>
 
@@ -265,13 +308,52 @@ export function GlossarioLeiloesPage() {
             </p>
           </header>
 
+          {/* ── Atalhos rápidos ────────────────────────────────────────── */}
+          <nav
+            aria-label="Pular para o termo"
+            style={{
+              marginBottom: "48px",
+              padding: "20px 20px 16px",
+              borderRadius: "10px",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+            }}
+          >
+            <p
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                letterSpacing: "0.10em",
+                textTransform: "uppercase",
+                color: "var(--t-low)",
+                marginBottom: "12px",
+              }}
+            >
+              Pular para o termo
+            </p>
+            <div
+              className="gloss-jump-nav"
+              style={{ columnCount: 3, columnGap: "4px" }}
+            >
+              {TERMOS.map((t) => (
+                <a
+                  key={t.termo}
+                  href={`#${termoSlug(t.termo)}`}
+                  className="gloss-jump-link"
+                >
+                  {t.termo}
+                </a>
+              ))}
+            </div>
+          </nav>
+
           {/* Glossário — lista de definições */}
           <section aria-label="Termos do glossário">
             <dl
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px",
+                gap: "12px",
                 margin: 0,
                 padding: 0,
               }}
@@ -279,9 +361,9 @@ export function GlossarioLeiloesPage() {
               {TERMOS.map((t) => (
                 <div
                   key={t.termo}
-                  className="card"
-                  id={`termo-${t.termo.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
-                  style={{ padding: "22px 24px" }}
+                  className="gloss-term-card"
+                  id={termoSlug(t.termo)}
+                  tabIndex={-1}
                   itemScope
                   itemType="https://schema.org/DefinedTerm"
                 >
