@@ -148,7 +148,7 @@ const FEATURES_SIGNUP = [
   { label: "Relatório PDF", detail: "com rastreabilidade até a origem" },
 ];
 
-const TRUST_ITEMS = ["Dado rastreável", "Sem cartão de crédito", "Cancele quando quiser"];
+const TRUST_ITEMS = ["Dado rastreável", "7 dias de garantia", "Cancele quando quiser"];
 
 // ─── Left brand panel ─────────────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
   const heroTag =
     mode === "login"
       ? "Inteligência de dados governamentais"
-      : "5 análises gratuitas · sem cartão";
+      : "7 dias de garantia · cancele quando quiser";
 
   const heroHeadline =
     mode === "login" ? (
@@ -177,7 +177,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
   const heroBody =
     mode === "login"
       ? "A Fonte.ia organiza cada lote de leilão da Receita Federal com os dados oficiais — lance mínimo, prazo e elegibilidade — e entrega rastreabilidade até a fonte. Mais órgãos em breve."
-      : "Crie sua conta e faça 5 análises completas de lotes da Receita Federal — score de oportunidade por regra, rastreabilidade até a fonte e assistente de IA. Sem cartão de crédito.";
+      : "Crie sua conta e analise lotes da Receita Federal — score de oportunidade por regra, rastreabilidade até a fonte e assistente de IA. 7 dias de garantia, cancele quando quiser.";
 
   return (
     <div className="auth-left-panel" style={{ flex: "0 0 52%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "48px 56px", background: "var(--bg)", position: "relative", overflow: "hidden" }}>
@@ -321,9 +321,11 @@ function PasswordField({
           type="button"
           onClick={() => setVisible((v) => !v)}
           title={visible ? "Ocultar senha" : "Ver senha"}
-          style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--t-low)", padding: 0, display: "flex", alignItems: "center" }}
+          aria-label={visible ? "Ocultar senha" : "Ver senha"}
+          aria-pressed={visible}
+          style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--t-low)", padding: 8, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 36 }}
         >
-          {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
     </div>
@@ -333,7 +335,7 @@ function PasswordField({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function LoginPage({ onGoToLanding }: LoginPageProps) {
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail, demoMode } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, demoMode } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
@@ -369,6 +371,21 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     }
   }
 
+  async function handleForgot() {
+    setError(null);
+    setSuccessMsg(null);
+    if (!email.trim()) {
+      setError("Digite seu e-mail no campo acima para receber o link de redefinição.");
+      return;
+    }
+    const result = await resetPassword(email.trim());
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setSuccessMsg("Se existir uma conta com esse e-mail, enviamos um link para você redefinir a senha.");
+    }
+  }
+
   function switchMode(next: AuthMode) {
     setMode(next);
     setError(null);
@@ -378,7 +395,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)", color: "var(--t-hi)" }}>
+    <div style={{ display: "flex", minHeight: "100dvh", background: "var(--bg)", color: "var(--t-hi)" }}>
 
       {/* ── Left brand panel (hidden on mobile) ── */}
       <LeftPanel mode={mode} />
@@ -430,9 +447,9 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 <>
                   Ou{" "}
                   <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("signup")}>
-                    inicie 5 análises gratuitas
+                    crie sua conta
                   </button>{" "}
-                  sem cadastro.
+                  em segundos.
                 </>
               ) : (
                 <>
@@ -533,14 +550,14 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             {/* Email */}
             <div className="auth-field" style={{ marginBottom: 16 }}>
               <label htmlFor="auth-email" className="auth-label">
-                {mode === "login" ? "E-mail corporativo" : "E-mail"}
+                E-mail
               </label>
               <input
                 id="auth-email"
                 type="email"
                 className="input"
                 autoComplete="email"
-                placeholder="voce@empresa.com.br"
+                placeholder="voce@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -561,14 +578,14 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 required
                 rightSlot={
                   mode === "login" ? (
-                    <span
+                    <button
+                      type="button"
                       className="link"
-                      style={{ fontSize: 12.5, cursor: "default" }}
-                      title="Entre em contato: suporte@fonteia.app"
-                      aria-label="Recuperação de senha: entre em contato com suporte@fonteia.app"
+                      style={{ fontSize: 12.5, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                      onClick={() => void handleForgot()}
                     >
                       Esqueceu?
-                    </span>
+                    </button>
                   ) : undefined
                 }
               />
@@ -586,7 +603,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
               ) : mode === "login" ? (
                 "Entrar"
               ) : (
-                "Criar conta grátis"
+                "Criar conta"
               )}
             </button>
           </form>
@@ -597,7 +614,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
               <>
                 Não tem conta?{" "}
                 <button type="button" className="link" style={{ fontSize: 12.5 }} onClick={() => switchMode("signup")}>
-                  Criar grátis
+                  Criar conta
                 </button>
                 {"  ·  "}
                 <button type="button" className="link" style={{ fontSize: 12.5 }} onClick={onGoToLanding}>

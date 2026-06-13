@@ -11,6 +11,7 @@ export interface AuthContextValue {
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -124,6 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   }
 
+  async function resetPassword(email: string): Promise<{ error: string | null }> {
+    if (!isSupabaseConfigured || !supabase) {
+      // Modo demo: não há backend de e-mail; respondemos como sucesso silencioso.
+      return { error: null };
+    }
+    const redirectTo = `${window.location.origin}/entrar`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    return { error: error?.message ?? null };
+  }
+
   async function signOut() {
     if (!isSupabaseConfigured || !supabase) {
       saveDemoUser(null);
@@ -143,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithGoogle,
         signInWithEmail,
         signUpWithEmail,
+        resetPassword,
         signOut,
       }}
     >

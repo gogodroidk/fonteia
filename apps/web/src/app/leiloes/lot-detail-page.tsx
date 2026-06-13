@@ -22,11 +22,14 @@ import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LotEconomia } from "@fonteia/scoring";
 import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
-import { Bar, FonteDots, riscoBadge } from "../../components/ui";
+import { Bar, FonteDots } from "../../components/ui";
 import { getConfiguredApiUrl, getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
 import { displayCity } from "../../lib/receita-localidades";
 import { useAuth } from "../../auth/auth-context";
 import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-detalhe-api";
+import { ComoDarLance } from "../../components/como-dar-lance";
+import { estimarCustoTotal } from "../../lib/custo-total";
+import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -590,9 +593,14 @@ export function LotDetailPage({
   const days = daysUntilDeadline(lot.proposalDeadline);
   const dlStatus = deadlineStatus(days);
   const dlTone = deadlineTone(dlStatus);
-  const { className: riscoBadgeClass, label: riscoBadgeLabel } = riscoBadge(
-    scoring.label === "alto" ? "baixo" : scoring.label === "medio" ? "medio" : "alto",
-  );
+  // Confiança da oportunidade (NÃO risco): "alto" do scoring = melhor lote.
+  // O selo positivo evita pintar o melhor lote de "Risco baixo" (semântica invertida).
+  const confianca =
+    scoring.label === "alto"
+      ? { className: "badge--ok", label: "Alta oportunidade" }
+      : scoring.label === "medio"
+        ? { className: "badge--warn", label: "Oportunidade media" }
+        : { className: "badge--neutral", label: "Avaliar com cautela" };
   const riskBars = buildRiskBars(scoring, lot);
 
   // Detalhe rico do lote (descrição dos bens, quantidade, recinto, avisos, fotos):
@@ -631,6 +639,24 @@ export function LotDetailPage({
   const itemTitle = detalhe?.titulo ?? null;
   const cityLabel = displayCity(lot.city);
   const avisos = detalhe?.avisos ?? [];
+
+  // Referência de mercado (FIPE) só para veículos — match heurístico, nunca chuta.
+  const [fipe, setFipe] = useState<FipePrecoResponse | null>(null);
+  useEffect(() => {
+    if (!isVeiculo(lot.category)) {
+      setFipe(null);
+      return;
+    }
+    let cancelled = false;
+    const termo = detalhe?.titulo ?? lot.category ?? "";
+    void fetchFipePreco(termo, lot.category).then((r) => {
+      if (!cancelled) setFipe(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lot.id, lot.category, detalhe?.titulo]);
 
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
@@ -720,11 +746,27 @@ export function LotDetailPage({
   }, []);
 
   function handleSaveAlert() {
+    // Persiste de verdade neste navegador (radar local) — nada de "falso sucesso".
+    try {
+      const raw = window.localStorage.getItem("fonteia_alerts");
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      const list = Array.isArray(parsed) ? parsed : [];
+      list.push({
+        lotId: lot.id,
+        edital: lot.edital,
+        name: alertName,
+        channel: alertChannel,
+        createdAt: new Date().toISOString(),
+      });
+      window.localStorage.setItem("fonteia_alerts", JSON.stringify(list));
+    } catch {
+      // localStorage indisponível: segue sem quebrar.
+    }
     setAlertOpen(false);
-    setSuccessMessage("✓ Alerta criado no app. E-mail e WhatsApp ficam para a proxima etapa.");
+    setSuccessMessage("✓ Lote salvo no seu radar (neste navegador). Avisos por e-mail/WhatsApp entram em breve.");
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
-    }, 3000);
+    }, 4000);
   }
 
   // Evidence for EvidencePanel
@@ -826,9 +868,9 @@ export function LotDetailPage({
 
             {/* Badges de identidade */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s-2)" }}>
-              <span className={`badge ${riscoBadgeClass}`}>
+              <span className={`badge ${confianca.className}`}>
                 <ShieldCheck aria-hidden="true" size={12} />
-                {riscoBadgeLabel}
+                {confianca.label}
               </span>
               <span className="badge badge--neutral" style={{ fontFamily: "monospace" }}>
                 Lote {lot.displayNumber}
@@ -1047,6 +1089,93 @@ export function LotDetailPage({
 
             {successMessage ? (
               <div className="lot-success-message">{successMessage}</div>
+            ) : null}
+          </section>
+
+          {/* ── Como dar lance (guia honesto pra quem nunca participou) ────── */}
+          <ComoDarLance sourceUrl={lot.sourceUrl} />
+
+          {/* ── Custo total estimado (o que realmente sai do bolso) ───────── */}
+          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+            <div>
+              <span className="section-label">Quanto voce paga de verdade</span>
+              <h3 style={{ marginTop: "var(--s-1)" }}>Custo total estimado</h3>
+            </div>
+            {(() => {
+              const custo = estimarCustoTotal({ lanceCents: lot.minimumBidCents });
+              const rowTd: React.CSSProperties = {
+                padding: "10px 0",
+                fontSize: "0.9rem",
+                color: "var(--n-600)",
+                borderBottom: "1px solid var(--n-100)",
+              };
+              const valTd: React.CSSProperties = {
+                padding: "10px 0",
+                textAlign: "right",
+                fontWeight: 700,
+                color: "var(--n-700)",
+                fontVariantNumeric: "tabular-nums",
+                borderBottom: "1px solid var(--n-100)",
+              };
+              return (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <tbody>
+                    <tr>
+                      <td style={rowTd}>Lance minimo</td>
+                      <td style={valTd}>{formatBRL(custo.lanceCents / 100)}</td>
+                    </tr>
+                    <tr>
+                      <td style={rowTd}>Comissao do leiloeiro (5%)</td>
+                      <td style={valTd}>{formatBRL(custo.comissaoCents / 100)}</td>
+                    </tr>
+                    <tr>
+                      <td style={{ ...rowTd, borderBottom: "none", fontWeight: 800, color: "var(--n-900)" }}>
+                        Custo estimado (no minimo)
+                      </td>
+                      <td style={{ ...valTd, borderBottom: "none", fontWeight: 800, fontSize: "1.1rem", color: "var(--g-700)" }}>
+                        {formatBRL(custo.totalCents / 100)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              );
+            })()}
+            <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
+              Estimativa: lance + comissao padrao de 5% do leiloeiro. <strong>Nao inclui</strong> tributos
+              (ICMS/IOF), retirada, frete e encargos — que variam por edital. Confirme no edital antes de propor.
+            </p>
+
+            {/* Referência de mercado (FIPE) — só veículos, só quando casou com confiança */}
+            {fipe?.encontrado ? (
+              <div
+                style={{
+                  marginTop: "var(--s-2)",
+                  padding: "var(--s-3) var(--s-4)",
+                  borderRadius: "0 var(--r-md) var(--r-md) 0",
+                  background: "var(--g-50)",
+                  border: "1px solid var(--n-100)",
+                  borderLeft: "3px solid var(--g-500)",
+                }}
+              >
+                <span className="section-label">Referencia de mercado (FIPE)</span>
+                <strong
+                  style={{
+                    display: "block",
+                    marginTop: "var(--s-1)",
+                    fontSize: "1.2rem",
+                    fontWeight: 800,
+                    color: "var(--g-700)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {formatBRL(fipe.fipeCents / 100)}
+                </strong>
+                <span style={{ fontSize: "0.78rem", color: "var(--n-500)" }}>{fipe.modelo}</span>
+                <p style={{ fontSize: "0.72rem", color: "var(--n-400)", margin: "var(--s-2) 0 0", lineHeight: 1.5 }}>
+                  Valor FIPE de referencia — nao e o valor do bem leiloado (pode ter avarias ou faltar
+                  documento). Use como orientacao e confirme.
+                </p>
+              </div>
             ) : null}
           </section>
 

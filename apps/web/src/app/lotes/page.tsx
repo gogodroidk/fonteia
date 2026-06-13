@@ -21,6 +21,7 @@ export interface LotesPageProps {
 type SortKey = "score" | "desconto" | "prazo" | "valor";
 type PersonFilter = "todos" | "pf" | "pj";
 type DescontoFilter = "todos" | "30" | "50";
+type StatusFilter = "todos" | "abertos" | "encerrados";
 
 interface LotView {
   lot: ReceitaLeilaoLot;
@@ -56,6 +57,12 @@ const DESCONTO_OPTIONS: ReadonlyArray<readonly [DescontoFilter, string]> = [
   ["todos", "Qualquer"],
   ["30", "≥ 30%"],
   ["50", "≥ 50%"],
+];
+
+const STATUS_OPTIONS: ReadonlyArray<readonly [StatusFilter, string]> = [
+  ["todos", "Todos"],
+  ["abertos", "Abertos"],
+  ["encerrados", "Encerrados"],
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -120,6 +127,73 @@ function matchesSearch(lot: ReceitaLeilaoLot, q: string): boolean {
     ].join(" "),
   );
   return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
+// ─── CSV export ──────────────────────────────────────────────────────────────
+
+function escapeCsvCell(value: string): string {
+  // Wrap in quotes if value contains ; " or newline; always escape internal quotes.
+  const escaped = value.replace(/"/g, '""');
+  if (escaped.includes(";") || escaped.includes('"') || escaped.includes("\n")) {
+    return `"${escaped}"`;
+  }
+  return escaped;
+}
+
+function exportCsv(views: LotView[]): void {
+  const BOM = "﻿";
+  const headers = [
+    "Cidade",
+    "Órgão",
+    "Edital",
+    "Lote",
+    "Categoria",
+    "Lance mínimo (R$)",
+    "Avaliação (R$)",
+    "Desconto (%)",
+    "Prazo",
+    "Status",
+    "Link",
+  ];
+
+  const rows = views.map(({ lot, economia }) => {
+    const days = daysUntil(lot.proposalDeadline);
+    const status = days < 0 ? "Encerrado" : "Aberto";
+    const lanceMinimoVal = (lot.minimumBidCents / 100).toFixed(2).replace(".", ",");
+    const avaliacaoVal =
+      economia !== null
+        ? (economia.avaliacaoCents / 100).toFixed(2).replace(".", ",")
+        : "";
+    const descontoPct =
+      economia !== null ? String(economia.descontoPct).replace(".", ",") : "";
+
+    return [
+      displayCity(lot.city),
+      lot.agency,
+      lot.edital,
+      lot.displayNumber,
+      lot.category ?? "",
+      lanceMinimoVal,
+      avaliacaoVal,
+      descontoPct,
+      formatDeadlineShort(lot.proposalDeadline),
+      status,
+      lot.sourceUrl ?? "",
+    ]
+      .map(escapeCsvCell)
+      .join(";");
+  });
+
+  const content = BOM + [headers.map(escapeCsvCell).join(";"), ...rows].join("\r\n");
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `lotes-fonteia-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ─── Skeleton card ───────────────────────────────────────────────────────────
@@ -195,6 +269,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
   const { lot, scoring, economia } = view;
   const badge = confidenceBadge(scoring.label);
   const days = daysUntil(lot.proposalDeadline);
+  const isEncerrado = days < 0;
   const cardLabel = `Lote ${lot.displayNumber} — ${lot.agency}, ${displayCity(lot.city)}`;
 
   return (
@@ -221,7 +296,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
         style={{
           height: 132,
           background: lot.imageUrl
-            ? `url(${lot.imageUrl}) center/cover no-repeat`
+            ? "linear-gradient(135deg, #1a2e52, #0c1c3a)"
             : "linear-gradient(135deg, #1a2e52, #0c1c3a)",
           position: "relative",
           display: "flex",
@@ -229,11 +304,55 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
           padding: "10px 12px",
         }}
       >
-        {/* Heart toggle — top right */}
-        <HeartButton watched={watched} onToggle={onToggleWatch} lotLabel={`lote ${lot.displayNumber}`} />
+        {/* Lazy-loaded cover image — rendered as <img> for native browser lazy-load */}
+        {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
+          <img
+            src={lot.imageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+              // Ensure overlays sit above this image via stacking context on parent
+            }}
+          />
+        )}
 
-        {/* Category chip — top left, when present */}
-        {lot.category && (
+        {/* "Encerrado" seal — top-right corner when encerrado (below the heart so heart stays clickable) */}
+        {isEncerrado && (
+          <span
+            aria-label="Lote encerrado"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              background: "color-mix(in srgb, var(--danger) 88%, #000)",
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 800,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              padding: "3px 8px",
+              borderBottomRightRadius: "var(--r-sm)",
+              zIndex: 3,
+            }}
+          >
+            Encerrado
+          </span>
+        )}
+
+        {/* Heart toggle — top right; zIndex above img and seal */}
+        <div style={{ position: "absolute", top: 0, right: 0, zIndex: 4 }}>
+          <HeartButton watched={watched} onToggle={onToggleWatch} lotLabel={`lote ${lot.displayNumber}`} />
+        </div>
+
+        {/* Category chip — top left (below encerrado seal when both present) */}
+        {lot.category && !isEncerrado && (
           <span
             className="badge badge--neutral"
             style={{
@@ -245,6 +364,25 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
               textTransform: "capitalize",
+              zIndex: 2,
+            }}
+          >
+            {lot.category.toLowerCase()}
+          </span>
+        )}
+        {lot.category && isEncerrado && (
+          <span
+            className="badge badge--neutral"
+            style={{
+              position: "absolute",
+              top: 28,
+              left: 12,
+              maxWidth: "60%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              textTransform: "capitalize",
+              zIndex: 2,
             }}
           >
             {lot.category.toLowerCase()}
@@ -260,6 +398,8 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
               color: "#fff",
               fontWeight: 800,
               boxShadow: "var(--shadow-sm)",
+              position: "relative",
+              zIndex: 2,
             }}
           >
             -{economia.descontoPct}% vs avaliação
@@ -267,8 +407,8 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
         )}
 
         {/* Score ring on the gradient when there is no photo */}
-        {!lot.imageUrl && (
-          <div style={{ position: "absolute", bottom: 10, right: 12 }}>
+        {(lot.imageUrl === undefined || lot.imageUrl === "") && (
+          <div style={{ position: "absolute", bottom: 10, right: 12, zIndex: 2 }}>
             <ScoreRing value={scoring.score} size={48} />
           </div>
         )}
@@ -306,7 +446,9 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
               {lot.edital}
             </div>
           </div>
-          {lot.imageUrl && <ScoreRing value={scoring.score} size={44} />}
+          {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
+            <ScoreRing value={scoring.score} size={44} />
+          )}
         </div>
 
         {/* Confidence badge */}
@@ -460,6 +602,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   const [city, setCity] = useState("todas");
   const [person, setPerson] = useState<PersonFilter>("todos");
   const [desconto, setDesconto] = useState<DescontoFilter>("todos");
+  const [status, setStatus] = useState<StatusFilter>("abertos");
   const [sortKey, setSortKey] = useState<SortKey>("score");
 
   // ── Paginação por scroll (cresce sozinha ao rolar, sem clicar) ──────────────
@@ -548,6 +691,12 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
         const threshold = Number(desconto);
         if (!economia || economia.descontoPct < threshold) return false;
       }
+      // Status filter
+      if (status !== "todos") {
+        const isEncerrado = daysUntil(lot.proposalDeadline) < 0;
+        if (status === "abertos" && isEncerrado) return false;
+        if (status === "encerrados" && !isEncerrado) return false;
+      }
       return true;
     });
 
@@ -564,12 +713,12 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       }
       return a.lot.minimumBidCents - b.lot.minimumBidCents;
     });
-  }, [views, query, category, city, person, desconto, sortKey]);
+  }, [views, query, category, city, person, desconto, status, sortKey]);
 
   // Reinicia a janela ao mudar busca/filtros/ordenação.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, category, city, person, desconto, sortKey]);
+  }, [query, category, city, person, desconto, status, sortKey]);
 
   // Carrega mais lotes automaticamente quando o sentinela entra na viewport.
   useEffect(() => {
@@ -585,7 +734,9 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [filtered.length, visibleCount]);
+    // Depende só de filtered.length: o observer persiste enquanto a janela cresce
+    // (não recriar a cada visibleCount evita o disparo em cascata).
+  }, [filtered.length]);
 
   const visibleViews = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
@@ -597,6 +748,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     setCity("todas");
     setPerson("todos");
     setDesconto("todos");
+    setStatus("abertos");
     setSortKey("score");
   }
 
@@ -605,7 +757,8 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     category !== "todas" ||
     city !== "todas" ||
     person !== "todos" ||
-    desconto !== "todos";
+    desconto !== "todos" ||
+    status !== "abertos";
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -665,6 +818,12 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
 
         {/* Filter selects — wrap on mobile, never overflow */}
         <div className="row wrap" style={{ gap: 10 }}>
+          <FilterSelect
+            label="Status"
+            value={status}
+            options={STATUS_OPTIONS}
+            onChange={setStatus}
+          />
           {hasAnyCategory && (
             <FilterSelect
               label="Categoria"
@@ -735,11 +894,23 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
               </>
             )}
           </span>
-          {hasActiveFilters && (
-            <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
-              Limpar filtros
-            </button>
-          )}
+          <div className="row" style={{ gap: 8 }}>
+            {filtered.length > 0 && (
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={() => exportCsv(filtered)}
+                type="button"
+                title="Baixar CSV com os lotes filtrados"
+              >
+                Exportar CSV
+              </button>
+            )}
+            {hasActiveFilters && (
+              <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
+                Limpar filtros
+              </button>
+            )}
+          </div>
         </div>
       )}
 
