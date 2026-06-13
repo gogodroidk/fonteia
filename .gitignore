@@ -14,3 +14,6 @@ coverage/
 android/
 ios/
 
+
+# Claude Code local state (worktrees + symlinks de skills)
+.claude/
