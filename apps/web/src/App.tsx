@@ -12,6 +12,7 @@ import {
   Menu,
   Search,
   ShieldCheck,
+  Sparkles,
   User,
   X,
   Zap,
@@ -345,6 +346,19 @@ function AppShell({ path, navigate }: AppShellProps) {
         </main>
       </div>
 
+      {/* floating "Perguntar" button — mobile only, sits above the bottom nav */}
+      {route !== "search" && (
+        <button
+          type="button"
+          className="shell-fab no-print"
+          onClick={() => goToSearch()}
+          aria-label="Perguntar com IA"
+          title="Perguntar"
+        >
+          <Sparkles size={24} strokeWidth={2.1} aria-hidden="true" />
+        </button>
+      )}
+
       {/* bottom nav mobile */}
       <nav className="shell-bottomnav no-print" aria-label="Navegação rápida">
         {NAV.map((item) => {
@@ -402,9 +416,10 @@ function AppShell({ path, navigate }: AppShellProps) {
         /* ---- Main content ---- */
         .shell-content{flex:1 1 auto;min-width:0;padding:22px clamp(16px,3vw,28px)}
 
-        /* ---- Burger + bottom nav: hidden on desktop ---- */
+        /* ---- Burger + bottom nav + mobile FAB: hidden on desktop ---- */
         .shell-burger{display:none}
         .shell-bottomnav{display:none}
+        .shell-fab{display:none}
 
         /* ---- Drawer / scrim entrance ---- */
         .shell-scrim{animation:shellFade .18s ease}
@@ -446,6 +461,27 @@ function AppShell({ path, navigate }: AppShellProps) {
             max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
           }
           .shell-bottomnav-item:active{transform:scale(.94)}
+
+          /* ---- Floating "Perguntar" (AI) button ---- */
+          .shell-fab{
+            display:inline-flex;align-items:center;justify-content:center;
+            position:fixed;z-index:35;
+            right:max(16px,calc(env(safe-area-inset-right) + 16px));
+            bottom:calc(64px + env(safe-area-inset-bottom) + 16px);
+            width:56px;height:56px;min-width:44px;min-height:44px;
+            border:0;border-radius:50%;cursor:pointer;
+            color:#fff;
+            background:linear-gradient(140deg,var(--brand-2),var(--brand));
+            box-shadow:0 12px 28px rgba(29,95,224,.42),0 4px 10px rgba(11,34,64,.18),inset 0 1px 0 rgba(255,255,255,.25);
+            -webkit-tap-highlight-color:transparent;
+            transition:transform .16s cubic-bezier(.2,.7,.3,1),box-shadow .2s;
+          }
+          .shell-fab:hover{transform:translateY(-2px);box-shadow:0 18px 38px rgba(29,95,224,.5),0 6px 14px rgba(11,34,64,.2)}
+          .shell-fab:active{transform:scale(.94)}
+          @media (prefers-reduced-motion:reduce){
+            .shell-fab{transition:none}
+            .shell-fab:hover,.shell-fab:active{transform:none}
+          }
         }
 
         /* =========================================================
