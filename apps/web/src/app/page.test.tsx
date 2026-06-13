@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PRODUCT_MODULES } from "@fonteia/domain";
+import { BILLING_PLANS } from "@fonteia/billing";
 import { DashboardPage } from "./page";
 import { BillingPage } from "./billing/page";
 import { ModulesPage } from "./modules/page";
@@ -35,8 +36,9 @@ describe("Fonte.ia web shell", () => {
     const html = renderToStaticMarkup(<BillingPage />);
 
     expect(html).toContain("Planos para vender");
-    expect(html).toContain("Individual");
-    expect(html).toContain("Business");
     expect(html).toContain("upsells visiveis");
+    for (const plan of BILLING_PLANS) {
+      expect(html).toContain(plan.name);
+    }
   });
 });

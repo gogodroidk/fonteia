@@ -9,9 +9,9 @@ import { ScoreRing } from "../../components/score-ring";
 interface LotDetailPageProps {
   lot: ReceitaLeilaoLot;
   onBack: () => void;
-  onAsk?: (question: string) => void;
-  isDemo?: boolean;
-  dataMessage?: string;
+  onAsk?: ((question: string) => void) | undefined;
+  isDemo?: boolean | undefined;
+  dataMessage?: string | undefined;
 }
 
 type AlertChannel = "in_app" | "email" | "whatsapp";

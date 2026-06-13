@@ -5,7 +5,7 @@ import { openCookieSettings } from "../../lib/consent";
 interface AccountPageProps {
   name: string;
   email: string;
-  avatarUrl?: string;
+  avatarUrl?: string | undefined;
   onSignOut: () => void;
 }
 

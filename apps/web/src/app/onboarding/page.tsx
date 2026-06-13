@@ -3,7 +3,7 @@ import { Bell, Mail, MessageCircle, Search, Sparkles, Target, TrendingUp } from 
 import { saveOnboardingPrefs } from "../../lib/onboarding";
 
 interface OnboardingPageProps {
-  name?: string;
+  name?: string | undefined;
   onFinish: () => void;
 }
 
