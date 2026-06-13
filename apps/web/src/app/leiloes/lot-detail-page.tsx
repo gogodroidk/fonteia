@@ -32,6 +32,7 @@ import { ComoDarLance } from "../../components/como-dar-lance";
 import { estimarCustoTotal } from "../../lib/custo-total";
 import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
 import { supabase } from "../../auth/supabase-client";
+import { usePlan } from "../../lib/use-plan";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -630,6 +631,7 @@ export function LotDetailPage({
   // Detalhe rico do lote (descrição dos bens, quantidade, recinto, avisos, fotos):
   // o catálogo não traz isso, então buscamos sob demanda do SLE via Edge Function.
   const { session } = useAuth();
+  const { isPro } = usePlan();
   const [detalhe, setDetalhe] = useState<LoteDetalhe | null>(null);
 
   useEffect(() => {
@@ -712,6 +714,9 @@ export function LotDetailPage({
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
   const [editalLoading, setEditalLoading] = useState(false);
+  const [editalIA, setEditalIA] = useState<string | null>(null);
+  const [editalIALoading, setEditalIALoading] = useState(false);
+  const [editalIAError, setEditalIAError] = useState<string | null>(null);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
   const [alertChannel, setAlertChannel] = useState<AlertChannel>("in_app");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -799,6 +804,11 @@ export function LotDetailPage({
 
   async function handleSaveAlert() {
     setAlertOpen(false);
+    if (!isPro) {
+      setSuccessMessage("Alertas por e-mail sao do plano Profissional. Assine (ou use o cupom de teste) para receber avisos de prazo.");
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 6000);
+      return;
+    }
     const email = session?.user?.email ?? "";
     if (supabase && email) {
       // Alerta REAL no servidor (RPC create_alert) — dispara e-mail quando o prazo chega.
@@ -858,6 +868,42 @@ export function LotDetailPage({
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setEditalLoading(false);
+    }
+  }
+
+  async function analisarEdital() {
+    if (!isPro) {
+      setEditalIA(null);
+      setEditalIAError("A analise do edital por IA e do plano Profissional. Assine (ou use o cupom de teste) para destravar.");
+      return;
+    }
+    setEditalIALoading(true);
+    setEditalIAError(null);
+    setEditalIA(null);
+    try {
+      const base = getConfiguredApiUrl();
+      if (!base) throw new Error("Backend nao configurado.");
+      const { key } = getSupabasePublicConfig();
+      const res = await fetch(`${trimTrailingSlash(base)}/ia/edital`, {
+        method: "POST",
+        headers: { "content-type": "application/json", apikey: key },
+        body: JSON.stringify({ edle: lot.edle }),
+      });
+      const data = (await res.json()) as { answer?: string; error?: string; message?: string };
+      if (res.status === 404) {
+        setEditalIAError("Este edital ainda nao tem PDF publicado no SLE.");
+        return;
+      }
+      if (res.status === 503) {
+        setEditalIAError("A analise por IA ainda nao foi ativada.");
+        return;
+      }
+      if (!res.ok || !data.answer) throw new Error(data.message ?? data.error ?? `Erro ${res.status}`);
+      setEditalIA(data.answer);
+    } catch (e) {
+      setEditalIAError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setEditalIALoading(false);
     }
   }
 
@@ -1186,6 +1232,20 @@ export function LotDetailPage({
               </button>
               <button
                 className="ghost-button lot-hero-action"
+                onClick={() => void analisarEdital()}
+                type="button"
+                disabled={editalIALoading}
+                title={isPro ? "Analisar o edital com IA" : "Recurso do plano Profissional"}
+              >
+                {editalIALoading ? (
+                  <Loader2 aria-hidden="true" size={16} className="spin" />
+                ) : (
+                  <Sparkles aria-hidden="true" size={16} />
+                )}
+                Analisar edital com IA
+              </button>
+              <button
+                className="ghost-button lot-hero-action"
                 onClick={() => {
                   window.print();
                 }}
@@ -1200,6 +1260,38 @@ export function LotDetailPage({
               <div className="lot-success-message">{successMessage}</div>
             ) : null}
           </section>
+
+          {/* ── Análise do edital por IA (Pro: Gemini lê o PDF inteiro) ────── */}
+          {editalIA || editalIAError || editalIALoading ? (
+            <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+              <div>
+                <span className="section-label">Análise do edital por IA</span>
+                <h3 style={{ marginTop: "var(--s-1)", display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
+                  <Sparkles aria-hidden="true" size={16} /> O que diz o edital
+                </h3>
+              </div>
+              {editalIALoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", color: "var(--n-500)", fontSize: "0.85rem" }}>
+                  <Loader2 size={16} className="spin" aria-hidden="true" /> Lendo o edital oficial…
+                </div>
+              ) : editalIAError ? (
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--n-600)" }}>{editalIAError}</p>
+              ) : editalIA ? (
+                <div style={{ fontSize: "0.88rem", lineHeight: 1.65, color: "var(--n-700)" }}>
+                  {editalIA.split("\n").map((line, i) =>
+                    line.trim() === "" ? (
+                      <div key={i} style={{ height: "var(--s-2)" }} />
+                    ) : (
+                      <p key={i} style={{ margin: "0 0 var(--s-2)" }}>{renderInline(line)}</p>
+                    ),
+                  )}
+                  <p style={{ margin: "var(--s-2) 0 0", fontSize: "0.72rem", color: "var(--n-400)" }}>
+                    Análise por IA do PDF oficial do edital. Confirme tudo no edital antes de dar lance.
+                  </p>
+                </div>
+              ) : null}
+            </section>
+          ) : null}
 
           {/* ── Como dar lance (guia honesto pra quem nunca participou) ────── */}
           <ComoDarLance sourceUrl={lot.sourceUrl} />
