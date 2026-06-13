@@ -1,5 +1,11 @@
 # fonteia-api
 
+> **Nota:** o caminho padrão do produto agora é a **Supabase Edge Function**
+> (`supabase/functions/fonteia`), porque é lá que a chave da Anthropic está
+> guardada. Este Worker Cloudflare é uma **alternativa** equivalente (mesmas
+> rotas) — útil se você preferir rodar o backend na Cloudflare. Para usá-lo,
+> defina `VITE_API_URL` para a URL deste Worker no build do front.
+
 Backend público (somente leitura) do app Fonte.ia. Entrega os dados **reais** dos
 leilões da Receita Federal e a análise por IA de cada lote.
 
