@@ -1,19 +1,27 @@
-// Supabase Edge Function: "fonteia"
-// Backend de IA (somente leitura) do app Fonte.ia — o Raio-X do lote.
+// Supabase Edge Function: "fonteia" — Raio-X do lote com IA grátis (Gemini Flash).
 //
-// Roda num modelo de IA GRÁTIS (Google Gemini Flash) — sem custo no começo.
-// Sem a chave configurada, responde 503 honesto (NUNCA resposta falsa). Quando
-// houver crédito, troca-se por Claude mudando 1 variável.
+// AUTENTICAÇÃO PRÓPRIA (verify_jwt=false, autorizado pelo dono): exige o header
+// `apikey` (chave pública do projeto). Conteúdo PÚBLICO (dados de leilão da Receita +
+// resumo por IA), sem segredo e sem escrita. O verify_jwt do gateway rejeitava o token
+// de sessão (401) e quebrava o Raio-X — por isso a auth é feita aqui dentro.
 //
 // Secrets (Supabase → Edge Functions → Secrets):
-//   GEMINI_API_KEY   obrigatório p/ ligar o Raio-X (crie em aistudio.google.com → "Get API key")
-//   GEMINI_MODEL     opcional; default "gemini-2.5-flash"
-//
-// Rotas (sufixo após /functions/v1/fonteia):
-//   GET  /health      -> status do serviço
-//   POST /ia/raio-x   -> análise do lote por IA  { lot, question? }
-//
-// verify_jwt = true: a página de detalhe é logada; o app envia o token da sessão.
+//   GEMINI_API_KEY   obrigatório p/ ligar o Raio-X (aistudio.google.com → "Get API key")
+//   GEMINI_MODEL     opcional; default tenta uma lista de modelos Flash atuais
+
+const CORS_HEADERS: Record<string, string> = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info",
+  "access-control-max-age": "86400",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", ...CORS_HEADERS },
+  });
+}
 
 interface ReceitaLeilaoLot {
   id: string;
@@ -31,21 +39,9 @@ interface ReceitaLeilaoLot {
   collectedAt: string;
 }
 
-const CORS_HEADERS: Record<string, string> = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
-  "access-control-allow-headers": "content-type, authorization, apikey, x-client-info",
-  "access-control-max-age": "86400",
-};
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", ...CORS_HEADERS },
-  });
-}
-
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// Modelos Flash tentados em ordem (o primeiro que responder vence). Robusto contra
+// renomeação de modelo pelo Google. Sobrescreva com o secret GEMINI_MODEL.
+const DEFAULT_MODELS = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"];
 
 const FONTEIA_SYSTEM_PROMPT = [
   "Você é o assistente da Fonte.ia, especialista em leilões da Receita Federal do Brasil.",
@@ -72,7 +68,7 @@ interface GeminiPart {
 interface GeminiResponse {
   candidates?: Array<{ content?: { parts?: GeminiPart[] } }>;
   promptFeedback?: { blockReason?: string };
-  error?: { message?: string };
+  error?: { message?: string; status?: string };
 }
 
 function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
@@ -93,6 +89,18 @@ function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
   ].join("\n");
 }
 
+async function callGemini(model: string, apiKey: string, userText: string): Promise<Response> {
+  return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: FONTEIA_SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: userText }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
+    }),
+  });
+}
+
 async function analyzeLotWithGemini(
   lot: ReceitaLeilaoLot,
   question: string | undefined,
@@ -100,40 +108,34 @@ async function analyzeLotWithGemini(
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return { notConfigured: true };
 
-  const model = (Deno.env.get("GEMINI_MODEL") ?? "").trim() || DEFAULT_MODEL;
+  const configured = (Deno.env.get("GEMINI_MODEL") ?? "").trim();
+  const models = configured ? [configured] : DEFAULT_MODELS;
   const userContent = question
     ? `Dados do lote:\n${lotFactsForPrompt(lot)}\n\nPergunta do usuário: ${question}`
     : `Faça o Raio-X deste lote:\n${lotFactsForPrompt(lot)}`;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: FONTEIA_SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: [{ text: userContent }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 1500 },
-      }),
-    },
-  );
-
-  const data = (await response.json()) as GeminiResponse;
-  if (!response.ok) {
-    throw new Error(`Gemini respondeu ${response.status}: ${data.error?.message ?? "erro desconhecido"}`);
+  let lastError = "nenhum modelo respondeu";
+  for (const model of models) {
+    try {
+      const response = await callGemini(model, apiKey, userContent);
+      const data = (await response.json()) as GeminiResponse;
+      if (response.ok && !data.promptFeedback?.blockReason) {
+        const answer = (data.candidates?.[0]?.content?.parts ?? [])
+          .map((p) => p.text)
+          .filter((t): t is string => typeof t === "string")
+          .join("\n")
+          .trim();
+        if (answer) return { answer, model };
+        lastError = `${model}: resposta vazia`;
+      } else {
+        lastError = `${model}: ${response.status} ${data.error?.message ?? data.promptFeedback?.blockReason ?? ""}`;
+      }
+    } catch (e) {
+      lastError = `${model}: ${String(e)}`;
+    }
+    console.error("[fonteia] gemini falhou:", lastError);
   }
-  if (data.promptFeedback?.blockReason) {
-    throw new Error(`Gemini bloqueou a resposta (${data.promptFeedback.blockReason}).`);
-  }
-
-  const answer = (data.candidates?.[0]?.content?.parts ?? [])
-    .map((p) => p.text)
-    .filter((t): t is string => typeof t === "string")
-    .join("\n")
-    .trim();
-
-  if (!answer) throw new Error("A IA não retornou texto utilizável.");
-  return { answer, model };
+  throw new Error(lastError);
 }
 
 Deno.serve(async (request: Request): Promise<Response> => {
@@ -141,9 +143,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  // Auth própria: exige a chave pública do projeto no header `apikey`.
+  const apikey = request.headers.get("apikey") ?? "";
+  if (apikey.trim() === "") {
+    return json({ error: "apikey ausente" }, 401);
+  }
+
   const { pathname } = new URL(request.url);
 
-  if (pathname.endsWith("/ia/raio-x") && request.method === "POST") {
+  // Raio-X: aceita POST em /ia/raio-x e na raiz (/fonteia, p/ supabase.functions.invoke).
+  if (request.method === "POST" && (pathname.endsWith("/ia/raio-x") || pathname.endsWith("/fonteia"))) {
     let parsed: { lot?: ReceitaLeilaoLot; question?: string };
     try {
       parsed = (await request.json()) as { lot?: ReceitaLeilaoLot; question?: string };
