@@ -533,7 +533,14 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
           <b>{formatBRL(lot.minimumBidCents / 100)}</b>
         </div>
         <div className="report-row">
-          <span>Lance maximo sugerido (scoring)</span>
+          <span>
+            Teto sugerido por regra{" "}
+            <span style={{ fontSize: "0.7rem", fontWeight: 400, opacity: 0.7 }}>
+              heurística (
+              {scoring.label === "alto" ? "35%" : scoring.label === "medio" ? "20%" : "10%"}
+              {" "}acima do mínimo) — não é valor de mercado; pesquise FIPE/mercado antes de definir seu lance
+            </span>
+          </span>
           <b>{formatBRL(scoring.maxSuggestedBidCents / 100)}</b>
         </div>
       </div>
@@ -1508,7 +1515,7 @@ export function LotDetailPage({
                       color: "var(--n-600)",
                     }}
                   >
-                    Lance maximo sugerido{" "}
+                    Teto sugerido por regra{" "}
                     <span
                       style={{
                         fontSize: "0.72rem",
@@ -1516,13 +1523,13 @@ export function LotDetailPage({
                         fontWeight: 400,
                       }}
                     >
-                      (calculado por regra do scoring —{" "}
+                      heurística (
                       {scoring.label === "alto"
                         ? "35%"
                         : scoring.label === "medio"
                         ? "20%"
-                        : "10%"}{" "}
-                      acima do minimo)
+                        : "10%"}
+                      {" "}acima do mínimo) — não é valor de mercado; pesquise FIPE/mercado antes de definir seu lance
                     </span>
                   </td>
                   <td

@@ -5,6 +5,29 @@ import { Bar, CountUp, FonteDots, ScoreRing } from "../components/ui";
 import { listLeilaoLots } from "../features/leiloes/leiloes-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
 import { displayCity } from "../lib/receita-localidades";
+import { useAuth } from "../auth/auth-context";
+
+function greetingPeriod(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
+function greetingName(user: ReturnType<typeof useAuth>["user"]): string {
+  const meta = user?.user_metadata;
+  if (meta != null) {
+    const full = meta["full_name"];
+    if (typeof full === "string" && full.trim().length > 0) {
+      return full.trim().split(" ")[0] ?? full.trim();
+    }
+  }
+  const email = user?.email;
+  if (typeof email === "string" && email.length > 0) {
+    return email.split("@")[0] ?? "Olá";
+  }
+  return "Olá";
+}
 
 // Linhas por vez na tabela do painel (o scroll carrega mais sozinho, sem clicar).
 const ROWS_PER_PAGE = 25;
@@ -105,6 +128,7 @@ export function DashboardPage(props: {
   onAsk?: ((q?: string) => void) | undefined;
 }) {
   const { onSelectLot, onAsk } = props;
+  const { user } = useAuth();
 
   const [lots, setLots] = useState<ReceitaLeilaoLot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -389,7 +413,7 @@ export function DashboardPage(props: {
       {/* ── Saudação ─────────────────────────────────────────────── */}
       <section className="dash-greeting">
         <div>
-          <h1 className="display">Bom dia, Fonte.ia</h1>
+          <h1 className="display">{greetingPeriod()}, {greetingName(user)}</h1>
           <p className="muted" style={{ marginTop: 4 }}>
             Leiloes governamentais monitorados em tempo real — Fonte antes de opiniao.
           </p>
