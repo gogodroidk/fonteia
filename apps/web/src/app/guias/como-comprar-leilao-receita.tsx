@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ArrowRight, ShieldCheck, AlertTriangle, BookOpen } from "lucide-react";
 import { LogoMark } from "../../components/ui/logo-mark";
+import {
+  useSeo,
+  articleJsonLd,
+  faqJsonLd,
+  breadcrumbJsonLd,
+  SITE_URL,
+} from "../../lib/seo";
 /* ── Primitivos de texto ─────────────────────────────────────────────────── */
 function P({ children }: { children: React.ReactNode }) {
   return (
@@ -10,6 +17,7 @@ function P({ children }: { children: React.ReactNode }) {
         lineHeight: 1.75,
         color: "var(--t-mid)",
         marginBottom: "16px",
+        maxWidth: "68ch",
       }}
     >
       {children}
@@ -112,11 +120,11 @@ function Passo({
       <div style={{ flex: 1 }}>
         <h3
           style={{
-            fontSize: "17px",
-            fontWeight: 700,
+            fontSize: "20px",
+            fontWeight: 800,
             color: "var(--t-hi)",
             marginBottom: "10px",
-            lineHeight: 1.35,
+            lineHeight: 1.3,
           }}
         >
           {titulo}
@@ -202,23 +210,64 @@ function FaqItem({ pergunta, resposta }: FaqItemProps) {
 
 /* ── Página principal ────────────────────────────────────────────────────── */
 export function GuiaComoComprarPage() {
-  useEffect(() => {
-    document.title =
-      "Como comprar em leilão da Receita Federal: passo a passo (2026) | Fonte.ia";
+  const TITLE =
+    "Como comprar em leilão da Receita Federal: passo a passo (2026) | Fonte.ia";
+  const DESCRIPTION =
+    "Guia completo para iniciantes: o que é o leilão da Receita Federal (SLE), quem pode participar, como habilitar conta gov.br, dar o lance, pagar o DARF e retirar o bem. Com FAQ.";
 
-    const META_DESC =
-      "Guia completo para iniciantes: o que é o leilão da Receita Federal (SLE), quem pode participar, como habilitar conta gov.br, dar o lance, pagar o DARF e retirar o bem. Com FAQ.";
-
-    const existing = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (existing) {
-      existing.content = META_DESC;
-    } else {
-      const meta = document.createElement("meta");
-      meta.name = "description";
-      meta.content = META_DESC;
-      document.head.appendChild(meta);
-    }
-  }, []);
+  useSeo({
+    title: TITLE,
+    description: DESCRIPTION,
+    canonicalPath: "/guias/como-comprar-leilao-receita",
+    jsonLd: [
+      articleJsonLd({
+        title: TITLE,
+        description: DESCRIPTION,
+        url: SITE_URL + "/guias/como-comprar-leilao-receita",
+        datePublished: "2026-06-13",
+      }),
+      faqJsonLd([
+        {
+          question: "Precisa de CNPJ para participar do leilão da Receita Federal?",
+          answer:
+            "Não. Pessoa física com CPF pode participar da maioria dos lotes. Alguns lotes têm restrição de participação — por exemplo, apenas pessoa jurídica de determinado ramo ou apenas empresas com licença específica. Essa informação consta no edital de cada lote. Confirme sempre no edital oficial antes de se habilitar.",
+        },
+        {
+          question: "Dá para parcelar o lance?",
+          answer:
+            "Na maioria dos leilões da Receita Federal, o pagamento é à vista via DARF, no prazo estabelecido no edital (geralmente de 5 a 10 dias úteis após o arremate). Parcelamento é raro e, quando existe, está descrito explicitamente no edital. Não presuma que haverá parcelamento — confirme no edital oficial antes de dar o lance.",
+        },
+        {
+          question: "Posso visitar ou inspecionar o bem antes de dar o lance?",
+          answer:
+            "Depende do edital. Alguns leilões permitem vistoria prévia em data e horário marcados (o edital informa onde e quando). Outros não permitem acesso ao bem antes do arremate. Mesmo quando a vistoria é permitida, você vê o bem 'no estado em que se encontra' — sem garantia de funcionamento. Confira a cláusula de vistoria no edital antes de qualquer decisão.",
+        },
+        {
+          question: "Quanto é a comissão do leiloeiro?",
+          answer:
+            "Nos leilões da Receita Federal conduzidos pelo Sistema de Leilão Eletrônico (SLE), a comissão do leiloeiro oficial é geralmente de 5% sobre o valor do arremate, cobrada do arrematante. Esse percentual é uma referência comum; o valor exato consta no edital de cada lote. Confirme no edital antes de calcular seu lance máximo.",
+        },
+        {
+          question: "Leilão da Receita Federal é confiável?",
+          answer:
+            "O leilão é realizado por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O risco não está na idoneidade do órgão, mas nas características do bem: ele é vendido sem garantia, 'no estado em que se encontra'. Quem avalia o risco do lote é você — com base no edital, nas fotos disponíveis e, quando permitido, na vistoria.",
+        },
+        {
+          question: "O que acontece se eu ganhar o lance e não pagar?",
+          answer:
+            "O arrematante que não pagar dentro do prazo do edital perde o direito ao lote e pode ser impedido de participar de futuros leilões da Receita Federal, além de responder pelas penalidades previstas no edital. Só dê o lance se tiver certeza de que pode pagar no prazo. Os termos exatos estão no edital — confirme antes de propor.",
+        },
+      ]),
+      breadcrumbJsonLd([
+        { name: "Início", url: SITE_URL + "/" },
+        { name: "Guias", url: SITE_URL + "/guias" },
+        {
+          name: "Como comprar",
+          url: SITE_URL + "/guias/como-comprar-leilao-receita",
+        },
+      ]),
+    ],
+  });
 
   const FAQ: FaqItemProps[] = [
     {

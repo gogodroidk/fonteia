@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import { BookOpen, ArrowRight, Calculator, ChevronRight } from "lucide-react";
 import { LogoMark } from "../../components/ui/logo-mark";
+import { useSeo, breadcrumbJsonLd, SITE_URL } from "../../lib/seo";
 /* ── Shared primitives ───────────────────────────────────────────────────── */
 function P({ children }: { children: React.ReactNode }) {
   return (
@@ -102,19 +102,19 @@ function GuideCard({ href, eyebrow, title, description, icon }: GuideCardProps) 
 
 /* ── Main export ─────────────────────────────────────────────────────────── */
 export function GuiasPage() {
-  useEffect(() => {
-    document.title =
-      "Guias de leilão da Receita Federal — como comprar, passo a passo | Fonte.ia";
-
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (!meta) {
-      meta = document.createElement("meta");
-      meta.name = "description";
-      document.head.appendChild(meta);
-    }
-    meta.content =
-      "Guias práticos sobre leilões da Receita Federal: como comprar passo a passo, diferenças entre leilão da Receita, judicial e de banco, e calculadora gratuita de lance.";
-  }, []);
+  useSeo({
+    title:
+      "Guias de leilão da Receita Federal — como comprar, passo a passo | Fonte.ia",
+    description:
+      "Guias práticos sobre leilões da Receita Federal: como comprar passo a passo, diferenças entre leilão da Receita, judicial e de banco, e calculadora gratuita de lance.",
+    canonicalPath: "/guias",
+    jsonLd: [
+      breadcrumbJsonLd([
+        { name: "Início", url: SITE_URL + "/" },
+        { name: "Guias", url: SITE_URL + "/guias" },
+      ]),
+    ],
+  });
 
   return (
     <div

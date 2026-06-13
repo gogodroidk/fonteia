@@ -1,6 +1,11 @@
-import { useEffect } from "react";
 import { ArrowRight, BookOpen, ShieldCheck } from "lucide-react";
 import { LogoMark } from "../../components/ui/logo-mark";
+import {
+  useSeo,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  SITE_URL,
+} from "../../lib/seo";
 /* ── Primitivos de texto ─────────────────────────────────────────────────── */
 function P({ children }: { children: React.ReactNode }) {
   return (
@@ -121,23 +126,32 @@ function RowLabel({ children }: { children: React.ReactNode }) {
 
 /* ── Página principal ────────────────────────────────────────────────────── */
 export function GuiaComparacaoPage() {
-  useEffect(() => {
-    document.title =
-      "Leilão da Receita Federal vs leilão judicial vs leilão de banco | Fonte.ia";
+  const TITLE =
+    "Leilão da Receita Federal vs leilão judicial vs leilão de banco | Fonte.ia";
+  const DESCRIPTION =
+    "Tabela comparativa: diferenças entre leilão da Receita Federal, leilão judicial e leilão de banco — o que é vendido, quem organiza, como participar, riscos e onde achar cada um.";
 
-    const META_DESC =
-      "Tabela comparativa: diferenças entre leilão da Receita Federal, leilão judicial e leilão de banco — o que é vendido, quem organiza, como participar, riscos e onde achar cada um.";
-
-    const existing = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (existing) {
-      existing.content = META_DESC;
-    } else {
-      const meta = document.createElement("meta");
-      meta.name = "description";
-      meta.content = META_DESC;
-      document.head.appendChild(meta);
-    }
-  }, []);
+  useSeo({
+    title: TITLE,
+    description: DESCRIPTION,
+    canonicalPath: "/guias/leilao-receita-vs-judicial",
+    jsonLd: [
+      articleJsonLd({
+        title: TITLE,
+        description: DESCRIPTION,
+        url: SITE_URL + "/guias/leilao-receita-vs-judicial",
+        datePublished: "2026-06-13",
+      }),
+      breadcrumbJsonLd([
+        { name: "Início", url: SITE_URL + "/" },
+        { name: "Guias", url: SITE_URL + "/guias" },
+        {
+          name: "Comparação de modalidades",
+          url: SITE_URL + "/guias/leilao-receita-vs-judicial",
+        },
+      ]),
+    ],
+  });
 
   return (
     <div
@@ -399,7 +413,8 @@ export function GuiaComparacaoPage() {
               Tabela comparativa
             </h2>
 
-            <div className="comp-table-wrap" style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid var(--border)" }}>
+            <div className="comp-table-wrap" style={{ borderRadius: "14px", border: "1px solid var(--border)", overflow: "hidden" }}>
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <table
                 style={{
                   width: "100%",
@@ -543,6 +558,7 @@ export function GuiaComparacaoPage() {
                   </tr>
                 </tbody>
               </table>
+              </div>
             </div>
 
             <p

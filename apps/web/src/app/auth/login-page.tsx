@@ -320,7 +320,7 @@ function PasswordField({
 export function LoginPage({ onGoToLanding }: LoginPageProps) {
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, demoMode } = useAuth();
 
-  const [mode, setMode] = useState<AuthMode>("login");
+  const [mode, setMode] = useState<AuthMode>("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -423,22 +423,21 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           {/* Title + subtitle */}
           <div style={{ marginBottom: mode === "signup" ? 28 : 32 }}>
             <h1 className="h2" style={{ fontSize: 23, fontWeight: 800, letterSpacing: "-0.025em", marginBottom: 6 }}>
-              {mode === "login" ? "Acesse sua conta" : "Criar conta"}
+              {mode === "login" ? "Acesse sua conta" : "Crie sua conta"}
             </h1>
             <p style={{ fontSize: 14.5, color: "var(--t-low)", lineHeight: 1.5, margin: 0 }}>
               {mode === "login" ? (
                 <>
-                  Ou{" "}
+                  Não tem conta?{" "}
                   <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("signup")}>
-                    crie sua conta
-                  </button>{" "}
-                  em segundos.
+                    Criar conta grátis
+                  </button>
                 </>
               ) : (
                 <>
-                  Já tem conta?{" "}
+                  7 dias grátis, sem cartão. Cancele quando quiser.{" "}
                   <button type="button" className="link" style={{ fontSize: 14.5 }} onClick={() => switchMode("login")}>
-                    Entrar
+                    Já tem conta? Entrar
                   </button>
                 </>
               )}
@@ -586,7 +585,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
               ) : mode === "login" ? (
                 "Entrar"
               ) : (
-                "Criar conta"
+                "Começar grátis"
               )}
             </button>
           </form>

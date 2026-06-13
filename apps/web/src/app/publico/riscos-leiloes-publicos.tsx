@@ -17,6 +17,7 @@ function P({ children }: { children: React.ReactNode }) {
         lineHeight: 1.75,
         color: "var(--t-mid)",
         marginBottom: "16px",
+        maxWidth: "68ch",
       }}
     >
       {children}
@@ -93,8 +94,8 @@ function RiscoCard({ titulo, oque, protecao }: RiscoCardProps) {
     >
       <h3
         style={{
-          fontSize: "16px",
-          fontWeight: 700,
+          fontSize: "18px",
+          fontWeight: 800,
           color: "var(--t-hi)",
           marginBottom: "12px",
           display: "flex",
