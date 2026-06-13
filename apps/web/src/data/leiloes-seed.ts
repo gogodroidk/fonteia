@@ -340,7 +340,7 @@ export const PLANOS: Plano[] = [
     limite: "Ilimitado",
   },
   {
-    id: "escritorio",
+    id: "corporativo",
     nome: "Corporativo",
     preco: 597,
     periodo: "/mês",

@@ -1,28 +1,44 @@
 /**
- * Configuração de checkout do Stripe — Payment Links (sem backend).
+ * Configuração de checkout do Stripe — Payment Links em modo LIVE (produção).
  *
- * ┌─ COMO LIGAR O CHECKOUT REAL ──────────────────────────────────────────────┐
- * │ 1. No painel do Stripe → Produtos → Payment Links, crie um link recorrente │
- * │    mensal (BRL) para cada plano pago.                                       │
- * │ 2. Cole as URLs (https://buy.stripe.com/...) em STRIPE_PAYMENT_LINKS abaixo.│
- * │ 3. (Opcional) Cole a URL do Customer Portal (https://billing.stripe.com/...)│
- * │    em STRIPE_CUSTOMER_PORTAL_URL para o botão "Gerenciar assinatura".       │
- * │ Enquanto os campos estão vazios, o botão "Assinar" mostra o contato —       │
- * │ nada quebra. Depois de colar, o checkout passa a cobrar de verdade.         │
- * └────────────────────────────────────────────────────────────────────────────┘
+ * ⚠️ PRODUÇÃO: estes Payment Links cobram de verdade (cartão/Pix).
  *
- * Os ids batem com os planos em data/leiloes-seed.ts (PLANOS): "pro" e "escritorio".
- * O plano "free" (Avaliação) é gratuito e não usa Stripe.
+ * Este arquivo (frontend) contém APENAS dados públicos:
+ *  - Payment Links, Customer Portal e a Publishable Key (pk_live_…) podem ir no bundle.
+ *  - A Secret Key (sk_live_…) NUNCA entra aqui — fica só no Worker de webhook (env var).
+ *
+ * A liberação de plano é feita pelo WEBHOOK (services/stripe-webhook) que escreve
+ * no Supabase — não pelo redirect de sucesso (que é só visual).
  */
+
+/** Chave publishable do Stripe (pública por design). */
+export const STRIPE_PUBLISHABLE_KEY =
+  "pk_live_51Sei4m4zjAI9pGd7PT2FgBYrpeUujaeQPEqXQ6J9X6yVnaZtaMXAXdhzGYhqXibJsYDg9hh32lHcOkF2iHMHYw3I007IWdiHIC";
+
+/** Payment Links por id de plano (bate com PLANOS em data/leiloes-seed.ts). */
 export const STRIPE_PAYMENT_LINKS: Record<string, string> = {
-  pro: "", // Profissional — R$ 197/mês
-  escritorio: "", // Corporativo — R$ 597/mês
+  pro: "https://buy.stripe.com/dRm00c4NGgYPdpV8HHasg00", // Profissional — R$ 197/mês
+  corporativo: "https://buy.stripe.com/14A14g1BueQHdpV9LLasg01", // Corporativo — R$ 597/mês
 };
 
-/** URL do Customer Portal do Stripe (gerenciar/cancelar assinatura, trocar cartão). */
-export const STRIPE_CUSTOMER_PORTAL_URL: string = "";
+/** Customer Portal do Stripe (gerenciar/cancelar assinatura, trocar cartão, faturas). */
+export const STRIPE_CUSTOMER_PORTAL_URL: string =
+  "https://billing.stripe.com/p/login/dRm00c4NGgYPdpV8HHasg00";
 
-/** Retorna o Payment Link do plano, ou null se ainda não configurado. */
+export type PlanId = "free" | "pro" | "corporativo";
+
+/** Mapeamento price_id (Stripe) → plan_id (app/banco). Usado pelo webhook. */
+export const STRIPE_PRICE_TO_PLAN: Record<string, PlanId> = {
+  price_1ThjWB4zjAI9pGd7GOAfQwBT: "pro",
+  price_1ThjhR4zjAI9pGd7UyBOlctV: "corporativo",
+};
+
+/** Mapeia um price_id do Stripe para o plano interno (fallback: free). */
+export function getPlanByStripePrice(priceId: string): PlanId {
+  return STRIPE_PRICE_TO_PLAN[priceId] ?? "free";
+}
+
+/** Retorna o Payment Link do plano, ou null se não houver. */
 export function stripeLinkFor(planId: string): string | null {
   const link = STRIPE_PAYMENT_LINKS[planId];
   return link && link.length > 0 ? link : null;
