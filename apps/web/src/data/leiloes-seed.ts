@@ -316,8 +316,8 @@ export const PLANOS: Plano[] = [
     cta: "Começar avaliação",
     feats: [
       "5 análises completas de lote",
-      "Score de risco e rastreabilidade",
-      "Acesso a todas as fontes oficiais",
+      "Score de oportunidade e rastreabilidade",
+      "Acesso aos leilões da Receita Federal",
       "Sem cartão de crédito",
     ],
     limite: "5 análises",
