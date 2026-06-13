@@ -17,6 +17,7 @@ import { SourcesPage } from "./app/sources/page";
 import { AccountPage } from "./app/account/page";
 import { LegalPage, type LegalKind } from "./app/legal/page";
 import { CookieBanner } from "./components/cookie-banner";
+import { getLeilaoLotById } from "./data/fonteia-client";
 
 type RouteKey = "dashboard" | "modules" | "sources" | "search" | "billing" | "lot-detail" | "conta";
 
@@ -34,8 +35,14 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/modulos")) return "modules";
   if (path.startsWith("/app/planos")) return "billing";
   if (path.startsWith("/app/conta")) return "conta";
-  if (path.startsWith("/app/lote")) return "lot-detail";
+  if (path.startsWith("/app/leiloes/") || path.startsWith("/app/lote")) return "lot-detail";
   return "dashboard";
+}
+
+function getLotIdFromPath(path: string): string | null {
+  const match = path.match(/^\/app\/leiloes\/([^/?#]+)/);
+
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 interface AppShellProps {
@@ -46,11 +53,50 @@ interface AppShellProps {
 function AppShell({ path, navigate }: AppShellProps) {
   const { user, signOut } = useAuth();
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
+  const [isLoadingLot, setIsLoadingLot] = useState(false);
+  const [lotLoadMessage, setLotLoadMessage] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchSeed, setSearchSeed] = useState<string>("");
   const [alertsOpen, setAlertsOpen] = useState(false);
   const activeModule = PRODUCT_MODULES.find((m) => m.id === "leiloes");
   const route = pathToRoute(path);
+  const lotIdFromPath = getLotIdFromPath(path);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (route !== "lot-detail" || !lotIdFromPath || selectedLot?.id === lotIdFromPath) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    setIsLoadingLot(true);
+    setLotLoadMessage("Buscando lote pelas fontes disponiveis...");
+
+    void getLeilaoLotById(lotIdFromPath)
+      .then((result) => {
+        if (!isMounted) return;
+
+        setSelectedLot(result.lot);
+        setLotLoadMessage(result.message);
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+
+        setSelectedLot(null);
+        setLotLoadMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!isMounted) return;
+
+        setIsLoadingLot(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [lotIdFromPath, route, selectedLot?.id]);
 
   function go(to: string) {
     navigate(to);
@@ -65,7 +111,7 @@ function AppShell({ path, navigate }: AppShellProps) {
 
   function handleSelectLot(lot: ReceitaLeilaoLot) {
     setSelectedLot(lot);
-    go("/app/lote");
+    go(`/app/leiloes/${lot.id}`);
   }
 
   const displayName =
@@ -213,7 +259,18 @@ function AppShell({ path, navigate }: AppShellProps) {
           )}
           {route === "lot-detail" &&
             (selectedLot ? (
-              <LotDetailPage lot={selectedLot} onBack={() => go("/app")} />
+              <LotDetailPage lot={selectedLot} onBack={() => go("/app")} onAsk={goToSearch} dataMessage={lotLoadMessage ?? undefined} />
+            ) : lotIdFromPath ? (
+              <section className="page-panel">
+                <span className="section-label">{isLoadingLot ? "Carregando lote" : "Lote nao encontrado"}</span>
+                <h2>{isLoadingLot ? "Buscando dados do lote..." : "Este lote nao apareceu nas fontes carregadas agora"}</h2>
+                <p className="muted-copy">{lotLoadMessage}</p>
+                {!isLoadingLot ? (
+                  <button className="primary-button" onClick={() => go("/app")} type="button">
+                    Voltar ao radar
+                  </button>
+                ) : null}
+              </section>
             ) : (
               <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />
             ))}
@@ -254,7 +311,6 @@ export function App() {
   const { path, navigate } = usePathname();
   const [onboarded, setOnboarded] = useState<boolean>(() => hasOnboarded());
 
-  // Pós-login: tira o usuário da landing/login e leva pro app.
   useEffect(() => {
     if (!loading && user && (path === "/" || path === "/entrar")) {
       navigate("/app");

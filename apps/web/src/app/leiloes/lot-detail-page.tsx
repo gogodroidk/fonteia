@@ -1,21 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, Download } from "lucide-react";
+import { ArrowLeft, Bell, Download, MessageSquareText } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
+import { DemoDataBanner } from "../../components/demo-data-banner";
 import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
 
 interface LotDetailPageProps {
   lot: ReceitaLeilaoLot;
   onBack: () => void;
+  onAsk?: (question: string) => void;
+  isDemo?: boolean;
+  dataMessage?: string;
 }
 
 type AlertChannel = "in_app" | "email" | "whatsapp";
 
 const channelLabels: Record<AlertChannel, string> = {
   in_app: "Notificacao no app",
-  email: "E-mail",
-  whatsapp: "WhatsApp",
+  email: "E-mail em breve",
+  whatsapp: "WhatsApp em breve",
 };
 
 function formatDeadline(value: string): string {
@@ -46,9 +50,9 @@ function getEligibilityLabel(lot: ReceitaLeilaoLot): string {
   const hasPf = lot.eligiblePersonTypes.includes("pf");
   const hasPj = lot.eligiblePersonTypes.includes("pj");
 
-  if (hasPf && hasPj) return "PF e PJ";
-  if (hasPf) return "Apenas Pessoa Fisica";
-  return "Apenas Pessoa Juridica";
+  if (hasPf && hasPj) return "Pessoa fisica e pessoa juridica podem participar";
+  if (hasPf) return "Apenas pessoa fisica pode participar";
+  return "Apenas pessoa juridica pode participar";
 }
 
 function impactIcon(impact: "positive" | "neutral" | "negative"): string {
@@ -57,13 +61,29 @@ function impactIcon(impact: "positive" | "neutral" | "negative"): string {
   return "·";
 }
 
-export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
+function decisionCopy(score: number): string {
+  if (score >= 70) {
+    return "Este lote merece investigacao agora. O score indica boa combinacao entre prazo, elegibilidade e valor minimo, mas a decisao final ainda depende da leitura do edital e dos custos de retirada.";
+  }
+
+  if (score >= 45) {
+    return "Este lote pode valer uma analise, mas nao deve ser tratado como oportunidade obvia. Valide custos, restricoes e liquidez antes de qualquer proposta.";
+  }
+
+  return "Este lote parece fraco ou arriscado para decisao rapida. Use o painel para entender o motivo e confirme tudo na fonte oficial antes de avancar.";
+}
+
+export function LotDetailPage({ lot, onBack, onAsk, isDemo = false, dataMessage }: LotDetailPageProps) {
   const scoring = scoreReceitaLeilaoLot(lot);
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
   const [alertChannel, setAlertChannel] = useState<AlertChannel>("in_app");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setAlertName(`Alerta — Edital ${lot.edital}`);
+  }, [lot.edital]);
 
   useEffect(() => {
     return () => {
@@ -75,7 +95,7 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
 
   function handleSaveAlert() {
     setAlertOpen(false);
-    setSuccessMessage("✓ Alerta criado");
+    setSuccessMessage("✓ Alerta criado no app. E-mail e WhatsApp ficam para a proxima etapa.");
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
     }, 3000);
@@ -91,6 +111,15 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
       // silent failure in alpha
     });
   }
+
+  const quickQuestions = [
+    "Esse lote vale a pena?",
+    "Quais riscos eu devo verificar?",
+    "Pessoa fisica pode participar?",
+    "Qual e o prazo?",
+    "Qual lance maximo sugerido?",
+    "Quais evidencias sustentam isso?",
+  ];
 
   const evidenceItems = [
     {
@@ -108,6 +137,13 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
 
   return (
     <div className="lot-detail">
+      {isDemo ? (
+        <DemoDataBanner
+          title="Lote em modo demonstracao"
+          message={dataMessage ?? "Este lote veio de amostras locais. Use para validar a experiencia, nao para decisao real."}
+        />
+      ) : null}
+
       <div className="lot-detail-main">
         <button className="ghost-button lot-back-button" onClick={onBack} type="button">
           <ArrowLeft aria-hidden="true" size={16} />
@@ -116,8 +152,9 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
 
         <div className="lot-detail-header">
           <div>
-            <span className="section-label">Leilao Receita Federal SLE</span>
+            <span className="section-label">Raio-x do lote Receita Federal SLE</span>
             <h2>Edital {lot.edital}</h2>
+            <p className="muted-copy">Lote {lot.displayNumber} em {lot.city}. A analise abaixo e apoio de decisao, nao substitui a leitura do edital oficial.</p>
           </div>
           <div className="lot-detail-actions">
             <button
@@ -139,6 +176,12 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
 
         {successMessage ? <div className="lot-success-message">{successMessage}</div> : null}
 
+        <section className="lot-decision-summary">
+          <span className="section-label">Decisao rapida</span>
+          <h3>{scoring.label === "alto" ? "Prioridade de investigacao" : scoring.label === "medio" ? "Investigar com cautela" : "Baixa prioridade"}</h3>
+          <p>{decisionCopy(scoring.score)}</p>
+        </section>
+
         <div className="lot-detail-meta">
           <div className="lot-meta-item">
             <span className="section-label">Cidade</span>
@@ -153,7 +196,7 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
             <strong>{formatDeadline(lot.proposalDeadline)}</strong>
           </div>
           <div className="lot-meta-item">
-            <span className="section-label">Elegibilidade</span>
+            <span className="section-label">Quem pode participar</span>
             <strong>{getEligibilityLabel(lot)}</strong>
           </div>
           <div className="lot-meta-item">
@@ -192,6 +235,35 @@ export function LotDetailPage({ lot, onBack }: LotDetailPageProps) {
             ))}
           </ul>
         </div>
+
+        <section className="lot-checklist">
+          <span className="section-label">Antes de propor</span>
+          <h3>Checklist minimo de seguranca</h3>
+          <ul>
+            <li>Confirmar prazo e regras no edital oficial.</li>
+            <li>Verificar retirada, patio, frete, taxas e documentos exigidos.</li>
+            <li>Comparar valor de mercado antes de definir lance maximo.</li>
+            <li>Checar se pessoa fisica ou juridica pode participar.</li>
+            <li>Nao usar o score como decisao final isolada.</li>
+          </ul>
+        </section>
+
+        <section className="lot-quick-questions">
+          <span className="section-label">Perguntas guiadas</span>
+          <h3>Pergunte sobre este lote</h3>
+          <div className="lot-quick-questions-grid">
+            {quickQuestions.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onAsk?.(`${item} Edital ${lot.edital}, lote ${lot.displayNumber}.`)}
+              >
+                <MessageSquareText aria-hidden="true" size={14} />
+                {item}
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
 
       <EvidencePanel evidence={evidenceItems} title={`Evidencia — Lote ${lot.displayNumber}`} />
