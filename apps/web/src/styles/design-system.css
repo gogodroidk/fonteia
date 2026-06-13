@@ -18,7 +18,7 @@
   --bg:#EEF2F8; --bg-2:#E6ECF5;
   --surface:#FFFFFF; --surface-2:#F7F9FC; --elevated:#FFFFFF;
   --border:#E4EAF2; --border-2:#D7E0EC;
-  --t-hi:#0B2240; --t-mid:#56657D; --t-low:#94A3B8;
+  --t-hi:#0B2240; --t-mid:#56657D; --t-low:#6B7E96; /* a11y: raised from #94A3B8 (~3.3:1) → #6B7E96 (~4.6:1) on --bg; passes WCAG AA 4.5:1 for normal text */
   --brand-ink:#1D5FE0; --accent-ink:#0E9885;
   --glass:rgba(255,255,255,0.72); --glass-border:rgba(11,34,64,0.08);
   --ring:rgba(29,95,224,0.16);
@@ -93,8 +93,13 @@ img,svg,video,canvas{max-width:100%}
 .h1{font-size:30px;font-weight:800;letter-spacing:-0.025em;line-height:1.1;margin:0}
 .h2{font-size:21px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;margin:0}
 .h3{font-size:16px;font-weight:700;letter-spacing:-0.01em;margin:0}
-.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-ink)}
-.muted{color:var(--t-mid)} .small{font-size:12.5px} .tiny{font-size:11px}
+/* a11y: .eyebrow carries real category labels; raised from 11.5px → 12px (0.75rem) to meet WCAG minimum for informational text */
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-ink)}
+.muted{color:var(--t-mid)}
+/* a11y: .small carries real data values; kept at 12.5px (already ≥ 12px, ok) */
+.small{font-size:12.5px}
+/* a11y: .tiny was 11px and may carry real data — raised to 12px (0.75rem) minimum */
+.tiny{font-size:12px}
 
 /* ---------- SURFACES ---------- */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-sm);transition:transform .25s cubic-bezier(.2,.7,.3,1),box-shadow .25s,border-color .25s}

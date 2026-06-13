@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cookie } from "lucide-react";
 import { getConsent, hasConsent, saveConsent } from "../lib/consent";
+import { useFocusTrap } from "../hooks/use-focus-trap";
 
 interface CookieBannerProps {
   onOpenPolicy?: () => void;
@@ -12,6 +13,9 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   const [funcionais, setFuncionais] = useState(true);
   const [analiticos, setAnaliticos] = useState(false);
   const [publicidade, setPublicidade] = useState(false);
+
+  // a11y: trap focus inside the dialog while it is open
+  const dialogRef = useFocusTrap<HTMLDivElement>(open);
 
   useEffect(() => {
     if (!hasConsent()) setOpen(true);
@@ -29,6 +33,19 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
     return () => window.removeEventListener("fonteia:cookies", reopen);
   }, []);
 
+  // a11y: allow users to dismiss the dialog with the Escape key
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        // Treat Escape as "reject all" to leave the user in a privacy-safe state
+        rejectAll();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   function acceptAll() {
     saveConsent({ funcionais: true, analiticos: true, publicidade: true });
     setOpen(false);
@@ -45,7 +62,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   if (!open) return null;
 
   return (
-    <div className="cookie-banner" role="dialog" aria-label="Preferências de cookies">
+    <div className="cookie-banner" role="dialog" aria-modal="true" aria-label="Preferências de cookies" ref={dialogRef}>
       <div className="cookie-banner-inner">
         <div className="cookie-banner-head">
           <Cookie size={20} aria-hidden="true" />
