@@ -10,20 +10,6 @@ const TOTAL_SOURCES = SOURCE_CATALOG.length;
 const CONNECTED_SOURCES = SOURCE_CATALOG.filter(
   (s) => s.status === "connected" || s.status === "fragile_operational",
 ).length;
-// Estimated records indexed — sum a representative weight per source
-const ESTIMATED_RECORDS = SOURCE_CATALOG.reduce((acc, s) => {
-  const weight: Record<SourceStatus, number> = {
-    connected: 96_200,
-    fragile_operational: 128_400,
-    integrating: 41_200,
-    open_no_api: 33_800,
-    complementary_non_government: 18_000,
-    restricted_government: 10_000,
-    paid_or_credentialed: 10_000,
-    deprecated: 0,
-  };
-  return acc + (weight[s.status] ?? 0);
-}, 0);
 
 const GOVT_SOURCES = SOURCE_CATALOG.filter(
   (s) => s.reliability === "official_stable" || s.reliability === "official_fragile",
@@ -43,8 +29,8 @@ interface StatusMeta {
 const STATUS_META: Record<SourceStatus, StatusMeta> = {
   connected: { label: "conectado", badgeClass: "badge--ok", pulse: false },
   fragile_operational: { label: "operacional frágil", badgeClass: "badge--warn", pulse: true },
-  integrating: { label: "integrando", badgeClass: "badge--info", pulse: false },
-  open_no_api: { label: "sem API", badgeClass: "badge--neutral", pulse: false },
+  integrating: { label: "em integração", badgeClass: "badge--info", pulse: false },
+  open_no_api: { label: "sem API pública", badgeClass: "badge--neutral", pulse: false },
   complementary_non_government: { label: "complementar", badgeClass: "badge--neutral", pulse: false },
   restricted_government: { label: "restrita", badgeClass: "badge--neutral", pulse: false },
   paid_or_credentialed: { label: "credencial", badgeClass: "badge--neutral", pulse: false },
@@ -259,9 +245,9 @@ export function SourcesPage() {
               className="muted small"
               style={{ marginTop: 10, lineHeight: 1.65, maxWidth: 480 }}
             >
-              A Fonte.ia cruza Receita Federal, PGFN, CGU, CNJ e demais órgãos
-              oficiais em tempo real. Nada é achismo: cada número tem origem
-              rastreável e auditável.
+              Hoje uma fonte oficial está conectada e alimentando a plataforma:
+              a Receita Federal (Sistema de Leilões Eletrônicos). Os demais órgãos
+              estão em integração. Cada número tem origem rastreável e auditável.
             </p>
           </div>
 
@@ -274,10 +260,10 @@ export function SourcesPage() {
                 className="display num"
                 style={{ fontSize: 34, color: "var(--t-hi)" }}
               >
-                <CountUp value={ESTIMATED_RECORDS} durationMs={1200} />
+                <CountUp value={CONNECTED_SOURCES} durationMs={800} />
               </div>
               <div className="tiny muted" style={{ marginTop: 3 }}>
-                registros indexados
+                {CONNECTED_SOURCES === 1 ? "fonte conectada" : "fontes conectadas"}
               </div>
             </div>
 
@@ -322,16 +308,16 @@ export function SourcesPage() {
             borderBottom: "1px solid var(--border)",
           }}
         >
-          <div className="h3">Fontes conectadas</div>
+          <div className="h3">Fontes cadastradas</div>
           <span
             className="row tiny muted"
             style={{ gap: 7 }}
           >
             <span
-              className="dot pulse"
-              style={{ background: "var(--ok)" }}
+              className="dot"
+              style={{ background: "var(--warn)" }}
             />
-            Sincronizando em tempo real
+            Coleta periódica
           </span>
         </div>
 
@@ -410,8 +396,9 @@ export function SourcesPage() {
           <span className="badge badge--warn" style={{ fontSize: 10 }}>
             operacional frágil
           </span>{" "}
-          são tratadas com fallback automático. Nenhum dado é inferido ou estimado — só
-          repercutimos o que o órgão publica.
+          dependem de coleta de portais sem API documentada e podem apresentar
+          instabilidade. Fontes em integração ainda não estão ativas na plataforma.
+          Nenhum dado é inferido ou estimado — só repercutimos o que o órgão publica.
         </p>
       </div>
     </section>

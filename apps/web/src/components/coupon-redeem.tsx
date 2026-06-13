@@ -64,7 +64,7 @@ export function CouponRedeem({
             flex: "1 1 160px",
             minWidth: 0,
             padding: "10px 12px",
-            fontSize: 14,
+            fontSize: 16,
             letterSpacing: ".04em",
             border: "1px solid var(--border)",
             borderRadius: 10,

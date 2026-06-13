@@ -585,7 +585,9 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [filtered.length, visibleCount]);
+    // Depende só de filtered.length: o observer persiste enquanto a janela cresce
+    // (não recriar a cada visibleCount evita o disparo em cascata).
+  }, [filtered.length]);
 
   const visibleViews = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;

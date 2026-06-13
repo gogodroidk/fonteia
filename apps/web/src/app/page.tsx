@@ -216,7 +216,8 @@ export function DashboardPage(props: {
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [sortedEntries.length, visibleRows]);
+    // Depende só de sortedEntries.length (não recriar a cada visibleRows evita cascata).
+  }, [sortedEntries.length]);
 
   const visibleEntries = sortedEntries.slice(0, visibleRows);
 
