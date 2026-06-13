@@ -5,7 +5,6 @@ import type { LeilaoOpportunityScore } from "@fonteia/scoring";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots, riscoBadge } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
-import { DemoDataBanner } from "../../components/demo-data-banner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -250,9 +249,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   // ── Data state ──────────────────────────────────────────────────────────────
   const [lots, setLots] = useState<ReceitaLeilaoLot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [dataMessage, setDataMessage] = useState("");
 
   // ── Filter/sort state ───────────────────────────────────────────────────────
   const [query, setQuery] = useState("");
@@ -270,8 +267,6 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       .then((result) => {
         if (cancelled) return;
         setLots(result.lots);
-        setIsDemo(result.isDemo);
-        setDataMessage(result.message);
         setIsLoading(false);
       })
       .catch((err: unknown) => {
@@ -330,14 +325,6 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
           Lotes disponíveis
         </h2>
       </div>
-
-      {/* Demo banner */}
-      {isDemo && (
-        <DemoDataBanner
-          title="Modo demonstração"
-          message={dataMessage}
-        />
-      )}
 
       {/* Error banner */}
       {errorMessage !== null && (
@@ -456,7 +443,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
       </div>
 
       {/* Count row */}
-      {!isLoading && errorMessage === null && (
+      {!isLoading && errorMessage === null && lots.length > 0 && (
         <div className="row between">
           <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
             <b
@@ -467,41 +454,22 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
             </b>{" "}
             {filtered.length === 1 ? "lote encontrado" : "lotes encontrados"}
           </span>
-          {isDemo && (
+          <span
+            className="tiny"
+            style={{ color: "var(--t-low)", display: "flex", alignItems: "center", gap: 6 }}
+          >
             <span
-              className="tiny"
-              style={{ color: "var(--t-low)", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: "var(--warn)",
-                  display: "inline-block",
-                }}
-              />
-              Dados de demonstração
-            </span>
-          )}
-          {!isDemo && (
-            <span
-              className="tiny"
-              style={{ color: "var(--t-low)", display: "flex", alignItems: "center", gap: 6 }}
-            >
-              <span
-                className="pulse"
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: "var(--accent-ink)",
-                  display: "inline-block",
-                }}
-              />
-              Atualizado em tempo real
-            </span>
-          )}
+              className="pulse"
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: "var(--accent-ink)",
+                display: "inline-block",
+              }}
+            />
+            Atualizado em tempo real
+          </span>
         </div>
       )}
 
@@ -520,7 +488,24 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : errorMessage !== null ? null : filtered.length === 0 ? (
+      ) : errorMessage !== null ? null : lots.length === 0 ? (
+        <div
+          className="panel"
+          style={{
+            padding: 48,
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote disponível no momento</div>
+          <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
+            A coleta dos leilões da Receita roda periodicamente. Volte em breve ou aguarde a próxima sincronização.
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div
           className="grid"
           style={{

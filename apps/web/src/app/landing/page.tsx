@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, Star, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck } from "lucide-react";
 import { ScoreRing, FonteDots, ThemeToggle } from "../../components/ui";
 import {
-  DEPOIMENTOS,
   PLANOS,
   FONTES,
   LEILAO_SEED,
@@ -508,65 +507,6 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               </div>
             </Reveal>
 
-            {/* Social proof */}
-            <Reveal delay={0.2}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 28, flexWrap: "wrap" }}>
-                {/* Stacked avatars */}
-                <div style={{ display: "flex" }} aria-label="Usuários da plataforma">
-                  {DEPOIMENTOS.map((d, i) => (
-                    <div
-                      key={d.avatar}
-                      className="avatar"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        fontSize: 10,
-                        fontWeight: 800,
-                        marginLeft: i > 0 ? -9 : 0,
-                        border: "2.5px solid var(--bg)",
-                        zIndex: DEPOIMENTOS.length - i,
-                        position: "relative",
-                      }}
-                      title={d.nome}
-                    >
-                      {d.avatar}
-                    </div>
-                  ))}
-                  {/* extra placeholder avatars */}
-                  {(["JV", "LS"] as const).map((initials, i) => (
-                    <div
-                      key={initials}
-                      className="avatar"
-                      style={{
-                        width: 32,
-                        height: 32,
-                        fontSize: 10,
-                        fontWeight: 800,
-                        marginLeft: -9,
-                        border: "2.5px solid var(--bg)",
-                        position: "relative",
-                        zIndex: i,
-                        background: "linear-gradient(135deg,var(--brand),var(--accent))",
-                      }}
-                      aria-hidden="true"
-                    >
-                      {initials}
-                    </div>
-                  ))}
-                </div>
-
-                <div>
-                  <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Star key={i} size={13} fill="var(--gold)" color="var(--gold)" aria-hidden="true" />
-                    ))}
-                  </div>
-                  <div className="tiny muted" style={{ marginTop: 3 }}>
-                    <strong style={{ color: "var(--t-hi)" }}>2.400+</strong> profissionais já utilizam
-                  </div>
-                </div>
-              </div>
-            </Reveal>
           </div>
 
           {/* Right: 3D mock card */}
@@ -824,45 +764,6 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           </Reveal>
         </div>
 
-        {/* Stats strip */}
-        <div
-          style={{
-            maxWidth: 1180,
-            margin: "60px auto 0",
-            padding: "0 24px",
-            display: "flex",
-            gap: 0,
-            flexWrap: "wrap",
-            position: "relative",
-          }}
-        >
-          {(
-            [
-              { value: "1.284", label: "Lotes disponíveis agora" },
-              { value: "47", label: "Órgãos monitorados" },
-              { value: "R$ 8,6M", label: "Economia potencial mapeada" },
-              { value: "SHA-256", label: "Evidência rastreável" },
-            ] as const
-          ).map((s, i) => (
-            <div
-              key={s.label}
-              style={{
-                flex: "1 1 180px",
-                borderLeft: i > 0 ? "1px solid var(--border)" : "none",
-                padding: "0 28px",
-                textAlign: "center",
-              }}
-            >
-              <div
-                className="display num"
-                style={{ fontSize: "clamp(22px,2.4vw,30px)", fontWeight: 800, color: "var(--t-hi)" }}
-              >
-                {s.value}
-              </div>
-              <div className="tiny muted" style={{ marginTop: 5 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
       </section>
 
       {/* ── FONTES STRIP ───────────────────────────────────────────────── */}
@@ -1383,79 +1284,6 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               </button>
             </p>
           </Reveal>
-        </div>
-      </section>
-
-      {/* ── DEPOIMENTOS ────────────────────────────────────────────────── */}
-      <section style={{ padding: "90px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Reveal style={{ textAlign: "center", marginBottom: 50 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Resultados reais</div>
-            <h2
-              className="display"
-              style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
-            >
-              Quem usa, não volta<br />ao método antigo.
-            </h2>
-          </Reveal>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-              gap: 20,
-            }}
-          >
-            {DEPOIMENTOS.map((d, i) => (
-              <Reveal key={d.nome} delay={i * 0.06}>
-                <div
-                  className="card card--pad card--hover"
-                  style={{ padding: 26, height: "100%", display: "flex", flexDirection: "column", gap: 16 }}
-                >
-                  {/* Stars */}
-                  <div style={{ display: "flex", gap: 3 }}>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star key={s} size={13} fill="var(--gold)" color="var(--gold)" aria-hidden="true" />
-                    ))}
-                  </div>
-
-                  <blockquote
-                    style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: "var(--t-mid)", flex: 1 }}
-                  >
-                    "{d.txt}"
-                  </blockquote>
-
-                  {/* Gain badge */}
-                  <div
-                    className="inset"
-                    style={{ padding: "8px 12px", display: "inline-flex", alignSelf: "flex-start" }}
-                  >
-                    <span
-                      className="num small"
-                      style={{ fontWeight: 800, color: "var(--accent-ink)" }}
-                    >
-                      {d.ganho}
-                    </span>
-                  </div>
-
-                  {/* Author */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div
-                      className="avatar"
-                      style={{ width: 38, height: 38, fontSize: 13, fontWeight: 800 }}
-                      aria-hidden="true"
-                    >
-                      {d.avatar}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{d.nome}</div>
-                      <div className="tiny muted">{d.papel}</div>
-                    </div>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
         </div>
       </section>
 

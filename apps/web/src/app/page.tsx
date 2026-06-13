@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
-import { AreaChart, Bar, CountUp, FonteDots, ScoreRing, Spark, riscoBadge } from "../components/ui";
-import { DemoDataBanner } from "../components/demo-data-banner";
+import { Bar, CountUp, FonteDots, ScoreRing, riscoBadge } from "../components/ui";
 import { listLeilaoLots } from "../features/leiloes/leiloes-api";
-import { OVERVIEW_STATS, FONTES, formatBRL } from "../data/leiloes-seed";
+import { FONTES, formatBRL } from "../data/leiloes-seed";
 
 // The single FonteItem for Receita Federal — used in every lot row
 const RFB_FONTE = {
@@ -27,7 +26,7 @@ function formatDeadline(value: string): string {
 
 // Derive a risk distribution (percent) from scored lots
 function riskDistribution(scores: number[]): { baixo: number; medio: number; alto: number } {
-  if (scores.length === 0) return { baixo: 34, medio: 46, alto: 20 };
+  if (scores.length === 0) return { baixo: 0, medio: 0, alto: 0 };
   const baixo = scores.filter((s) => s >= 70).length;
   const medio = scores.filter((s) => s >= 45 && s < 70).length;
   const alto = scores.filter((s) => s < 45).length;
@@ -39,15 +38,24 @@ function riskDistribution(scores: number[]): { baixo: number; medio: number; alt
   };
 }
 
+// Read watchlist size from localStorage
+function getWatchlistSize(): number {
+  try {
+    const raw = localStorage.getItem("fonteia_watchlist");
+    if (!raw) return 0;
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 const KPI_COLORS = [
   "var(--brand-ink)",
   "var(--accent-ink)",
   "#7C5CFC",
   "#C98A2E",
 ] as const;
-
-// OVERVIEW_STATS key order for KPI strip
-const KPI_KEYS = ["oportunidades", "economia", "rastreadas", "watchlist"] as const;
 
 export function DashboardPage(props: {
   onSelectLot?: ((lot: ReceitaLeilaoLot) => void) | undefined;
@@ -56,12 +64,16 @@ export function DashboardPage(props: {
   const { onSelectLot, onAsk } = props;
 
   const [lots, setLots] = useState<ReceitaLeilaoLot[]>([]);
-  const [isDemo, setIsDemo] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | undefined>();
   const [term, setTerm] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
+  const [watchlistSize, setWatchlistSize] = useState(0);
+
+  useEffect(() => {
+    setWatchlistSize(getWatchlistSize());
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -71,7 +83,6 @@ export function DashboardPage(props: {
       .then((result) => {
         if (!active) return;
         setLots(result.lots);
-        setIsDemo(result.isDemo);
         setIsLoading(false);
       })
       .catch((err: unknown) => {
@@ -116,8 +127,12 @@ export function DashboardPage(props: {
     });
   }, [scoredLots, term, riskFilter, personFilter]);
 
-  // Spark data for trend chart: derive from spark series of "oportunidades" stat
-  const trendData = OVERVIEW_STATS.oportunidades.spark;
+  // KPIs derived from real lots
+  const kpiLotesDisponiveis = lots.length;
+  const kpiOrgaosMonitorados = useMemo(
+    () => new Set(lots.map((l) => l.agency)).size,
+    [lots],
+  );
 
   // Risk distribution from real scored lots
   const dist = useMemo(
@@ -125,14 +140,30 @@ export function DashboardPage(props: {
     [scoredLots],
   );
 
+  // KPI strip derived from real data
+  const kpiStrip = [
+    {
+      key: "lotes",
+      label: "Lotes disponíveis",
+      value: kpiLotesDisponiveis,
+      color: KPI_COLORS[0],
+    },
+    {
+      key: "orgaos",
+      label: "Órgãos monitorados",
+      value: kpiOrgaosMonitorados,
+      color: KPI_COLORS[1],
+    },
+    {
+      key: "watchlist",
+      label: "Acompanhando",
+      value: watchlistSize,
+      color: KPI_COLORS[2],
+    },
+  ] as const;
+
   return (
     <div className="dashboard-grid">
-      {isDemo ? (
-        <DemoDataBanner
-          title="Modo demonstracao"
-          message="O cockpit esta usando amostras locais. Use para validar a experiencia, nao para tomar decisao real de leilao."
-        />
-      ) : null}
 
       {/* ── Saudação ─────────────────────────────────────────────── */}
       <section className="dash-greeting">
@@ -153,56 +184,43 @@ export function DashboardPage(props: {
         ) : null}
       </section>
 
-      {/* ── 4 KPIs ───────────────────────────────────────────────── */}
+      {/* ── 3 KPIs derivados dos lotes reais ─────────────────────── */}
       <section className="kpi-strip">
-        {KPI_KEYS.map((key, i) => {
-          const stat = OVERVIEW_STATS[key];
-          const color = KPI_COLORS[i] ?? "var(--brand-ink)";
-          const up = stat.delta >= 0;
-          return (
-            <div className="card card--pad" key={key}>
-              <div className="row between" style={{ alignItems: "flex-start" }}>
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--t-mid)",
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {stat.label}
-                </span>
-                <span
-                  className={`badge num ${up ? "badge--ok" : "badge--danger"}`}
-                  style={{ fontSize: 11 }}
-                >
-                  {up ? "+" : ""}
-                  {stat.delta}%
-                </span>
-              </div>
-              <div
-                className="row between"
-                style={{ alignItems: "flex-end", marginTop: 12 }}
+        {kpiStrip.map(({ key, label, value, color }) => (
+          <div className="card card--pad" key={key}>
+            <div className="row between" style={{ alignItems: "flex-start" }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "var(--t-mid)",
+                  lineHeight: 1.3,
+                }}
               >
-                <div
-                  style={{
-                    fontSize: 28,
-                    fontWeight: 800,
-                    letterSpacing: "-.025em",
-                  }}
-                >
-                  <CountUp
-                    value={stat.value}
-                    prefix={stat.prefix}
-                    suffix={stat.suffix}
-                    decimals={stat.suffix === "M" ? 1 : 0}
-                  />
-                </div>
-                <Spark data={stat.spark} color={color} width={80} height={30} />
+                {label}
+              </span>
+            </div>
+            <div
+              className="row between"
+              style={{ alignItems: "flex-end", marginTop: 12 }}
+            >
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 800,
+                  letterSpacing: "-.025em",
+                  color,
+                }}
+              >
+                {isLoading ? (
+                  <span className="muted" style={{ fontSize: 18 }}>—</span>
+                ) : (
+                  <CountUp value={value} decimals={0} />
+                )}
               </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </section>
 
       {/* ── Oportunidade do dia ──────────────────────────────────── */}
@@ -335,6 +353,10 @@ export function DashboardPage(props: {
             style={{ padding: "32px 0", textAlign: "center", color: "var(--danger)" }}
           >
             {loadError}
+          </p>
+        ) : lots.length === 0 ? (
+          <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
+            Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.
           </p>
         ) : filteredEntries.length === 0 ? (
           <p className="muted" style={{ padding: "32px 0", textAlign: "center" }}>
@@ -489,33 +511,9 @@ export function DashboardPage(props: {
         )}
       </section>
 
-      {/* ── Gráficos ─────────────────────────────────────────────── */}
-      <section
-        className="grid"
-        style={{ gridTemplateColumns: "1.5fr 1fr", gap: 18, alignItems: "start" }}
-      >
-        {/* Tendência — lotes mapeados */}
-        <div className="panel" style={{ padding: 22 }}>
-          <div className="row between" style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>
-              Lotes mapeados — tendencia
-            </div>
-            <span className="badge badge--ok num" style={{ fontSize: 11 }}>
-              +{OVERVIEW_STATS.oportunidades.delta}%
-            </span>
-          </div>
-          <AreaChart data={trendData} height={120} color="var(--brand-ink)" />
-          <div
-            className="row between tiny muted"
-            style={{ marginTop: 6 }}
-          >
-            <span>inicio</span>
-            <span>hoje</span>
-          </div>
-        </div>
-
-        {/* Distribuição de risco dos lotes reais */}
-        <div className="panel" style={{ padding: 22 }}>
+      {/* ── Distribuição de risco dos lotes reais ───────────────── */}
+      {scoredLots.length > 0 ? (
+        <section className="panel" style={{ padding: 22 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
             Distribuicao de risco
           </div>
@@ -536,8 +534,8 @@ export function DashboardPage(props: {
               color="var(--danger)"
             />
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       {/* ── Fontes oficiais ──────────────────────────────────────── */}
       <section className="panel" style={{ padding: 20 }}>

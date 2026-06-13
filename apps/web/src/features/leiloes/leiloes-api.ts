@@ -1,16 +1,11 @@
-import {
-  normalizeReceitaDestaquesPayload,
-  type ReceitaLeilaoLot,
-  type ReceitaLeiloesDestaquesPayload,
-} from "@fonteia/sources";
+import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { fetchJsonFromApi, getPublicEnv, trimTrailingSlash } from "../../lib/api-client";
 
-export type LeiloesDataSource = "api" | "supabase" | "sample";
+export type LeiloesDataSource = "api" | "supabase" | "empty";
 
 export interface LeiloesLoadResult {
   source: LeiloesDataSource;
   lots: ReceitaLeilaoLot[];
-  isDemo: boolean;
   message: string;
   lastSyncedAt?: string | undefined;
   errors?: string[] | undefined;
@@ -20,57 +15,16 @@ export interface LeilaoLotResult extends LeiloesLoadResult {
   lot: ReceitaLeilaoLot | null;
 }
 
+// isDemo is kept for backwards compatibility but always false — no sample data is shown
+/** @deprecated Use `source === "empty"` instead */
+export function isLeiloesDemo(_result: LeiloesLoadResult): boolean {
+  return false;
+}
+
 interface SupabaseEntityRow {
   attributes: ReceitaLeilaoLot;
   updated_at?: string;
 }
-
-const samplePayload: ReceitaLeiloesDestaquesPayload = {
-  agora: "2026-06-10 02:40",
-  destaques: [
-    {
-      permitePF: false,
-      orgao: "Receita Federal",
-      cidade: "BELEM",
-      edital: "0200100/0000001/2026",
-      edle: "200100/1/2026",
-      dtFimProposta: "2026-07-06 20:00",
-      destaque: true,
-      imagemDestaque: "https://storagegw.estaleiro.serpro.gov.br/sle-pro-publico/arquivos/images/sample-belem.jpg",
-      numero: 136,
-      lote: 136,
-      valor: 4000,
-    },
-    {
-      permitePF: true,
-      orgao: "Receita Federal",
-      cidade: "FORTALEZA",
-      edital: "0317900/0000002/2026",
-      edle: "317900/2/2026",
-      dtFimProposta: "2026-06-26 21:00",
-      destaque: true,
-      imagemDestaque: "https://storagegw.estaleiro.serpro.gov.br/sle-pro-publico/arquivos/images/sample-fortaleza.jpg",
-      numero: 250,
-      lote: 216,
-      valor: 118805,
-    },
-    {
-      permitePF: true,
-      orgao: "Receita Federal",
-      cidade: "CURITIBA",
-      edital: "0900100/0000007/2026",
-      edle: "900100/7/2026",
-      dtFimProposta: "2026-06-29 20:00",
-      destaque: true,
-      imagemDestaque: "https://storagegw.estaleiro.serpro.gov.br/sle-pro-publico/arquivos/images/sample-curitiba.jpg",
-      numero: 42,
-      lote: 42,
-      valor: 1490,
-    },
-  ],
-};
-
-export const SAMPLE_LEILAO_LOTS: ReceitaLeilaoLot[] = normalizeReceitaDestaquesPayload(samplePayload);
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -133,7 +87,6 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "api",
         lots,
-        isDemo: false,
         message: "Dados carregados pela API Fonte.ia com trilha de fonte e normalizacao do produto.",
       };
     }
@@ -148,7 +101,6 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "supabase",
         lots,
-        isDemo: false,
         message: "Dados carregados do Supabase publico com RLS e evidencias da Receita Federal.",
         lastSyncedAt,
         errors,
@@ -159,11 +111,9 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
   }
 
   return {
-    source: "sample",
-    lots: SAMPLE_LEILAO_LOTS,
-    isDemo: true,
-    message: "Modo demonstracao: usando amostras locais porque a API e o Supabase nao retornaram lotes ao vivo.",
-    lastSyncedAt: samplePayload.agora,
+    source: "empty",
+    lots: [],
+    message: "Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.",
     errors,
   };
 }
@@ -178,7 +128,6 @@ export async function getLeilaoLotById(lotId: string, fetcher: typeof fetch = fe
       source: "api",
       lot,
       lots: [lot],
-      isDemo: false,
       message: "Lote carregado pela API Fonte.ia.",
     };
   } catch (error) {
