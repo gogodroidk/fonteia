@@ -237,13 +237,27 @@ const ROTULOS: Record<NivelSuporte, { texto: string; cor: string }> = {
 
 function TabelaComparativa() {
   return (
-    <div style={{ overflowX: "auto", marginBottom: "20px" }}>
+    <div style={{ marginBottom: "20px" }}>
+      <span
+        className="mfa-table-hint"
+        style={{
+          display: "none",
+          fontSize: "12px",
+          color: "var(--t-low)",
+          marginBottom: "6px",
+        }}
+        aria-hidden="true"
+      >
+        → deslize para ver
+      </span>
+      <div className="mfa-table-scroll" style={{ overflowX: "auto" }}>
       <table
         style={{
           width: "100%",
           borderCollapse: "collapse",
           fontSize: "14px",
           lineHeight: 1.5,
+          minWidth: "560px",
         }}
       >
         <thead>
@@ -312,6 +326,7 @@ function TabelaComparativa() {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -472,6 +487,10 @@ export function MelhoresFerramentasPage() {
         }
         @media (max-width: 460px) {
           .mfa-criterios-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 720px) {
+          .mfa-table-scroll { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+          .mfa-table-hint   { display: block !important; }
         }
       `}</style>
 

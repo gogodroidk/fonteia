@@ -151,7 +151,7 @@ const ROWS: CompRow[] = [
     criterio: "Custo",
     manual: "Grátis — o site da Receita é público",
     manualPos: true,
-    fonteia: "A partir de R$ 299/mês — 7 dias grátis para testar",
+    fonteia: "A partir de R$ 197/mês — 7 dias grátis para testar",
     fonteiaNeg: true,
   },
   {
@@ -265,7 +265,8 @@ export function FonteiaVsManualPage() {
           .vsm-header { padding-left: 20px !important; padding-right: 20px !important; }
           .vsm-main   { padding-left: 20px !important; padding-right: 20px !important; }
           .vsm-footer { padding-left: 20px !important; padding-right: 20px !important; }
-          .vsm-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          .vsm-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+          .vsm-table-hint { display: block !important; }
         }
       `}</style>
 
@@ -397,13 +398,28 @@ export function FonteiaVsManualPage() {
               Comparativo
             </h2>
 
+            <span
+              className="vsm-table-hint"
+              style={{
+                display: "none",
+                fontSize: "12px",
+                color: "var(--t-low)",
+                marginBottom: "6px",
+              }}
+              aria-hidden="true"
+            >
+              → deslize para ver
+            </span>
             <div
-              className="vsm-table-wrap"
               style={{
                 borderRadius: "14px",
-                overflow: "hidden",
                 border: "1px solid var(--border)",
+                overflow: "hidden",
               }}
+            >
+            <div
+              className="vsm-table-wrap"
+              style={{ overflowX: "auto" }}
             >
               <table
                 style={{ width: "100%", borderCollapse: "collapse", minWidth: "560px" }}
@@ -446,6 +462,7 @@ export function FonteiaVsManualPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
 
             <p
@@ -523,7 +540,7 @@ export function FonteiaVsManualPage() {
               A Fonte.ia vale quando o custo do tempo começa a superar o custo da assinatura. Se
               você passa 2 horas por semana navegando em edital atrás de edital, fazendo contas
               soltas e tentando lembrar de qual lote vence quando — o tempo já custa mais do que
-              R$ 299/mês para a maioria das pessoas que trabalha.
+              R$ 197/mês para a maioria das pessoas que trabalha.
             </P>
 
             <P>

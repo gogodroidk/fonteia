@@ -1,6 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Calculator, Gavel, Info, ArrowRight } from "lucide-react";
 import { LogoMark } from "../../../components/ui/logo-mark";
+import {
+  useSeo,
+  articleJsonLd,
+  breadcrumbJsonLd,
+  SITE_URL,
+} from "../../../lib/seo";
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function brl(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -175,26 +181,31 @@ function Campo({
 
 /* ─── Página principal ───────────────────────────────────────────────────── */
 export function CalculadoraLancePage() {
-  /* ── SEO on-page ── */
-  useEffect(() => {
-    document.title =
-      "Calculadora de lance máximo para leilão — grátis | Fonte.ia";
+  const TITLE = "Calculadora de lance máximo para leilão — grátis | Fonte.ia";
+  const DESCRIPTION =
+    "Calcule grátis o lance máximo que vale a pena dar em um leilão da Receita Federal, já considerando comissão do leiloeiro, tributos e custos. Sem cadastro.";
 
-    const META_DESC =
-      "Calcule grátis o lance máximo que vale a pena dar em um leilão da Receita Federal, já considerando comissão do leiloeiro, tributos e custos. Sem cadastro.";
-
-    const existing = document.querySelector<HTMLMetaElement>(
-      'meta[name="description"]',
-    );
-    if (existing) {
-      existing.content = META_DESC;
-    } else {
-      const meta = document.createElement("meta");
-      meta.name = "description";
-      meta.content = META_DESC;
-      document.head.appendChild(meta);
-    }
-  }, []);
+  useSeo({
+    title: TITLE,
+    description: DESCRIPTION,
+    canonicalPath: "/ferramentas/calculadora-lance",
+    jsonLd: [
+      articleJsonLd({
+        title: TITLE,
+        description: DESCRIPTION,
+        url: SITE_URL + "/ferramentas/calculadora-lance",
+        datePublished: "2026-06-13",
+      }),
+      breadcrumbJsonLd([
+        { name: "Início", url: SITE_URL + "/" },
+        { name: "Ferramentas", url: SITE_URL + "/ferramentas" },
+        {
+          name: "Calculadora de lance",
+          url: SITE_URL + "/ferramentas/calculadora-lance",
+        },
+      ]),
+    ],
+  });
 
   /* ── State dos campos ── */
   const [valorMercado, setValorMercado] = useState("");

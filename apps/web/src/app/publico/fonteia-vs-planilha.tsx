@@ -150,7 +150,7 @@ const ROWS: CompRow[] = [
     criterio: "Custo",
     planilha: "Grátis (Google Sheets ou Excel)",
     planilhaPos: true,
-    fonteia: "A partir de R$ 299/mês — teste grátis por 7 dias",
+    fonteia: "A partir de R$ 197/mês — teste grátis por 7 dias",
     fonteiaNeg: true,
   },
   {
@@ -263,7 +263,8 @@ export function FonteiaVsPlanilhaPage() {
           .vspl-header { padding-left: 20px !important; padding-right: 20px !important; }
           .vspl-main   { padding-left: 20px !important; padding-right: 20px !important; }
           .vspl-footer { padding-left: 20px !important; padding-right: 20px !important; }
-          .vspl-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+          .vspl-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+          .vspl-table-hint { display: block !important; }
         }
       `}</style>
 
@@ -394,13 +395,28 @@ export function FonteiaVsPlanilhaPage() {
               Comparativo
             </h2>
 
+            <span
+              className="vspl-table-hint"
+              style={{
+                display: "none",
+                fontSize: "12px",
+                color: "var(--t-low)",
+                marginBottom: "6px",
+              }}
+              aria-hidden="true"
+            >
+              → deslize para ver
+            </span>
             <div
-              className="vspl-table-wrap"
               style={{
                 borderRadius: "14px",
-                overflow: "hidden",
                 border: "1px solid var(--border)",
+                overflow: "hidden",
               }}
+            >
+            <div
+              className="vspl-table-wrap"
+              style={{ overflowX: "auto" }}
             >
               <table
                 style={{ width: "100%", borderCollapse: "collapse", minWidth: "560px" }}
@@ -443,6 +459,7 @@ export function FonteiaVsPlanilhaPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
             </div>
 
             <p
