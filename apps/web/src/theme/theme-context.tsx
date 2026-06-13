@@ -15,9 +15,8 @@ function getInitialTheme(): Theme {
   if (typeof window === "undefined") return "dark";
   const saved = window.localStorage.getItem(STORAGE_KEY);
   if (saved === "dark" || saved === "light") return saved;
-  // Transição: default claro enquanto as telas migram para o novo design system.
-  // Passa a dark-first quando toda a UI estiver no design novo.
-  return "light";
+  // Toda a UI já está no design system novo (compatível com dark). Dark-first por padrão.
+  return "dark";
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

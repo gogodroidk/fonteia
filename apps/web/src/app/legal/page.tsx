@@ -542,8 +542,8 @@ function Termos() {
         </P>
         <Sub title="4.2 Planos pagos" />
         <P>
-          Os planos Individual (R$ 299/mês), Escritório (R$ 699/mês) e Corporativo
-          (R$ 1.499/mês) são cobrados mensalmente via cartão ou boleto. O cancelamento pode ser
+          O plano Profissional (R$ 197/mês) e o Corporativo (R$ 597/mês) são cobrados
+          mensalmente via cartão ou Pix; o plano Avaliação é gratuito. O cancelamento pode ser
           feito a qualquer momento no painel da conta, sem multa ou fidelidade.
         </P>
         <Sub title="4.3 Garantia de 7 dias" />
