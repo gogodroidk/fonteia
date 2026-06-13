@@ -135,20 +135,20 @@ function BrandLockup({
 // ─── Feature data ─────────────────────────────────────────────────────────────
 
 const FEATURES_LOGIN = [
-  { label: "Score de risco", detail: "calculado a partir das fontes oficiais" },
-  { label: "Custo total estimado", detail: "incluindo tributos e taxas" },
+  { label: "Score de oportunidade", detail: "calculado por regra a partir da fonte oficial" },
+  { label: "Lance mínimo e prazo", detail: "lidos direto do edital da Receita Federal" },
   { label: "Link direto", detail: "para o sistema oficial de lances" },
-  { label: "Relatório PDF", detail: "com análise de IA e rastreabilidade" },
+  { label: "Relatório PDF", detail: "com link e data de coleta da fonte" },
 ];
 
 const FEATURES_SIGNUP = [
-  { label: "Score de risco", detail: "calculado a partir das fontes oficiais" },
-  { label: "Custo total", detail: "incluindo tributos, taxas e ônus" },
-  { label: "Chat com IA", detail: "para perguntas sobre qualquer lote" },
-  { label: "Relatório PDF", detail: "com rastreabilidade completa" },
+  { label: "Score de oportunidade", detail: "calculado por regra a partir da fonte oficial" },
+  { label: "Quem pode participar", detail: "elegibilidade PF/PJ informada no edital" },
+  { label: "Assistente de IA", detail: "pergunte em português, receba com a fonte" },
+  { label: "Relatório PDF", detail: "com rastreabilidade até a origem" },
 ];
 
-const TRUST_ITEMS = ["Dado rastreável", "Sem cartão de crédito", "Garantia de 7 dias"];
+const TRUST_ITEMS = ["Dado rastreável", "Sem cartão de crédito", "Cancele quando quiser"];
 
 // ─── Left brand panel ─────────────────────────────────────────────────────────
 
@@ -176,8 +176,8 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
 
   const heroBody =
     mode === "login"
-      ? "A Fonte.ia monitora editais da Receita Federal, PGFN e SPU, cruza cada lote com as fontes oficiais e entrega tudo que você precisa para decidir — em segundos."
-      : "Crie sua conta e acesse 5 análises completas de lotes governamentais — score de risco, custo total, rastreabilidade e IA. Sem cartão de crédito.";
+      ? "A Fonte.ia organiza cada lote de leilão da Receita Federal com os dados oficiais — lance mínimo, prazo e elegibilidade — e entrega rastreabilidade até a fonte. Mais órgãos em breve."
+      : "Crie sua conta e faça 5 análises completas de lotes da Receita Federal — score de oportunidade por regra, rastreabilidade até a fonte e assistente de IA. Sem cartão de crédito.";
 
   return (
     <div className="auth-left-panel" style={{ flex: "0 0 52%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "48px 56px", background: "var(--bg)", position: "relative", overflow: "hidden" }}>
@@ -413,7 +413,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
         </div>
 
         {/* Form box */}
-        <div style={{ width: "100%", maxWidth: 400, marginTop: mode === "signup" ? 48 : 0 }}>
+        <div className="auth-form-box" style={{ width: "100%", maxWidth: 400, marginTop: mode === "signup" ? 48 : 0 }}>
 
           {/* Mobile logo */}
           <div style={{ marginBottom: 28 }}>
@@ -625,9 +625,19 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           .auth-right-panel {
             background: var(--bg) !important;
             border-left: none !important;
-            padding: 32px 24px !important;
+            /* Extra top padding clears the absolute back/theme controls so the
+               logo and title never sit under them on phones. */
+            padding: 72px 22px 40px !important;
             align-items: flex-start !important;
           }
+        }
+        @media (max-width: 820px) {
+          /* Panel top padding already clears the controls — drop the desktop
+             signup offset so the form starts cleanly under the logo. */
+          .auth-form-box { margin-top: 0 !important; }
+        }
+        @media (max-width: 380px) {
+          .auth-right-panel { padding-left: 18px !important; padding-right: 18px !important; }
         }
         .auth-label {
           display: block;

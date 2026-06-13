@@ -452,7 +452,7 @@ export function LotDetailPage({
 
           {/* ── Header card ──────────────────────────────────────────────── */}
           <div className="lot-detail-header">
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
               {/* Badges */}
               <div
                 style={{
@@ -483,7 +483,7 @@ export function LotDetailPage({
               </div>
 
               {/* Title */}
-              <h2 style={{ marginBottom: "var(--s-3)", lineHeight: 1.2 }}>
+              <h2 style={{ marginBottom: "var(--s-3)", lineHeight: 1.2, overflowWrap: "anywhere" }}>
                 Edital {lot.edital} — Lote {lot.displayNumber}
               </h2>
 

@@ -34,7 +34,7 @@ function DocHeader({ tag, title }: { tag: string; title: string }) {
       <span className="eyebrow" style={{ display: "block", marginBottom: "14px" }}>
         {tag}
       </span>
-      <h1 className="h1" style={{ fontSize: "36px", fontWeight: 800, letterSpacing: "-0.03em", marginBottom: "12px" }}>
+      <h1 className="h1 legal-doc-h1" style={{ fontWeight: 800, letterSpacing: "-0.03em", marginBottom: "12px" }}>
         {title}
       </h1>
       <p className="muted small" style={{ margin: 0 }}>{UPDATED}</p>
@@ -501,8 +501,10 @@ function Termos() {
           <strong style={{ color: "var(--t-hi)" }}>
             inteligência de dados públicos governamentais
           </strong>
-          . Ela coleta, estrutura, cruza e apresenta informações de fontes oficiais (Receita
-          Federal, PGFN, SPU e outros órgãos) de forma clara e rastreável.
+          . Atualmente cobre os leilões da Receita Federal (Sistema de Leilão Eletrônico — SLE),
+          coletando, estruturando e apresentando as informações da fonte oficial de forma clara e
+          rastreável. A integração com outros órgãos (como PGFN e SPU) está no roteiro e será
+          liberada gradualmente.
         </P>
         <Warn>
           <p
@@ -658,16 +660,38 @@ export function LegalPage({ kind, onHome }: LegalPageProps) {
 
   return (
     <div
+      className="legal-root"
       style={{
         minHeight: "100vh",
         background: "var(--bg)",
         color: "var(--t-hi)",
         display: "flex",
         flexDirection: "column",
+        overflowX: "hidden",
       }}
     >
+      {/* ── Scoped styles: visually-hidden helper + mobile polish ── */}
+      <style>{`
+        .legal-root .visually-hidden {
+          position: absolute !important;
+          width: 1px; height: 1px;
+          padding: 0; margin: -1px;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          clip-path: inset(50%);
+          white-space: nowrap;
+          border: 0;
+        }
+        .legal-root .legal-doc-h1 { font-size: clamp(26px, 6vw, 36px); }
+        @media (max-width: 720px) {
+          .legal-header, .legal-footer { padding-left: 20px !important; padding-right: 20px !important; }
+          .legal-main { padding-left: 20px !important; padding-right: 20px !important; }
+        }
+      `}</style>
+
       {/* ── NAV ── */}
       <header
+        className="legal-header"
         style={{
           display: "flex",
           alignItems: "center",
@@ -727,6 +751,7 @@ export function LegalPage({ kind, onHome }: LegalPageProps) {
 
       {/* ── CONTENT ── */}
       <main
+        className="legal-main"
         style={{
           flex: 1,
           maxWidth: "760px",
@@ -745,6 +770,7 @@ export function LegalPage({ kind, onHome }: LegalPageProps) {
 
       {/* ── FOOTER ── */}
       <footer
+        className="legal-footer"
         style={{
           borderTop: "1px solid var(--border)",
           padding: "24px 48px",

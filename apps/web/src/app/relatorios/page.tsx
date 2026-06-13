@@ -81,7 +81,7 @@ const REPORT_CONTENTS: Array<{ icon: typeof FileText; label: string; desc: strin
   {
     icon: ExternalLink,
     label: "Fontes oficiais",
-    desc: "Cadeia de rastreabilidade com a URL, data de coleta e hash do registro.",
+    desc: "Cadeia de rastreabilidade com a URL oficial, o ID do registro e a data de coleta.",
   },
   {
     icon: CheckSquare,
@@ -178,7 +178,8 @@ function ReportsTable({ reports }: { reports: ReportEntry[] }) {
         </span>
       </div>
 
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "inherit" }}>
+      <div style={{ overflowX: "auto" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "inherit", minWidth: 480 }}>
         <thead>
           <tr style={{ borderBottom: "1px solid var(--border)" }}>
             {(["Lote", "Gerado em", "Ações"] as const).map((h) => (
@@ -292,6 +293,7 @@ function ReportsTable({ reports }: { reports: ReportEntry[] }) {
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -404,36 +406,30 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
 
       {/* ── Two-column layout when there are reports, single column otherwise ── */}
       {hasReports ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 300px",
-            gap: 20,
-            alignItems: "start",
-          }}
-        >
+        <div className="relatorios-grid">
           <ReportsTable reports={reports} />
           <ReportContentsPanel />
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 300px",
-            gap: 20,
-            alignItems: "start",
-          }}
-        >
+        <div className="relatorios-grid">
           <EmptyState onExplore={onExplore} />
           <ReportContentsPanel />
         </div>
       )}
 
-      {/* ── Responsive collapse to single column ─────────────────────────── */}
+      {/* ── Responsive: 2 columns on desktop, single column on mobile ────── */}
       <style>{`
-        @media (max-width: 700px) {
+        .relatorios-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 300px;
+          gap: 20px;
+          align-items: start;
+        }
+        /* Collapse early: the app sidebar consumes ~280px, so the rigid
+           300px side panel would squeeze the table before "mobile" widths. */
+        @media (max-width: 1000px) {
           .relatorios-grid {
-            grid-template-columns: 1fr !important;
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
