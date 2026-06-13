@@ -7,6 +7,7 @@ import {
   Database,
   FileText,
   Gavel,
+  HelpCircle,
   LayoutGrid,
   LogOut,
   Menu,
@@ -22,6 +23,7 @@ import { useAuth } from "./auth/auth-context";
 import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { ThemeToggle } from "./components/ui";
+import { HelpModeProvider, HelpHint, useHelpMode } from "./components/help-mode";
 import { LoginPage } from "./app/auth/login-page";
 import { LandingPage } from "./app/landing/page";
 import { OnboardingPage } from "./app/onboarding/page";
@@ -260,6 +262,8 @@ function AppShell({ path, navigate }: AppShellProps) {
     (user?.user_metadata?.["full_name"] as string | undefined) ?? user?.email?.split("@")[0] ?? "Você";
   const avatarUrl = user?.user_metadata?.["avatar_url"] as string | undefined;
 
+  const { helpOn, toggleHelp } = useHelpMode();
+
   const navItem = (item: (typeof NAV)[number], inDrawer: boolean): ReactNode => {
     const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
     const Icon = item.icon;
@@ -281,14 +285,17 @@ function AppShell({ path, navigate }: AppShellProps) {
       fontSize: 14,
       transition: "background .15s,color .15s",
     };
+    const hintId = `nav.${item.route}` as const;
     return (
-      <button key={item.route} type="button" onClick={() => go(item.path)} style={style} title={item.label}>
-        {active && (
-          <span style={{ position: "absolute", left: 0, top: 10, bottom: 10, width: 3, borderRadius: 2, background: "var(--brand-ink)" }} />
-        )}
-        <Icon size={18} strokeWidth={active ? 2.1 : 1.8} aria-hidden="true" />
-        {(!collapsed || inDrawer) && <span>{item.label}</span>}
-      </button>
+      <HelpHint key={item.route} id={hintId}>
+        <button type="button" onClick={() => go(item.path)} style={style} title={item.label}>
+          {active && (
+            <span style={{ position: "absolute", left: 0, top: 10, bottom: 10, width: 3, borderRadius: 2, background: "var(--brand-ink)" }} />
+          )}
+          <Icon size={18} strokeWidth={active ? 2.1 : 1.8} aria-hidden="true" />
+          {(!collapsed || inDrawer) && <span>{item.label}</span>}
+        </button>
+      </HelpHint>
     );
   };
 
@@ -320,18 +327,22 @@ function AppShell({ path, navigate }: AppShellProps) {
 
       <div style={{ padding: collapsed && !inDrawer ? "12px 10px" : "12px 14px" }}>
         {collapsed && !inDrawer ? (
-          <button className="btn btn--accent btn--icon btn--sm" type="button" onClick={() => go("/app/planos")} title="Ampliar acesso" style={{ width: "100%" }}>
-            <Zap size={15} fill="currentColor" aria-hidden="true" />
-          </button>
+          <HelpHint id="nav.planos">
+            <button className="btn btn--accent btn--icon btn--sm" type="button" onClick={() => go("/app/planos")} title="Ampliar acesso" style={{ width: "100%" }}>
+              <Zap size={15} fill="currentColor" aria-hidden="true" />
+            </button>
+          </HelpHint>
         ) : (
           <div className="inset" style={{ padding: 13 }}>
             <div className="row between" style={{ marginBottom: 7 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)" }}>Fonte.ia Pro</span>
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-ink)" }}>7 dias grátis</span>
             </div>
-            <button className="btn btn--accent btn--sm btn--block" type="button" onClick={() => go("/app/planos")} style={{ fontSize: 12 }}>
-              <Zap size={13} fill="currentColor" aria-hidden="true" />Assinar agora
-            </button>
+            <HelpHint id="nav.planos">
+              <button className="btn btn--accent btn--sm btn--block" type="button" onClick={() => go("/app/planos")} style={{ fontSize: 12 }}>
+                <Zap size={13} fill="currentColor" aria-hidden="true" />Assinar agora
+              </button>
+            </HelpHint>
           </div>
         )}
       </div>
@@ -379,34 +390,58 @@ function AppShell({ path, navigate }: AppShellProps) {
             </button>
             <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
-              <div className="searchbar" role="search" aria-label="Buscar lote, órgão ou edital">
-                <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
-                <input
-                  ref={topbarInputRef}
-                  placeholder="Buscar lote, órgão ou edital…"
-                  value={topbarQuery}
-                  onChange={(e) => setTopbarQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && topbarQuery.trim().length > 0) {
-                      goToSearch(topbarQuery);
-                      setTopbarQuery("");
-                    }
-                  }}
-                  aria-label="Buscar lote, órgão ou edital"
-                  style={{ fontSize: 13.5 }}
-                />
-                <span className="kbd" aria-hidden="true">⌘K</span>
-              </div>
+              <HelpHint id="topbar.search">
+                <div className="searchbar" role="search" aria-label="Buscar lote, órgão ou edital">
+                  <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+                  <input
+                    ref={topbarInputRef}
+                    placeholder="Buscar lote, órgão ou edital…"
+                    value={topbarQuery}
+                    onChange={(e) => setTopbarQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && topbarQuery.trim().length > 0) {
+                        goToSearch(topbarQuery);
+                        setTopbarQuery("");
+                      }
+                    }}
+                    aria-label="Buscar lote, órgão ou edital"
+                    style={{ fontSize: 13.5 }}
+                  />
+                  <span className="kbd" aria-hidden="true">⌘K</span>
+                </div>
+              </HelpHint>
             </div>
             <div className="shell-actions">
-              <ThemeToggle />
-              <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
-                <Bell size={18} aria-hidden="true" />
+              <HelpHint id="topbar.theme">
+                <ThemeToggle />
+              </HelpHint>
+              {/* Botão Modo Ajuda */}
+              <button
+                className="btn btn--icon btn--ghost"
+                type="button"
+                onClick={toggleHelp}
+                aria-label={helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
+                aria-pressed={helpOn}
+                title={helpOn ? "Desligar ajuda" : "Ligar ajuda"}
+                style={{
+                  color: helpOn ? "var(--brand-ink, #1D5FE0)" : undefined,
+                  background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : undefined,
+                  borderRadius: 9,
+                }}
+              >
+                <HelpCircle size={18} aria-hidden="true" />
               </button>
-              <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")} aria-label="Ampliar acesso">
-                <Zap size={14} fill="currentColor" aria-hidden="true" />
-                <span className="shell-upgrade-label">Upgrade</span>
-              </button>
+              <HelpHint id="topbar.alerts">
+                <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
+                  <Bell size={18} aria-hidden="true" />
+                </button>
+              </HelpHint>
+              <HelpHint id="topbar.upgrade">
+                <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")} aria-label="Ampliar acesso">
+                  <Zap size={14} fill="currentColor" aria-hidden="true" />
+                  <span className="shell-upgrade-label">Upgrade</span>
+                </button>
+              </HelpHint>
               <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
                 {avatarUrl ? <img src={avatarUrl} alt={displayName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
               </button>
@@ -713,9 +748,9 @@ export function App() {
   }
 
   return (
-    <>
+    <HelpModeProvider>
       {content}
       <CookieBanner onOpenPolicy={() => navigate("/cookies")} />
-    </>
+    </HelpModeProvider>
   );
 }
