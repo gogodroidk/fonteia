@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle, User, Phone } from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { LogoMark } from "../../components/ui/logo-mark";
+import { TURNSTILE_SITE_KEY, isTurnstileEnabled } from "../../config/turnstile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -402,6 +403,119 @@ function IconField({
   );
 }
 
+// ─── Cloudflare Turnstile ─────────────────────────────────────────────────────
+
+// Minimal type for the Turnstile API exposed on window.
+interface TurnstileAPI {
+  render: (
+    el: HTMLElement,
+    params: {
+      sitekey: string;
+      callback: (token: string) => void;
+      "error-callback": () => void;
+      "expired-callback": () => void;
+      theme?: "light" | "dark" | "auto";
+    },
+  ) => string;
+  reset: (widgetId: string) => void;
+}
+
+declare global {
+  interface Window {
+    turnstile?: TurnstileAPI;
+  }
+}
+
+/** Loads the Turnstile script once, then resolves. */
+function loadTurnstileScript(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (window.turnstile) {
+      resolve();
+      return;
+    }
+    if (document.querySelector("script[data-turnstile]")) {
+      // Already injected — wait for it.
+      const poll = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 80);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.dataset["turnstile"] = "1";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Turnstile script failed to load"));
+    document.head.appendChild(script);
+  });
+}
+
+interface TurnstileWidgetProps {
+  onToken: (token: string) => void;
+  onError: () => void;
+  onExpire: () => void;
+  widgetIdRef: React.MutableRefObject<string | null>;
+}
+
+function TurnstileWidget({ onToken, onError, onExpire, widgetIdRef }: TurnstileWidgetProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    if (!isTurnstileEnabled()) return;
+
+    let cancelled = false;
+
+    loadTurnstileScript()
+      .then(() => {
+        if (cancelled || !containerRef.current || !window.turnstile) return;
+        // Clear any previous render (e.g. mode switch re-mount)
+        containerRef.current.innerHTML = "";
+        const id = window.turnstile.render(containerRef.current, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: (token) => { onToken(token); },
+          "error-callback": () => { setLoadError(true); onError(); },
+          "expired-callback": () => { onExpire(); },
+          theme: "auto",
+        });
+        widgetIdRef.current = id;
+      })
+      .catch(() => {
+        if (!cancelled) { setLoadError(true); onError(); }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!isTurnstileEnabled()) return null;
+
+  return (
+    <div style={{ margin: "0 0 16px" }}>
+      <div ref={containerRef} />
+      {loadError && (
+        <p
+          role="status"
+          style={{
+            fontSize: 11.5,
+            color: "var(--t-low)",
+            marginTop: 6,
+            lineHeight: 1.4,
+          }}
+        >
+          Verificação anti-bot indisponível neste ambiente — cadastro liberado.
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function LoginPage({ onGoToLanding }: LoginPageProps) {
@@ -418,6 +532,35 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // ── Turnstile state ──────────────────────────────────────────────────────────
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // true when the widget loaded and rendered without error
+  const [captchaReady, setCaptchaReady] = useState(false);
+  // widget id so we can call window.turnstile.reset() after submission errors
+  const turnstileWidgetId = useRef<string | null>(null);
+
+  const handleCaptchaToken = useCallback((token: string) => {
+    setCaptchaToken(token);
+    setCaptchaReady(true);
+  }, []);
+
+  const handleCaptchaError = useCallback(() => {
+    // Widget failed (network, domain not whitelisted, etc.) — degrade gracefully.
+    setCaptchaToken(null);
+    setCaptchaReady(false);
+  }, []);
+
+  const handleCaptchaExpire = useCallback(() => {
+    setCaptchaToken(null);
+  }, []);
+
+  function resetTurnstile() {
+    if (turnstileWidgetId.current && window.turnstile) {
+      window.turnstile.reset(turnstileWidgetId.current);
+    }
+    setCaptchaToken(null);
+  }
 
   // ── Auth handlers ────────────────────────────────────────────────────────────
 
@@ -439,6 +582,14 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
         setNameError("Nome completo é obrigatório.");
         return;
       }
+
+      // Captcha gate: only block when the widget successfully loaded (captchaReady)
+      // AND we still don't have a token. If the widget failed/errored (captchaReady=false),
+      // we degrade gracefully and allow signup without a token.
+      if (captchaReady && !captchaToken) {
+        setError("Por favor, complete a verificação anti-bot antes de continuar.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -450,16 +601,24 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     } else {
       const trimmedName = fullName.trim();
       const trimmedPhone = phone.trim();
-      result = await signUpWithEmail(email, password, {
-        full_name: trimmedName,
-        ...(trimmedPhone ? { phone: trimmedPhone } : {}),
-      });
+      // Only pass captchaToken when we actually have one (exactOptionalPropertyTypes safe).
+      result = await signUpWithEmail(
+        email,
+        password,
+        {
+          full_name: trimmedName,
+          ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+        },
+        captchaToken ?? undefined,
+      );
     }
 
     setSubmitting(false);
 
     if (result.error) {
       setError(result.error);
+      // Token is single-use — reset the widget so the user can get a fresh one.
+      if (mode === "signup") resetTurnstile();
     } else if (mode === "signup") {
       setSuccessMsg("Verifique seu e-mail para confirmar o cadastro.");
     }
@@ -485,6 +644,9 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     setError(null);
     setSuccessMsg(null);
     setNameError(null);
+    // Reset captcha state when leaving/entering signup mode.
+    setCaptchaToken(null);
+    setCaptchaReady(false);
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -765,7 +927,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             </div>
 
             {/* Password */}
-            <div style={{ marginBottom: isSignup ? 24 : 22 }}>
+            <div style={{ marginBottom: isSignup ? 20 : 22 }}>
               <PasswordField
                 id="auth-password"
                 label="Senha"
@@ -789,6 +951,16 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 }
               />
             </div>
+
+            {/* Turnstile anti-bot widget — signup only */}
+            {isSignup && (
+              <TurnstileWidget
+                onToken={handleCaptchaToken}
+                onError={handleCaptchaError}
+                onExpire={handleCaptchaExpire}
+                widgetIdRef={turnstileWidgetId}
+              />
+            )}
 
             {/* Submit */}
             {isSignup ? (
