@@ -609,10 +609,25 @@ export function DashboardPage(props: {
                     >
                       <ScoreRing value={scoring.score} size={36} />
                       <div style={{ minWidth: 0, flex: 1 }}>
+                        {lot.category != null && lot.category !== "" ? (
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 700,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              textTransform: "capitalize",
+                            }}
+                          >
+                            {lot.category.toLowerCase()}
+                          </div>
+                        ) : null}
                         <div
                           style={{
-                            fontSize: 13,
-                            fontWeight: 600,
+                            fontSize: lot.category != null && lot.category !== "" ? 11.5 : 13,
+                            fontWeight: lot.category != null && lot.category !== "" ? 500 : 600,
+                            color: lot.category != null && lot.category !== "" ? "var(--t-mid)" : "var(--t-hi)",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",

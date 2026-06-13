@@ -418,6 +418,44 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
 
       {/* Body */}
       <div style={{ padding: "14px 16px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {/* Category — "o que é": prominent identity line when available */}
+        {lot.category != null && lot.category !== "" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: "var(--t-hi)",
+                textTransform: "capitalize",
+                letterSpacing: "0.01em",
+              }}
+            >
+              {lot.category.toLowerCase()}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--t-low)",
+                fontFamily: "monospace",
+              }}
+            >
+              Lote {lot.displayNumber}
+            </span>
+          </div>
+        ) : (
+          <div
+            style={{
+              fontSize: 11.5,
+              fontWeight: 600,
+              color: "var(--t-low)",
+              fontFamily: "monospace",
+            }}
+          >
+            Lote {lot.displayNumber}
+          </div>
+        )}
+
         {/* City + agency + edital */}
         <div className="row between" style={{ gap: 10, alignItems: "flex-start" }}>
           <div style={{ minWidth: 0 }}>
