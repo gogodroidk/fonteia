@@ -17,9 +17,12 @@ leilões da Receita Federal e a análise por IA de cada lote.
 ## Deploy (uma vez)
 
 ```bash
-cd services/api
-wrangler deploy
+pnpm --filter @fonteia/api-worker run deploy
 ```
+
+> Use o comando acima (ou `cd services/api && wrangler deploy --config wrangler.toml`).
+> O `--config` é obrigatório: sem ele, o wrangler pega o `wrangler.jsonc` da raiz
+> (o app web) em vez deste Worker.
 
 A URL de produção fica `https://fonteia-api.<sua-conta>.workers.dev`.
 O app web já aponta para `https://fonteia-api.igoreluisa.workers.dev` por padrão

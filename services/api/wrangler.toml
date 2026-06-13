@@ -8,7 +8,9 @@ compatibility_date = "2026-06-10"
 #   POST /ia/raio-x           -> analise por IA (requer ANTHROPIC_API_KEY)
 #   GET  /health
 #
-# Deploy:  cd services/api && wrangler deploy
+# Deploy:  pnpm --filter @fonteia/api-worker run deploy
+#   (ou: cd services/api && wrangler deploy --config wrangler.toml — o --config
+#    e obrigatorio; sem ele o wrangler pega o wrangler.jsonc da raiz, que e o app web)
 # URL de producao esperada: https://fonteia-api.<sua-conta>.workers.dev
 #
 # Para ligar a IA (opcional):
