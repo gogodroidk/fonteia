@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bell,
@@ -40,6 +40,21 @@ function renderInline(text: string) {
       <span key={i}>{part}</span>
     ),
   );
+}
+
+// ─── SHA-256 helper (Web Crypto, async) ──────────────────────────────────────
+
+/**
+ * Computes a SHA-256 hex digest of an arbitrary string via Web Crypto.
+ * Returns null if the API is unavailable (e.g. non-secure context in tests).
+ */
+async function sha256Hex(input: string): Promise<string | null> {
+  if (typeof globalThis.crypto?.subtle?.digest !== "function") return null;
+  const encoded = new TextEncoder().encode(input);
+  const buf = await globalThis.crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -665,6 +680,33 @@ export function LotDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lot.id, lot.category, detalhe?.titulo]);
 
+  // SHA-256 hash do conteúdo factual exibido (prova de integridade do que está na tela).
+  // Computado async via Web Crypto a partir de campos estáveis do lote (sem inferências).
+  const [contentHash, setContentHash] = useState<string | null>(null);
+
+  const buildHashInput = useCallback((l: ReceitaLeilaoLot): string => {
+    // Serialização estável e determinística dos campos factuais exibidos.
+    return JSON.stringify({
+      id: l.id,
+      edital: l.edital,
+      minimumBidCents: l.minimumBidCents,
+      proposalDeadline: l.proposalDeadline,
+      collectedAt: l.collectedAt,
+      sourceUrl: l.sourceUrl,
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setContentHash(null);
+    void sha256Hex(buildHashInput(lot)).then((h) => {
+      if (!cancelled) setContentHash(h);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lot, buildHashInput]);
+
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
@@ -776,8 +818,11 @@ export function LotDetailPage({
     }, 4000);
   }
 
-  // Evidence for EvidencePanel
-  const evidenceItems = [
+  // Evidence for EvidencePanel.
+  // confidence: 1 = "cópia direta da fonte oficial, sem interpretação" (sem metodologia inventada).
+  // hash: SHA-256 do conteúdo factual exibido — prova que o que está na tela não foi alterado
+  // após a computação. NÃO é hash verificado na coleta; é hash do que a tela exibe agora.
+  const evidenceItems = useMemo(() => [
     {
       id: `ev-detail-${lot.id}`,
       sourceId: lot.sourceId,
@@ -786,9 +831,10 @@ export function LotDetailPage({
       collectedAt: lot.collectedAt,
       rawRecordId: lot.id,
       quote: `Lote ${lot.displayNumber} — edital ${lot.edital}, lance minimo ${formatBRL(lot.minimumBidCents / 100)}, prazo ${formatDeadline(lot.proposalDeadline)}.`,
-      confidence: 0.85,
+      confidence: 1 as const,
+      ...(contentHash !== null ? { hash: `sha256:${contentHash}` } : {}),
     },
-  ];
+  ], [lot, contentHash]);
 
   // FonteDots source
   const fonteDotsSources = [
@@ -1590,7 +1636,7 @@ export function LotDetailPage({
               </div>
               <span className="badge badge--ok">
                 <ShieldCheck aria-hidden="true" size={12} />
-                Dados verificados
+                Origem oficial rastreada
               </span>
             </div>
 

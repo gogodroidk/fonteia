@@ -30,7 +30,12 @@ export function EvidencePanel({ title = "Trilha de fonte", evidence }: EvidenceP
           <article className="evidence-item" key={item.id}>
             <div className="evidence-meta">
               <strong>{item.sourceId}</strong>
-              <span>{Math.round(item.confidence * 100)}% confianca</span>
+              {/* Exibe "fonte oficial" quando confidence === 1 (dado direto, sem inferência).
+                  Para confidence < 1 exibe o percentual somente quando há metodologia real
+                  que o justifique — valores heurísticos são omitidos para não enganar. */}
+              {item.confidence >= 1
+                ? <span>fonte oficial</span>
+                : null}
             </div>
             <p>{item.quote}</p>
             <dl>
@@ -44,8 +49,8 @@ export function EvidencePanel({ title = "Trilha de fonte", evidence }: EvidenceP
               </div>
               {item.hash ? (
                 <div>
-                  <dt>Hash</dt>
-                  <dd>{item.hash}</dd>
+                  <dt>hash SHA-256 do conteúdo exibido</dt>
+                  <dd style={{ fontFamily: "monospace", wordBreak: "break-all", fontSize: "0.72em" }}>{item.hash}</dd>
                 </div>
               ) : null}
             </dl>
