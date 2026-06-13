@@ -3,6 +3,7 @@ import { Check, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
 import { stripeLinkFor } from "../../config/stripe";
 import { CouponRedeem } from "../../components/coupon-redeem";
+import { useAuth } from "../../auth/auth-context";
 
 function precoLabel(preco: number, periodo: string): string {
   if (preco === 0) return "R$ 0";
@@ -10,6 +11,7 @@ function precoLabel(preco: number, periodo: string): string {
 }
 
 export function BillingPage() {
+  const { user } = useAuth();
   const [chosen, setChosen] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
 
@@ -21,7 +23,12 @@ export function BillingPage() {
   function handleChoose(id: string, nome: string) {
     const link = stripeLinkFor(id);
     if (link) {
-      window.location.href = link;
+      // Pré-preenche o e-mail do login no checkout: garante que a assinatura do
+      // Stripe use o MESMO e-mail que o app usa em my_plan() para liberar o Pro.
+      const email = user?.email;
+      window.location.href = email
+        ? `${link}?prefilled_email=${encodeURIComponent(email)}`
+        : link;
       return;
     }
     setChosen(nome);
