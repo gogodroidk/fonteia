@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Bell,
+  Check,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -102,6 +103,9 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [searchSeed, setSearchSeed] = useState("");
+  const [checkoutOk, setCheckoutOk] = useState<boolean>(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "sucesso",
+  );
 
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
@@ -296,6 +300,22 @@ function AppShell({ path, navigate }: AppShellProps) {
           </header>
 
           <div style={{ padding: "22px clamp(16px,3vw,28px)", flex: 1 }}>
+            {checkoutOk && (
+              <div
+                className="panel elevated"
+                role="status"
+                style={{ padding: 16, marginBottom: 18, display: "flex", gap: 12, alignItems: "center", borderColor: "color-mix(in srgb,var(--accent) 40%,var(--border))" }}
+              >
+                <Check size={20} strokeWidth={2.6} style={{ color: "var(--accent-ink)", flexShrink: 0 }} aria-hidden="true" />
+                <div style={{ flex: 1 }}>
+                  <strong>Pagamento recebido. Estamos ativando sua assinatura.</strong>{" "}
+                  <span className="muted small">Se o acesso não liberar em alguns segundos, atualize a página.</span>
+                </div>
+                <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setCheckoutOk(false)} aria-label="Fechar">
+                  <X size={15} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
             {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
             {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
