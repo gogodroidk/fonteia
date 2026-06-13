@@ -263,9 +263,11 @@ interface LotCardProps {
   watched: boolean;
   onToggleWatch: () => void;
   onSelect: (() => void) | undefined;
+  editalCount: number;
+  onFilterByEdital: (edital: string) => void;
 }
 
-function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
+function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilterByEdital }: LotCardProps) {
   const { lot, scoring, economia } = view;
   const badge = confidenceBadge(scoring.label);
   const days = daysUntil(lot.proposalDeadline);
@@ -442,8 +444,41 @@ function LotCard({ view, watched, onToggleWatch, onSelect }: LotCardProps) {
             >
               {lot.agency}
             </div>
-            <div className="tiny muted" style={{ marginTop: 1, fontFamily: "monospace" }}>
-              {lot.edital}
+            <div
+              className="tiny muted"
+              style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+            >
+              <span style={{ fontFamily: "monospace" }}>{lot.edital}</span>
+              {editalCount > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFilterByEdital(lot.edital);
+                  }}
+                  title={`Filtrar pelos ${editalCount} lotes deste edital`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                    padding: "1px 6px",
+                    border: "1px solid color-mix(in srgb, var(--brand-ink) 30%, transparent)",
+                    borderRadius: 99,
+                    background: "color-mix(in srgb, var(--brand-ink) 10%, transparent)",
+                    color: "var(--brand-ink)",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    lineHeight: 1.5,
+                    letterSpacing: "0.02em",
+                    fontFamily: "inherit",
+                    flexShrink: 0,
+                  }}
+                  aria-label={`${editalCount} lotes neste edital — clique para filtrar`}
+                >
+                  +{editalCount - 1} neste edital
+                </button>
+              )}
             </div>
           </div>
           {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
@@ -715,6 +750,18 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     });
   }, [views, query, category, city, person, desconto, status, sortKey]);
 
+  // Mapa edital → quantidade de lotes no conjunto filtrado atual.
+  // Computado sobre `filtered` inteiro (não só a janela visível) para que o
+  // indicador reflita quantos irmãos existem dentre os resultados do filtro ativo.
+  const editalCountMap = useMemo<ReadonlyMap<string, number>>(() => {
+    const map = new Map<string, number>();
+    for (const { lot } of filtered) {
+      const key = lot.edital.trim();
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [filtered]);
+
   // Reinicia a janela ao mudar busca/filtros/ordenação.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -742,6 +789,10 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   const hasMore = visibleCount < filtered.length;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
+  function handleFilterByEdital(edital: string) {
+    setQuery(edital.trim());
+  }
+
   function clearFilters() {
     setQuery("");
     setCategory("todas");
@@ -959,6 +1010,8 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
                 watched={watchIds.includes(view.lot.id)}
                 onToggleWatch={() => handleToggleWatch(view.lot.id)}
                 onSelect={onSelectLot !== undefined ? () => onSelectLot(view.lot) : undefined}
+                editalCount={editalCountMap.get(view.lot.edital.trim()) ?? 1}
+                onFilterByEdital={handleFilterByEdital}
               />
             ))}
           </div>
