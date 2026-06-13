@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { Check, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
-
-/**
- * Links de pagamento do Stripe (Payment Links). Cole a URL de cada plano pago,
- * gerada no painel do Stripe (Produtos -> Payment Links). Enquanto vazio, o
- * botao registra a escolha e mostra o contato — o checkout funciona sem backend.
- */
-const STRIPE_PAYMENT_LINKS: Record<string, string> = {
-  pro: "",
-  escritorio: "",
-};
+import { stripeLinkFor } from "../../config/stripe";
 
 function precoLabel(preco: number, periodo: string): string {
   if (preco === 0) return "R$ 0";
@@ -21,7 +12,7 @@ export function BillingPage() {
   const [chosen, setChosen] = useState<string | null>(null);
 
   function handleChoose(id: string, nome: string) {
-    const link = STRIPE_PAYMENT_LINKS[id];
+    const link = stripeLinkFor(id);
     if (link) {
       window.location.href = link;
       return;
