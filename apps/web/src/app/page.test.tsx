@@ -11,7 +11,7 @@ describe("Fonte.ia web shell", () => {
   it("renders the dashboard with the active leiloes wedge and evidence promise", () => {
     const html = renderToStaticMarkup(<DashboardPage />);
 
-    expect(html).toContain("Melhores lotes para investigar hoje");
+    expect(html).toContain("Ultimos lotes publicados");
     expect(html).toContain("Fonte antes de opiniao");
     expect(html).toContain("Receita Federal SLE");
   });
