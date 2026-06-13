@@ -714,6 +714,7 @@ export function LotDetailPage({
   // Alert modal
   const [alertOpen, setAlertOpen] = useState(false);
   const [editalLoading, setEditalLoading] = useState(false);
+  const [relacaoLoading, setRelacaoLoading] = useState(false);
   const [editalIA, setEditalIA] = useState<string | null>(null);
   const [editalIALoading, setEditalIALoading] = useState(false);
   const [editalIAError, setEditalIAError] = useState<string | null>(null);
@@ -868,6 +869,40 @@ export function LotDetailPage({
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setEditalLoading(false);
+    }
+  }
+
+  async function baixarRelacao() {
+    setRelacaoLoading(true);
+    try {
+      const { url, key } = getSupabasePublicConfig();
+      const res = await fetch(
+        `${trimTrailingSlash(url)}/functions/v1/edital-pdf?edle=${encodeURIComponent(lot.edle)}&doc=relacao-lotes`,
+        { headers: { apikey: key } },
+      );
+      if (!res.ok) {
+        setSuccessMessage(
+          res.status === 404
+            ? "Este edital nao tem relacao de itens publicada no SLE."
+            : "Nao consegui baixar a relacao de itens agora.",
+        );
+        successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+        return;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      a.download = `relacao-itens_${lot.edital.replaceAll("/", "_")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch {
+      setSuccessMessage("Nao consegui baixar a relacao de itens agora.");
+      successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
+    } finally {
+      setRelacaoLoading(false);
     }
   }
 
@@ -1238,6 +1273,19 @@ export function LotDetailPage({
                   <FileText aria-hidden="true" size={16} />
                 )}
                 Baixar edital (PDF)
+              </button>
+              <button
+                className="ghost-button lot-hero-action"
+                onClick={() => void baixarRelacao()}
+                type="button"
+                disabled={relacaoLoading}
+              >
+                {relacaoLoading ? (
+                  <Loader2 aria-hidden="true" size={16} className="spin" />
+                ) : (
+                  <FileText aria-hidden="true" size={16} />
+                )}
+                Baixar relacao de itens (PDF)
               </button>
               <button
                 className="ghost-button lot-hero-action"
