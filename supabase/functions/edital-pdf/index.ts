@@ -13,6 +13,9 @@
 //   OU
 //   ?unidade=0317900&numero=000002&exercicio=2026
 //
+//   &doc=edital-completo         — (opcional, padrão) baixa o edital completo
+//   &doc=relacao-lotes           — baixa a relação de itens/bens do lote
+//
 //   &store=1                     — (opcional) persiste no Storage antes de responder
 //                                  (exige SUPABASE_SERVICE_ROLE_KEY + bucket "editais" público)
 //
@@ -20,6 +23,7 @@
 // Dado público — o mesmo PDF que qualquer pessoa acessa no site da Receita.
 //
 // Uso: GET /functions/v1/edital-pdf?edle=317900/2/2026
+//      GET /functions/v1/edital-pdf?edle=317900/2/2026&doc=relacao-lotes
 //      GET /functions/v1/edital-pdf?edle=317900/2/2026&store=1
 //      Também aceita a notação padded: ?edital=0317900/000002/2026
 
@@ -64,20 +68,24 @@ function parseRef(raw: string): { unidade: string; numero: string; exercicio: st
   return { unidade: u.trim(), numero: n.trim(), exercicio: e.trim() };
 }
 
+type DocSuffix = "edital-completo" | "relacao-lotes";
+
 // Busca o PDF no SLE e devolve os bytes.
 async function fetchEditalPdf(
   unidade: string,
   numero: string,
   exercicio: string,
+  doc: DocSuffix,
 ): Promise<Uint8Array> {
   // O SLE aceita tanto "317900" quanto "0317900" — usamos como veio.
-  const url = `${SLE_BASE}/api/edital/${unidade}/${numero}/${exercicio}/edital-completo`;
+  const url = `${SLE_BASE}/api/edital/${unidade}/${numero}/${exercicio}/${doc}`;
   const resp = await fetch(url, {
     headers: { "User-Agent": UA, Accept: "application/json" },
   });
 
   if (resp.status === 404) {
-    throw new SleNotFoundError("Edital não encontrado no SLE (404).");
+    const label = doc === "relacao-lotes" ? "Relação de itens" : "Edital";
+    throw new SleNotFoundError(`${label} não encontrado no SLE (404).`);
   }
   if (!resp.ok) {
     const body = await resp.text().catch(() => "");
@@ -87,9 +95,10 @@ async function fetchEditalPdf(
   // O SLE retorna { "data": "<base64 do PDF>" } — confirmado empiricamente.
   const payload = (await resp.json()) as { data?: string };
   if (!payload?.data) {
+    const label = doc === "relacao-lotes" ? "relação de itens" : "edital";
     throw new SleNotFoundError(
-      "A resposta do SLE não contém o campo 'data' (PDF em base64). " +
-      "O edital talvez não tenha um PDF gerado ainda.",
+      `A resposta do SLE não contém o campo 'data' (PDF em base64). ` +
+      `A ${label} talvez não tenha um PDF gerado ainda.`,
     );
   }
 
@@ -176,6 +185,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const { searchParams } = new URL(request.url);
   const store = searchParams.get("store") === "1";
 
+  // Valida o parâmetro ?doc= (default: edital-completo)
+  const docRaw = searchParams.get("doc") ?? "edital-completo";
+  if (docRaw !== "edital-completo" && docRaw !== "relacao-lotes") {
+    return jsonErr(
+      "Parâmetro 'doc' inválido. Valores aceitos: 'edital-completo' (padrão) ou 'relacao-lotes'.",
+      400,
+    );
+  }
+  const doc = docRaw as DocSuffix;
+
   // Aceita ?edle=317900/2/2026  OU  ?edital=0317900/000002/2026
   // OU  ?unidade=...&numero=...&exercicio=...
   let ref: { unidade: string; numero: string; exercicio: string } | null = null;
@@ -205,7 +224,11 @@ Deno.serve(async (request: Request): Promise<Response> => {
   const { unidade, numero, exercicio } = ref;
 
   // Nome de arquivo legível para o download
-  const filename = `edital_${padUnidade(unidade)}_${padNumero(numero)}_${normalizeExercicio(exercicio)}.pdf`;
+  const refSlug = `${padUnidade(unidade)}_${padNumero(numero)}_${normalizeExercicio(exercicio)}`;
+  const filename =
+    doc === "relacao-lotes"
+      ? `relacao-itens-${refSlug}.pdf`
+      : `edital_${refSlug}.pdf`;
 
   try {
     // Se &store=1 e o arquivo já existe no Storage, redireciona direto (economiza 1 fetch no SLE)
@@ -226,7 +249,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     // Busca o PDF no SLE
-    const pdfBytes = await fetchEditalPdf(unidade, numero, exercicio);
+    const pdfBytes = await fetchEditalPdf(unidade, numero, exercicio, doc);
 
     // Modo store: persiste e redireciona para URL permanente
     if (store) {

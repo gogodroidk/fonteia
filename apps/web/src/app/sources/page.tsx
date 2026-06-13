@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { SOURCE_CATALOG } from "@fonteia/sources";
 import type { PublicSource, SourceStatus } from "@fonteia/domain";
 import { CountUp } from "../../components/ui/CountUp";
+import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 
 // ---------------------------------------------------------------------------
 // Derived stats from SOURCE_CATALOG
@@ -100,11 +102,16 @@ function SourceRow({
   source,
   index,
   isActive,
+  runtimeStatus,
+  checkLoading,
 }: {
   source: PublicSource;
   index: number;
   isActive: boolean;
+  runtimeStatus: SourceStatus | undefined;
+  checkLoading: boolean;
 }) {
+  const effectiveStatus: SourceStatus = runtimeStatus ?? source.status;
   const modules = source.modules.map(moduleLabel).join(", ");
   const dotColor = reliabilityDot(source.reliability);
   const reliabilityText = reliabilityLabel(source.reliability);
@@ -139,9 +146,15 @@ function SourceRow({
         </div>
       </td>
 
-      {/* Status */}
+      {/* Status — runtime override when available, static catalog otherwise */}
       <td style={{ padding: "15px 20px" }}>
-        <StatusBadge status={source.status} />
+        {isActive && checkLoading ? (
+          <span className="badge badge--neutral" style={{ color: "var(--t-mid)" }}>
+            verificando…
+          </span>
+        ) : (
+          <StatusBadge status={effectiveStatus} />
+        )}
       </td>
 
       {/* Módulos */}
@@ -192,6 +205,36 @@ function SourceRow({
 
 export function SourcesPage() {
   const activeSourceId = "receita-leiloes-sle";
+
+  // Runtime health-check: call listLeilaoLots() once on mount. If it returns
+  // real data (source !== "empty"), the Receita source is "connected"; if it
+  // fails or returns empty, it's "deprecated" (unreachable). Other sources
+  // keep their static catalog status — no extra requests needed.
+  const [runtimeStatus, setRuntimeStatus] = useState<Record<string, SourceStatus>>({});
+  const [checkLoading, setCheckLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCheckLoading(true);
+
+    listLeilaoLots()
+      .then((result) => {
+        if (cancelled) return;
+        const status: SourceStatus = result.source !== "empty" ? "connected" : "deprecated";
+        setRuntimeStatus({ [activeSourceId]: status });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRuntimeStatus({ [activeSourceId]: "deprecated" });
+      })
+      .finally(() => {
+        if (!cancelled) setCheckLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section
@@ -361,6 +404,8 @@ export function SourcesPage() {
                   source={source}
                   index={i}
                   isActive={source.id === activeSourceId}
+                  runtimeStatus={runtimeStatus[source.id]}
+                  checkLoading={checkLoading}
                 />
               ))}
             </tbody>

@@ -487,8 +487,8 @@ p { margin: 0; }
 .score-detail,
 .lot-detail-header,
 .lot-detail-meta {
-  background: var(--white);
-  border: 1px solid var(--n-100);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-sm);
 }
@@ -957,6 +957,8 @@ p { margin: 0; }
 /* ── Lot detail ── */
 .lot-detail { display: flex; flex-direction: column; gap: var(--s-4); }
 .lot-detail-main { display: flex; flex-direction: column; gap: var(--s-4); }
+/* Mobile: o Raio-X (sidebar) sobe pro topo, logo no começo. No desktop volta pra coluna 2. */
+.lot-detail .evidence-panel { order: -1; }
 .lot-back-button { align-self: flex-start; }
 .lot-detail-header {
   display: flex;
@@ -1612,6 +1614,7 @@ p { margin: 0; }
      (Evidência) ficava escondida e inalcançável. Agora rola por dentro. */
   .lot-detail .evidence-panel {
     grid-column: 2;
+    order: 0;
     position: sticky;
     top: 72px;
     align-self: start;
@@ -2332,8 +2335,8 @@ p { margin: 0; }
   display: grid;
   gap: var(--s-4);
   padding: var(--s-5);
-  background: var(--white);
-  border: 1px solid var(--n-100);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--r-lg);
   margin-bottom: var(--s-5);
 }

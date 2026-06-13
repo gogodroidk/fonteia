@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Bell,
   Check,
@@ -180,6 +180,8 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [searchSeed, setSearchSeed] = useState("");
+  const [topbarQuery, setTopbarQuery] = useState("");
+  const topbarInputRef = useRef<HTMLInputElement | null>(null);
   const [checkoutOk, setCheckoutOk] = useState<boolean>(
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "sucesso",
   );
@@ -214,6 +216,18 @@ function AppShell({ path, navigate }: AppShellProps) {
       isMounted = false;
     };
   }, [lotIdFromPath, route, selectedLot?.id]);
+
+  // Global ⌘K / Ctrl+K shortcut → focus topbar search input
+  useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        topbarInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, []);
 
   function go(to: string) {
     navigate(to);
@@ -353,10 +367,23 @@ function AppShell({ path, navigate }: AppShellProps) {
             </button>
             <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
-              <div className="searchbar" style={{ cursor: "pointer" }} onClick={() => go("/app/lotes")} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go("/app/lotes"); }} aria-label="Buscar lote, órgão ou edital">
-                <Search size={16} style={{ color: "var(--t-low)" }} aria-hidden="true" />
-                <input placeholder="Buscar lote, órgão ou edital…" readOnly tabIndex={-1} style={{ cursor: "pointer", fontSize: 13.5 }} />
-                <span className="kbd">⌘K</span>
+              <div className="searchbar" role="search" aria-label="Buscar lote, órgão ou edital">
+                <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+                <input
+                  ref={topbarInputRef}
+                  placeholder="Buscar lote, órgão ou edital…"
+                  value={topbarQuery}
+                  onChange={(e) => setTopbarQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && topbarQuery.trim().length > 0) {
+                      goToSearch(topbarQuery);
+                      setTopbarQuery("");
+                    }
+                  }}
+                  aria-label="Buscar lote, órgão ou edital"
+                  style={{ fontSize: 13.5 }}
+                />
+                <span className="kbd" aria-hidden="true">⌘K</span>
               </div>
             </div>
             <div className="shell-actions">

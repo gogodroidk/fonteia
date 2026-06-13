@@ -53,20 +53,30 @@ async function fetchApiLotById(lotId: string, fetcher: typeof fetch): Promise<Re
 async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string | undefined }> {
   const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
 
-  const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc&limit=2000";
-  const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-    headers: {
-      accept: "application/json",
-      apikey: publishableKey,
-      authorization: `Bearer ${publishableKey}`,
-    },
-  });
+  // Paginação por Range: o PostgREST corta em 1000 linhas por padrão (max-rows),
+  // então buscamos em páginas de 1000 até acabar — sem o teto de "1000 lotes".
+  const pageSize = 1000;
+  const rows: SupabaseEntityRow[] = [];
+  for (let offset = 0; offset < 50000; offset += pageSize) {
+    const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc";
+    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
+      headers: {
+        accept: "application/json",
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+        Range: `${offset}-${offset + pageSize - 1}`,
+        "Range-Unit": "items",
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Supabase REST returned ${response.status}`);
+    if (!response.ok) {
+      throw new Error(`Supabase REST returned ${response.status}`);
+    }
+
+    const batch = (await response.json()) as SupabaseEntityRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
   }
-
-  const rows = (await response.json()) as SupabaseEntityRow[];
   const lots = rows.map((row) => row.attributes).filter((lot) => lot?.sourceId === "receita-leiloes-sle");
 
   return { lots, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
