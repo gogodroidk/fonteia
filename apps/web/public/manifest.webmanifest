@@ -1,20 +1,17 @@
 {
   "name": "Fonte.ia by Olli",
   "short_name": "Fonte.ia",
-  "description": "Inteligência de dados públicos brasileiros com IA e evidência rastreável.",
+  "description": "Inteligência de leilões da Receita Federal com IA e evidência rastreável até a fonte oficial.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#041510",
-  "theme_color": "#0f5f4a",
+  "background_color": "#070C16",
+  "theme_color": "#070C16",
   "lang": "pt-BR",
   "icons": [
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

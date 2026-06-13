@@ -8,8 +8,6 @@
 User-agent: *
 Allow: /
 Disallow: /app
-Disallow: /conta
-Disallow: /relatorios-privados
 
 # --- Buscadores ---
 User-agent: Googlebot

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Cookie } from "lucide-react";
 import { getConsent, hasConsent, saveConsent } from "../lib/consent";
-import { useFocusTrap } from "../hooks/use-focus-trap";
 
 interface CookieBannerProps {
   onOpenPolicy?: () => void;
@@ -14,11 +13,11 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   const [analiticos, setAnaliticos] = useState(false);
   const [publicidade, setPublicidade] = useState(false);
 
-  // a11y: trap focus inside the dialog while it is open
-  const dialogRef = useFocusTrap<HTMLDivElement>(open);
-
   useEffect(() => {
-    if (!hasConsent()) setOpen(true);
+    // Barra de consentimento (NÃO é modal): aparece com um atraso curto pra não
+    // cobrir o hero/formulário no carregamento e não bloquear a interação.
+    let t: ReturnType<typeof setTimeout> | undefined;
+    if (!hasConsent()) t = setTimeout(() => setOpen(true), 1400);
     const reopen = () => {
       const c = getConsent();
       if (c) {
@@ -30,7 +29,10 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
       setOpen(true);
     };
     window.addEventListener("fonteia:cookies", reopen);
-    return () => window.removeEventListener("fonteia:cookies", reopen);
+    return () => {
+      window.removeEventListener("fonteia:cookies", reopen);
+      if (t) clearTimeout(t);
+    };
   }, []);
 
   // a11y: allow users to dismiss the dialog with the Escape key
@@ -62,7 +64,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   if (!open) return null;
 
   return (
-    <div className="cookie-banner" role="dialog" aria-modal="true" aria-label="Preferências de cookies" ref={dialogRef}>
+    <div className="cookie-banner" role="region" aria-label="Preferências de cookies">
       <div className="cookie-banner-inner">
         <div className="cookie-banner-head">
           <Cookie size={20} aria-hidden="true" />

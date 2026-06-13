@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck } from "lucide-react";
-import { ScoreRing, FonteDots, ThemeToggle } from "../../components/ui";
+import { ScoreRing, FonteDots, ThemeToggle, LogoMark } from "../../components/ui";
 import {
   PLANOS,
   FONTES,
@@ -392,16 +392,12 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontWeight: 900,
-                  fontSize: 16,
                   color: "#fff",
-                  letterSpacing: "-0.02em",
                   flexShrink: 0,
                   boxShadow: "var(--shadow-md)",
                 }}
-                aria-hidden="true"
               >
-                f
+                <LogoMark size={22} />
               </div>
               <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: "-0.025em", color: "var(--t-hi)" }}>
                 Fonte<span style={{ color: "var(--accent-ink)" }}>.ia</span>
@@ -1476,14 +1472,11 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontWeight: 900,
-                fontSize: 13,
                 color: "#fff",
                 flexShrink: 0,
               }}
-              aria-hidden="true"
             >
-              f
+              <LogoMark size={18} />
             </div>
             <span style={{ fontWeight: 800, fontSize: 14, letterSpacing: "-0.025em" }}>
               Fonte<span style={{ color: "var(--accent-ink)" }}>.ia</span>

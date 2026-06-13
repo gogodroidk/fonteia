@@ -40,7 +40,7 @@ export function organizationJsonLd(): Record<string, unknown> {
   };
 }
 
-/** WebSite — habilita sitelinks search box e nome canônico no Google */
+/** WebSite — nome canônico no Google. (Sem SearchAction: não há busca pública.) */
 export function websiteJsonLd(): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
@@ -50,14 +50,6 @@ export function websiteJsonLd(): Record<string, unknown> {
     description:
       "Inteligência de leilões da Receita Federal para o público brasileiro. Encontre, analise e arremate com segurança.",
     inLanguage: "pt-BR",
-    potentialAction: {
-      "@type": "SearchAction",
-      target: {
-        "@type": "EntryPoint",
-        urlTemplate: `${SITE_URL}/buscar?q={search_term_string}`,
-      },
-      "query-input": "required name=search_term_string",
-    },
   };
 }
 

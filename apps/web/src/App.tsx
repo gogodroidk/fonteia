@@ -276,7 +276,7 @@ function AppShell({ path, navigate }: AppShellProps) {
           {(!collapsed || inDrawer) && (
             <span style={{ textAlign: "left", lineHeight: 1.05 }}>
               <strong style={{ display: "block", fontSize: 16, color: "var(--t-hi)" }}>Fonte.ia</strong>
-              <span style={{ fontSize: 10.5, color: "var(--t-low)", letterSpacing: ".08em" }}>BY OLLI</span>
+              <span style={{ fontSize: 10.5, color: "var(--t-low)", letterSpacing: "0.22em" }}>by Olli</span>
             </span>
           )}
         </button>
