@@ -52,9 +52,14 @@
 
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{font-family:var(--font);background:var(--bg);color:var(--t-hi);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{font-family:var(--font);background:var(--bg);color:var(--t-hi);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;min-height:100dvh;overflow-x:clip}
+/* Media never forces horizontal overflow */
+img,svg,video,canvas{max-width:100%}
 ::selection{background:rgba(45,212,191,.28)}
-.app-root{background:var(--bg);color:var(--t-hi);min-height:100vh;transition:background .4s ease,color .3s ease}
+/* Visible keyboard focus everywhere (mouse clicks stay clean via :focus-visible) */
+:focus-visible{outline:2px solid var(--brand-ink);outline-offset:2px}
+.app-root{background:var(--bg);color:var(--t-hi);min-height:100dvh;transition:background .4s ease,color .3s ease}
 
 /* ===== PRINT — Relatório PDF ===== */
 @media print {
