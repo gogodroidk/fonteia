@@ -23,7 +23,7 @@ import type { LotEconomia } from "@fonteia/scoring";
 import { EvidencePanel } from "../../components/evidence-panel";
 import { ScoreRing } from "../../components/score-ring";
 import { Bar, FonteDots, riscoBadge } from "../../components/ui";
-import { getConfiguredApiUrl, trimTrailingSlash } from "../../lib/api-client";
+import { getConfiguredApiUrl, getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
 import { displayCity } from "../../lib/receita-localidades";
 import { useAuth } from "../../auth/auth-context";
 import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-detalhe-api";
@@ -658,9 +658,16 @@ export function LotDetailPage({
         throw new Error("Backend nao configurado.");
       }
       const trimmed = question?.trim();
+      // A função `fonteia` tem verify_jwt: a página é logada, então mandamos o
+      // token da sessão (cai para a chave pública se, por algum motivo, não houver).
+      const { key } = getSupabasePublicConfig();
       const response = await fetch(`${trimTrailingSlash(base)}/ia/raio-x`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          apikey: key,
+          authorization: `Bearer ${session?.access_token ?? key}`,
+        },
         body: JSON.stringify(trimmed ? { lot, question: trimmed } : { lot }),
       });
       const data = (await response.json()) as {
