@@ -1893,6 +1893,49 @@ p { margin: 0; }
   color: var(--n-700);
   font-size: 14px;
 }
+/* Alias so the component can use .onboarding-body-h1 without colliding with
+   the generic h1 reset (which strips margin) */
+.onboarding-body-h1 {
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--n-900);
+  margin: 0 0 var(--s-2);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+/* Advance button inside actions row */
+.onboarding-actions-advance { min-width: 160px; }
+/* Check icon tint in checklist */
+.onboarding-check-icon { color: var(--g-600); flex-shrink: 0; }
+/* Summary card on step 3 */
+.onboarding-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  background: var(--g-50);
+  border: 1px solid var(--g-200);
+  border-radius: var(--r-lg);
+  margin-bottom: var(--s-5);
+}
+.onboarding-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.onboarding-summary-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--n-400);
+}
+.onboarding-summary-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--g-700);
+}
 .mockup-row-sub { font-size: 0.58rem; color: rgba(255,255,255,0.35); }
 .mockup-row-val { font-size: 0.65rem; font-weight: 800; flex-shrink: 0; }
 
