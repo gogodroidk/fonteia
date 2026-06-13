@@ -1,5 +1,5 @@
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
-import { fetchJsonFromApi, getPublicEnv, trimTrailingSlash } from "../../lib/api-client";
+import { fetchJsonFromApi, getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
 
 export type LeiloesDataSource = "api" | "supabase" | "empty";
 
@@ -51,12 +51,7 @@ async function fetchApiLotById(lotId: string, fetcher: typeof fetch): Promise<Re
 }
 
 async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string | undefined }> {
-  const supabaseUrl = getPublicEnv("VITE_SUPABASE_URL");
-  const publishableKey = getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY");
-
-  if (!supabaseUrl || !publishableKey) {
-    throw new Error("Supabase public environment is not configured");
-  }
+  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
 
   const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc&limit=50";
   const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
