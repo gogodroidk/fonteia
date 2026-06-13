@@ -148,7 +148,7 @@ const FEATURES_SIGNUP = [
   { label: "Relatório PDF", detail: "com rastreabilidade até a origem" },
 ];
 
-const TRUST_ITEMS = ["Dado rastreável", "7 dias de garantia", "Cancele quando quiser"];
+const TRUST_ITEMS = ["Dado rastreável", "7 dias grátis", "Cancele quando quiser"];
 
 // ─── Left brand panel ─────────────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
   const heroTag =
     mode === "login"
       ? "Inteligência de dados governamentais"
-      : "7 dias de garantia · cancele quando quiser";
+      : "7 dias grátis · cancele quando quiser";
 
   const heroHeadline =
     mode === "login" ? (
@@ -177,7 +177,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
   const heroBody =
     mode === "login"
       ? "A Fonte.ia organiza cada lote de leilão da Receita Federal com os dados oficiais — lance mínimo, prazo e elegibilidade — e entrega rastreabilidade até a fonte. Mais órgãos em breve."
-      : "Crie sua conta e analise lotes da Receita Federal — score de oportunidade por regra, rastreabilidade até a fonte e assistente de IA. 7 dias de garantia, cancele quando quiser.";
+      : "Crie sua conta e analise lotes da Receita Federal — score de oportunidade por regra, rastreabilidade até a fonte e assistente de IA. Comece com 7 dias grátis, cancele quando quiser.";
 
   return (
     <div className="auth-left-panel" style={{ flex: "0 0 52%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "48px 56px", background: "var(--bg)", position: "relative", overflow: "hidden" }}>

@@ -3,6 +3,7 @@ import { Check, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
 import { stripeLinkFor } from "../../config/stripe";
 import { CouponRedeem } from "../../components/coupon-redeem";
+import { useAuth } from "../../auth/auth-context";
 
 function precoLabel(preco: number, periodo: string): string {
   if (preco === 0) return "R$ 0";
@@ -10,6 +11,7 @@ function precoLabel(preco: number, periodo: string): string {
 }
 
 export function BillingPage() {
+  const { user } = useAuth();
   const [chosen, setChosen] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
 
@@ -21,7 +23,12 @@ export function BillingPage() {
   function handleChoose(id: string, nome: string) {
     const link = stripeLinkFor(id);
     if (link) {
-      window.location.href = link;
+      // Pré-preenche o e-mail do login no checkout: garante que a assinatura do
+      // Stripe use o MESMO e-mail que o app usa em my_plan() para liberar o Pro.
+      const email = user?.email;
+      window.location.href = email
+        ? `${link}?prefilled_email=${encodeURIComponent(email)}`
+        : link;
       return;
     }
     setChosen(nome);
@@ -74,7 +81,7 @@ export function BillingPage() {
         <p className="muted" style={{ maxWidth: 560, margin: "10px auto 0", lineHeight: 1.6 }}>
           Acesso completo aos leilões da Receita Federal: Raio-X com IA, análise do edital, alertas por e-mail
           e relatório PDF com rastreabilidade de fonte. Tudo pago, sem plano grátis.
-          7 dias de garantia — não gostou, devolvemos 100%.
+          Comece com 7 dias grátis — só cobramos depois, cancele antes e não paga nada.
         </p>
       </div>
 
@@ -136,7 +143,7 @@ export function BillingPage() {
       <div className="inset" style={{ marginTop: 16, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
         <ShieldCheck size={17} style={{ color: "var(--accent-ink)" }} aria-hidden="true" />
         <span className="small muted">
-          <strong className="t-hi">Garantia de 7 dias.</strong> Não gostou, devolvemos 100%. Pagamento seguro via Stripe (cartão e Pix).
+          <strong className="t-hi">7 dias grátis.</strong> Você só é cobrado após o período de teste; cancele antes e não paga nada. Pagamento seguro via Stripe (cartão e Pix).
           Não prometemos arremates ou lucro — entregamos informação rastreável para você decidir melhor.
         </span>
       </div>

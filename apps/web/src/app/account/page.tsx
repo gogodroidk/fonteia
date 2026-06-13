@@ -299,7 +299,7 @@ function TabPerfil({
         </div>
         <TRow label="Membro desde" val="Junho 2026" />
         <TRow label="Plano atual" val={access.active ? `Teste — ate ${access.until}` : "Sem assinatura ativa"} />
-        <TRow label="Garantia" val="7 dias, reembolso integral" />
+        <TRow label="Teste" val="7 dias grátis nos planos pagos" />
       </div>
 
       {/* Meu radar — watchlist local */}
@@ -375,7 +375,7 @@ function TabPerfil({
           }}
         >
           Análises ilimitadas, alertas de novos editais e relatórios com
-          rastreabilidade completa. 7 dias de garantia — reembolso integral.
+          rastreabilidade completa. Comece com 7 dias grátis — só paga depois.
         </p>
         <button
           type="button"
@@ -462,7 +462,7 @@ function TabAssinatura({ trialUntil }: { trialUntil: string | null }) {
 
       <TRow label="Método de pagamento" val="Não cadastrado" />
       <TRow label="Próxima cobrança" val="—" />
-      <TRow label="Garantia" val="7 dias, reembolso integral" />
+      <TRow label="Teste" val="7 dias grátis nos planos pagos" />
     </div>
   );
 }
