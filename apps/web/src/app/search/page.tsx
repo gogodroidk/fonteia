@@ -7,68 +7,6 @@ type AskStatus = "idle" | "loading" | "success" | "error" | "unavailable";
 
 const DEFAULT_API_URL = "http://localhost:4000";
 
-/**
- * Resposta de demonstração usada quando a API não está disponível.
- * Mantém o produto utilizável e mostra o formato real da resposta
- * (resumo + fatos + risco + fontes) para quem ainda não conectou o backend.
- */
-function buildDemoAnswer(question: string): FonteiaAnswer {
-  const collectedAt = new Date().toISOString();
-  return {
-    status: "answered",
-    summary:
-      "Resposta de demonstração: encontramos 3 lotes da Receita Federal com margem estimada acima da média e prazo aberto nesta semana.",
-    keyFacts: [
-      {
-        label: "Lotes com boa margem",
-        value: "3 lotes (score ≥ 78)",
-        evidenceIds: ["demo-ev-1"],
-        confidence: 0.82,
-      },
-      {
-        label: "Melhor oportunidade",
-        value: "Lote 042 — entrada R$ 18.000, valor ref. R$ 47.500",
-        evidenceIds: ["demo-ev-1"],
-        confidence: 0.76,
-      },
-      {
-        label: "Prazo mais próximo",
-        value: "Encerra em 4 dias",
-        evidenceIds: ["demo-ev-2"],
-        confidence: 0.9,
-      },
-    ],
-    riskOrOpportunity:
-      "Oportunidade: margem estimada de ~60% no lote em destaque, com risco baixo de disputa pelo histórico da comarca.",
-    nextActions: [
-      "Abrir o lote no radar para ver o edital completo",
-      "Criar um alerta de prazo para não perder a data",
-    ],
-    citations: [
-      {
-        evidenceId: "demo-ev-1",
-        sourceId: "receita-leiloes-sle",
-        sourceUrl: "https://venda.estaleiro.serpro.gov.br/",
-        collectedAt,
-        quote: "Lote 042 — veículo, lance mínimo R$ 18.000, avaliação R$ 47.500.",
-        confidence: 0.82,
-      },
-      {
-        evidenceId: "demo-ev-2",
-        sourceId: "receita-leiloes-sle",
-        sourceUrl: "https://venda.estaleiro.serpro.gov.br/",
-        collectedAt,
-        quote: "Encerramento da sessão pública previsto para esta semana.",
-        confidence: 0.9,
-      },
-    ] as FonteiaAnswer["citations"],
-    guardrails: [
-      "Esta é uma resposta de demonstração com dados de amostra.",
-      "Conecte a API ou o Supabase para respostas com fontes ao vivo.",
-    ],
-  };
-}
-
 function getApiUrl(): string {
   const configured = import.meta.env["VITE_API_URL"] as string | undefined;
 
@@ -138,9 +76,9 @@ export function SearchPage({ initialQuestion }: SearchPageProps = {}) {
       const message = err instanceof Error ? err.message : String(err);
 
       if (message === "unavailable" || message.includes("fetch") || message.includes("Failed to fetch")) {
-        // Sem backend ao vivo: entrega uma resposta de amostra em vez de travar.
-        setAnswer(buildDemoAnswer(q));
-        setStatus("success");
+        // Sem backend ao vivo: estado honesto, sem inventar resposta.
+        setAnswer(null);
+        setStatus("unavailable");
       } else {
         setStatus("error");
         setErrorMessage(message);
@@ -215,7 +153,8 @@ export function SearchPage({ initialQuestion }: SearchPageProps = {}) {
 
         {status === "unavailable" ? (
           <div className="ask-feedback ask-feedback-error">
-            API indisponivel — tente mais tarde.
+            Assistente em ativacao — conecte o backend para respostas com fonte. Ate la, nenhuma
+            resposta e exibida para nao inventar dados.
           </div>
         ) : null}
 

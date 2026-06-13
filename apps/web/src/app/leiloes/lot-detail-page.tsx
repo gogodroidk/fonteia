@@ -422,7 +422,6 @@ export function LotDetailPage({
       collectedAt: lot.collectedAt,
       rawRecordId: lot.id,
       quote: `Lote ${lot.displayNumber} — edital ${lot.edital}, lance minimo ${formatBRL(lot.minimumBidCents / 100)}, prazo ${formatDeadline(lot.proposalDeadline)}.`,
-      hash: `sha256:${lot.id}`,
       confidence: 0.85,
     },
   ];
