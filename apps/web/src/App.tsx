@@ -320,7 +320,7 @@ function AppShell({ path, navigate }: AppShellProps) {
             {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
             {route === "fontes" && <SourcesPage />}
             {route === "billing" && <BillingPage />}
-            {route === "search" && <SearchPage initialQuestion={searchSeed} />}
+            {route === "search" && <SearchPage initialQuestion={searchSeed} onSelectLot={handleSelectLot} />}
             {route === "conta" && (
               <AccountPage name={displayName} email={user?.email ?? ""} avatarUrl={avatarUrl} onSignOut={() => void signOut()} />
             )}
