@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cookie } from "lucide-react";
 import { getConsent, hasConsent, saveConsent } from "../lib/consent";
 
@@ -12,6 +12,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   const [funcionais, setFuncionais] = useState(true);
   const [analiticos, setAnaliticos] = useState(false);
   const [publicidade, setPublicidade] = useState(false);
+  const innerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     // Barra de consentimento (NÃO é modal): aparece com um atraso curto pra não
@@ -35,13 +36,46 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
     };
   }, []);
 
-  // a11y: allow users to dismiss the dialog with the Escape key
+  // Reserva espaço no fim da página enquanto a barra estiver visível, para que
+  // ela NUNCA cubra conteúdo (ex.: formulário de login, link de WhatsApp em
+  // /contato). Mede a altura real do banner e aplica como padding-bottom no body.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const body = document.body;
+    if (!open) {
+      body.style.removeProperty("padding-bottom");
+      return;
+    }
+    const apply = () => {
+      const h = innerRef.current?.getBoundingClientRect().height ?? 0;
+      // 24px de folga abaixo do banner
+      body.style.paddingBottom = `${Math.ceil(h) + 24}px`;
+    };
+    apply();
+    const ro =
+      typeof ResizeObserver !== "undefined" && innerRef.current
+        ? new ResizeObserver(apply)
+        : null;
+    if (ro && innerRef.current) ro.observe(innerRef.current);
+    window.addEventListener("resize", apply);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
+      body.style.removeProperty("padding-bottom");
+    };
+  }, [open, customize]);
+
+  // a11y: Escape apenas DISPENSA a barra quando o foco está dentro dela.
+  // Não força "recusar tudo" (decisão de consentimento não solicitada) nem
+  // sequestra o Escape global da página — sem consentimento salvo, a barra
+  // reaparece numa próxima visita (estado privacy-safe e não presuntivo).
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent): void {
-      if (e.key === "Escape") {
-        // Treat Escape as "reject all" to leave the user in a privacy-safe state
-        rejectAll();
+      if (e.key !== "Escape") return;
+      const node = innerRef.current;
+      if (node && node.contains(document.activeElement)) {
+        setOpen(false);
       }
     }
     document.addEventListener("keydown", onKeyDown);
@@ -65,7 +99,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
 
   return (
     <div className="cookie-banner" role="region" aria-label="Preferências de cookies">
-      <div className="cookie-banner-inner">
+      <div className="cookie-banner-inner" ref={innerRef}>
         <div className="cookie-banner-head">
           <Cookie size={20} aria-hidden="true" />
           <strong>Sua privacidade</strong>
@@ -87,7 +121,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
                 <strong>Necessários</strong>
                 <small>Essenciais para login e segurança. Sempre ativos.</small>
               </span>
-              <input type="checkbox" checked readOnly disabled />
+              <input type="checkbox" checked readOnly aria-disabled="true" />
             </label>
             <label className="cookie-option">
               <span>

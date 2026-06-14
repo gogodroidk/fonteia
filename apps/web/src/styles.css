@@ -4,41 +4,59 @@
    Breakpoints: sm 480 | md 768 | lg 1024 | xl 1280
    ========================================================= */
 
-/* ── Variables ── */
+/* ── Variables ──
+   CORREÇÃO-MÃE (Onda 2): os tokens LEGADOS abaixo deixaram de ser cores fixas de
+   light-mode e passaram a ser ALIASES dos tokens do design system novo
+   (styles/design-system.css). Como custom properties resolvem em tempo de USO,
+   um único bloco :root cobre os dois temas: o valor final segue o que --surface,
+   --t-hi etc. valem no tema ativo ([data-theme="light"] | [data-theme="dark"]).
+   Assim toda classe legada (.module-card, .page-panel, .section-label, .spinner,
+   .data-source-banner, .status-chip, .onboarding-option, .legal-page, etc.) fica
+   dark-safe sem editar cada arquivo. Mapa:
+     --white            → var(--surface)
+     --n-50/-100        → var(--surface-2) / var(--border)
+     --n-300/-400       → var(--t-low)
+     --n-500/-600       → var(--t-mid)
+     --n-700/-800/-900  → var(--t-mid) / var(--t-hi) / var(--t-hi)
+     --g-* (verdes)     → var(--brand)/--accent/--surface etc. (marca é azul/teal)
+     --color-success/-bg→ var(--ok) / mix
+     --color-warning/-bg→ var(--warn) / mix
+     --color-error/-bg  → var(--danger) / mix
+*/
 :root {
-  /* Brand greens */
-  --g-950: #041510;
-  --g-900: #0a1f18;
-  --g-800: #0f2e24;
-  --g-700: #0f5f4a;
-  --g-600: #1a7a5e;
-  --g-500: #22a87e;
-  --g-400: #4dc99a;
-  --g-300: #80ddb8;
-  --g-200: #b8f0da;
-  --g-100: #e4f9f0;
-  --g-50:  #f2fdf8;
+  /* Brand greens → remapeados para a paleta azul/teal do design system */
+  --g-950: var(--bg);
+  --g-900: var(--bg-2);
+  --g-800: var(--surface-2);
+  --g-700: var(--brand-ink);
+  --g-600: var(--brand);
+  --g-500: var(--accent);
+  --g-400: var(--accent-2);
+  --g-300: var(--border-2);
+  --g-200: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  --g-100: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  --g-50:  var(--surface-2);
 
-  /* Neutrals */
-  --n-900: #0f1f1a;
-  --n-800: #1c2e28;
-  --n-700: #2a3f38;
-  --n-600: #3d524a;
-  --n-500: #556560;
-  --n-400: #6f807a;
-  --n-300: #9aaca5;
-  --n-200: #c5d4ce;
-  --n-100: #dfe7e2;
-  --n-50:  #f3f7f5;
-  --white: #ffffff;
+  /* Neutrals → escala de superfícies/texto do design system */
+  --n-900: var(--t-hi);
+  --n-800: var(--t-hi);
+  --n-700: var(--t-mid);
+  --n-600: var(--t-mid);
+  --n-500: var(--t-mid);
+  --n-400: var(--t-low);
+  --n-300: var(--t-low);
+  --n-200: var(--border-2);
+  --n-100: var(--border);
+  --n-50:  var(--surface-2);
+  --white: var(--surface);
 
-  /* Semantic */
-  --color-success-bg: #e4f7ee;
-  --color-success:    #0b6048;
-  --color-warning-bg: #fef3c7;
-  --color-warning:    #92400e;
-  --color-error-bg:   #fee2e2;
-  --color-error:      #991b1b;
+  /* Semantic → tokens semânticos do design system */
+  --color-success-bg: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --color-success:    var(--ok);
+  --color-warning-bg: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --color-warning:    var(--warn);
+  --color-error-bg:   color-mix(in srgb, var(--danger) 12%, var(--surface));
+  --color-error:      var(--danger);
 
   /* Spacing scale */
   --s-1: 4px;
@@ -1904,9 +1922,8 @@ p { margin: 0; }
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, transform 0.05s;
 }
-.onboarding-option:hover { border-color: var(--g-300); }
+/* cor de hover/selected definida no bloco de tokens novos abaixo (.onboarding-option …) */
 .onboarding-option:active { transform: scale(0.99); }
-.onboarding-option.selected { border-color: var(--g-500); background: var(--g-50); }
 .onboarding-option-icon {
   display: flex;
   align-items: center;
@@ -2299,6 +2316,9 @@ p { margin: 0; }
   pointer-events: auto;
   width: 100%;
   max-width: 640px;
+  /* Nunca deixa a barra crescer a ponto de cobrir o viewport: rola por dentro */
+  max-height: min(78vh, 540px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
@@ -2345,7 +2365,20 @@ p { margin: 0; }
   min-height: 40px;
 }
 .cookie-banner .primary-button:hover { filter: brightness(1.05); }
-.cookie-banner .link-btn { color: var(--brand-ink); }
+.cookie-banner .link-btn { color: var(--brand-ink); font-weight: 700; }
+/* Alvos de toque adequados (≥44px) e estética compacta no mobile */
+.cookie-banner .ghost-button,
+.cookie-banner .primary-button { padding: 0 var(--s-4); border-radius: var(--r-md); }
+@media (max-width: 560px) {
+  .cookie-banner { padding: var(--s-3); padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom)); }
+  .cookie-banner-inner { padding: var(--s-4); max-height: min(72vh, 460px); }
+  .cookie-actions { gap: var(--s-2); }
+  .cookie-actions-main { width: 100%; margin-left: 0; }
+  .cookie-actions-main .ghost-button,
+  .cookie-actions-main .primary-button { flex: 1 1 0; min-height: 44px; }
+  .cookie-banner .ghost-button,
+  .cookie-banner .primary-button { min-height: 44px; }
+}
 
 /* Páginas legais */
 .legal-page { min-height: 100vh; background: var(--white); color: var(--n-800); }
