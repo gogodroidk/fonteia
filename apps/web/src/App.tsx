@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Bell,
+  Building2,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
   HelpCircle,
   LayoutGrid,
   Landmark,
+  Leaf,
   LogOut,
   MapPin,
   Menu,
@@ -126,6 +128,12 @@ const MunicipiosPage = lazy(() =>
 const PoliticaPage = lazy(() =>
   import("./app/politica/page").then((m) => ({ default: m.PoliticaPage })),
 );
+const EmpresasPage = lazy(() =>
+  import("./app/empresas/page").then((m) => ({ default: m.EmpresasPage })),
+);
+const AmbientalPage = lazy(() =>
+  import("./app/ambiental/page").then((m) => ({ default: m.AmbientalPage })),
+);
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -206,7 +214,9 @@ type RouteKey =
   | "modules"
   | "admin"
   | "municipios"
-  | "politica";
+  | "politica"
+  | "empresas"
+  | "ambiental";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
@@ -214,6 +224,8 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
   { path: "/app/politica", route: "politica", label: "Política", icon: Users },
   { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
+  { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
+  { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
   { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
@@ -242,6 +254,8 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   admin: "Administração",
   municipios: "Municípios",
   politica: "Política",
+  empresas: "Empresas",
+  ambiental: "Ambiental",
 };
 
 function pathToRoute(path: string): RouteKey {
@@ -250,6 +264,8 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/licitacoes")) return "licitacoes";
   if (path.startsWith("/app/politica")) return "politica";
   if (path.startsWith("/app/municipios")) return "municipios";
+  if (path.startsWith("/app/empresas")) return "empresas";
+  if (path.startsWith("/app/ambiental")) return "ambiental";
   if (path.startsWith("/app/alertas")) return "alertas";
   if (path.startsWith("/app/relatorios")) return "relatorios";
   if (path.startsWith("/app/fontes")) return "fontes";
@@ -582,6 +598,8 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "licitacoes" && <LicitacoesPage />}
                 {route === "politica" && <PoliticaPage />}
                 {route === "municipios" && <MunicipiosPage />}
+                {route === "empresas" && <EmpresasPage />}
+                {route === "ambiental" && <AmbientalPage />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
                 {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
                 {route === "fontes" && <SourcesPage />}
