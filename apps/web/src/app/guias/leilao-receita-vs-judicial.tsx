@@ -27,8 +27,8 @@ function Info({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--accent) 6%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--accent) 20%, transparent)",
+        background: "color-mix(in srgb, var(--accent) 10%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--accent) 25%, var(--surface-2))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -321,9 +321,9 @@ export function GuiaComparacaoPage() {
                   style={{
                     fontSize: "10px",
                     padding: "2px 8px",
-                    background: "color-mix(in srgb, var(--ok, #22c55e) 10%, transparent)",
-                    color: "var(--ok, #16a34a)",
-                    border: "1px solid color-mix(in srgb, var(--ok, #22c55e) 25%, transparent)",
+                    background: "color-mix(in srgb, var(--ok) 10%, transparent)",
+                    color: "var(--ok)",
+                    border: "1px solid color-mix(in srgb, var(--ok) 25%, transparent)",
                   }}
                 >
                   Foco atual da Fonte.ia
@@ -366,9 +366,9 @@ export function GuiaComparacaoPage() {
                 execução ou falência. Podem ser vendidos imóveis, veículos, equipamentos
                 industriais, estoque de empresas, participações societárias, entre outros. O leilão
                 é conduzido por um leiloeiro oficial indicado pelo juízo — não pela Receita — e
-                publicado no Diário de Justiça. A arrematação transfere o bem livre de dívidas
-                de IPTU e condomínio anteriores ao arremate (em regra, para imóveis), mas o
-                processo é mais complexo: exige atenção a prazos processuais, possibilidade de
+                publicado no Diário de Justiça. A arrematação pode transferir o imóvel livre de
+                débitos anteriores de IPTU e condomínio, conforme o edital e a decisão judicial
+                — confirme caso a caso. O processo é mais complexo: exige atenção a prazos processuais, possibilidade de
                 embargos do devedor e, no caso de imóveis, vistoria e análise da matrícula.
                 Recomenda-se acompanhamento de advogado ou especialista para iniciantes.
               </P>
@@ -534,8 +534,8 @@ export function GuiaComparacaoPage() {
                       os lotes com dados organizados e link para o edital original
                     </Td>
                     <Td>
-                      Diário de Justiça do tribunal competente; sites de leiloeiros judiciais;
-                      plataformas como leilãojudicial.com.br (verifique idoneidade)
+                      Diário de Justiça do tribunal competente; sites de leilões judiciais
+                      (verifique a idoneidade antes de usar)
                     </Td>
                     <Td>
                       Portais dos próprios bancos (ex.: Caixa Econômica Federal, Itaú, Bradesco
@@ -702,7 +702,7 @@ export function GuiaComparacaoPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -711,6 +711,7 @@ export function GuiaComparacaoPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -718,7 +719,7 @@ export function GuiaComparacaoPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -727,6 +728,7 @@ export function GuiaComparacaoPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)

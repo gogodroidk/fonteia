@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
-import { ChevronDown, ChevronUp, Heart, Layers, LayoutList, Loader2, Search, Tag } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, Layers, LayoutList, Loader2, Search, Tag, X } from "lucide-react";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
@@ -247,6 +247,7 @@ function HeartButton({
   return (
     <button
       type="button"
+      className="heart-btn"
       onClick={(e) => {
         e.stopPropagation();
         onToggle();
@@ -266,7 +267,9 @@ function HeartButton({
         border: "none",
         borderRadius: "50%",
         cursor: "pointer",
-        background: "color-mix(in srgb, #0B2240 55%, transparent)",
+        // Scrim via token (--bg) em vez de hex fixo; 70% garante contraste do ícone
+        // branco mesmo sobre o gradiente claro (lotes sem foto).
+        background: "color-mix(in srgb, var(--bg) 70%, transparent)",
         backdropFilter: "blur(4px)",
         WebkitBackdropFilter: "blur(4px)",
         color: watched ? "#FF5A7A" : "#FFFFFF",
@@ -331,7 +334,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
         {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
           <img
             src={lot.imageUrl}
-            alt=""
+            alt={`Foto do lote ${lot.displayNumber} — ${lot.category ?? lot.agency}`}
             loading="lazy"
             decoding="async"
             onLoad={() => setImgLoaded(true)}
@@ -376,58 +379,23 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
           <HeartButton watched={watched} onToggle={onToggleWatch} lotLabel={`lote ${lot.displayNumber}`} />
         </div>
 
-        {/* Category chip — top left (below encerrado seal when both present) */}
-        {lot.category && !isEncerrado && (
-          <span
-            className="badge badge--neutral"
-            style={{
-              position: "absolute",
-              top: 12,
-              left: 12,
-              maxWidth: "60%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              textTransform: "capitalize",
-              zIndex: 2,
-            }}
-          >
-            {lot.category.toLowerCase()}
-          </span>
-        )}
-        {lot.category && isEncerrado && (
-          <span
-            className="badge badge--neutral"
-            style={{
-              position: "absolute",
-              top: 28,
-              left: 12,
-              maxWidth: "60%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              textTransform: "capitalize",
-              zIndex: 2,
-            }}
-          >
-            {lot.category.toLowerCase()}
-          </span>
-        )}
+        {/* A categoria aparece na linha de identidade do corpo (abaixo) — não
+            repetimos o chip sobre a foto para evitar a categoria renderizada 2x. */}
 
         {/* Desconto ribbon — bottom left, only when honest economia exists */}
         {economia && (
           <span
             className="badge"
             style={{
-              background: "var(--accent-ink)",
-              color: "#fff",
+              background: "var(--accent)",
+              color: "#04231F",
               fontWeight: 800,
               boxShadow: "var(--shadow-sm)",
               position: "relative",
               zIndex: 2,
             }}
           >
-            -{economia.descontoPct}% vs avaliação
+            −{economia.descontoPct}% vs. avaliação
           </span>
         )}
 
@@ -971,7 +939,6 @@ function FilterSelect<T extends string>({
           fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
-          outline: "none",
           maxWidth: 160,
         }}
       >
@@ -1242,6 +1209,13 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <style>{`
+        /* Foco visível explícito no coração (o anel global pode ficar atrás do z-index do overlay). */
+        .heart-btn:focus-visible {
+          outline: 2px solid var(--brand-ink);
+          outline-offset: 2px;
+        }
+      `}</style>
       {/* Header */}
       <div>
         <span className="eyebrow">Leilões governamentais</span>
@@ -1290,7 +1264,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
               type="button"
               aria-label="Limpar busca"
             >
-              ×
+              <X size={16} aria-hidden="true" />
             </button>
           )}
         </div>

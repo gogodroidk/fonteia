@@ -108,6 +108,7 @@ function LgpdItem({
 }) {
   return (
     <div
+      className="seg-lgpd-item"
       style={{
         display: "grid",
         gridTemplateColumns: "180px 1fr",

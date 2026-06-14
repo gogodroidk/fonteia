@@ -4,9 +4,9 @@ const labels: Record<SourceStatus, string> = {
   complementary_non_government: "complementar",
   connected: "conectada",
   deprecated: "descontinuada",
-  fragile_operational: "operacional fragil",
+  fragile_operational: "operacional frágil",
   integrating: "integrando",
-  open_no_api: "sem API estavel",
+  open_no_api: "sem API estável",
   paid_or_credentialed: "credencial",
   restricted_government: "restrita",
 };

@@ -41,8 +41,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 12%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--warn) 30%, var(--surface))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -54,7 +54,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -302,7 +302,7 @@ export function LeiloesReceitaFederalPage() {
         {
           question: "Os bens têm garantia?",
           answer:
-            "Não. Os bens são vendidos 'no estado em que se encontra', sem garantia de funcionamento, sem nota fiscal do fabricante e sem direito de devolução. A responsabilidade pela avaliação do risco é do arrematante. Vistoria prévia é permitida em alguns editais — mas não em todos.",
+            "Não. Os bens são vendidos “no estado em que se encontram”, sem garantia de funcionamento, sem nota fiscal do fabricante e sem direito de devolução. A responsabilidade pela avaliação do risco é do arrematante. Vistoria prévia é permitida em alguns editais — mas não em todos.",
         },
         {
           question: "Onde ficam os bens e como é a retirada?",
@@ -367,7 +367,7 @@ export function LeiloesReceitaFederalPage() {
       resposta: (
         <>
           Não. Os bens são vendidos{" "}
-          <strong style={{ color: "var(--t-hi)" }}>"no estado em que se encontra"</strong>, sem
+          <strong style={{ color: "var(--t-hi)" }}>“no estado em que se encontram”</strong>, sem
           garantia de funcionamento, sem nota fiscal do fabricante e sem direito de devolução. A
           responsabilidade pela avaliação do risco é do arrematante. Vistoria prévia é permitida
           em alguns editais — mas não em todos. Confira a cláusula de vistoria no edital de cada
@@ -863,7 +863,7 @@ export function LeiloesReceitaFederalPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -872,6 +872,7 @@ export function LeiloesReceitaFederalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -879,7 +880,7 @@ export function LeiloesReceitaFederalPage() {
               </a>
               <a
                 href="/guias/leilao-receita-vs-judicial"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -888,6 +889,7 @@ export function LeiloesReceitaFederalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <ArrowRight size={15} aria-hidden="true" />
@@ -895,7 +897,7 @@ export function LeiloesReceitaFederalPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -904,13 +906,14 @@ export function LeiloesReceitaFederalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)
               </a>
               <a
                 href="/glossario-leiloes"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -919,13 +922,14 @@ export function LeiloesReceitaFederalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Glossário de termos
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -934,6 +938,7 @@ export function LeiloesReceitaFederalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 FAQ completo

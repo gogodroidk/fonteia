@@ -20,3 +20,8 @@ ios/
 
 # Wrangler local dev cache/temp (gerado por `wrangler dev`)
 .wrangler/
+
+# Artefatos de trabalho do loop de QA (auditoria + prints) — nao versionar
+.audit/
+screenshots/
+apps/web/shots.mjs

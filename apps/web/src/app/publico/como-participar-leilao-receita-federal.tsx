@@ -42,8 +42,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 12%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--warn) 30%, var(--surface))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -55,7 +55,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -582,7 +582,7 @@ export function ComoParticiparPage() {
               </P>
               <Warn>
                 Os bens são vendidos{" "}
-                <strong style={{ color: "var(--t-hi)" }}>"no estado em que se encontram"</strong>{" "}
+                <strong style={{ color: "var(--t-hi)" }}>“no estado em que se encontram”</strong>{" "}
                 — sem garantia de funcionamento, sem nota fiscal de origem e sem direito de
                 devolução. Essa cláusula está em praticamente todos os editais da Receita Federal.
                 Avalie o risco antes de decidir o lance.
@@ -702,7 +702,7 @@ export function ComoParticiparPage() {
                 "Verifique se o edital permite vistoria prévia. Se sim, use essa oportunidade antes de decidir o lance.",
                 "Calcule o custo total real: lance + comissão do leiloeiro + transporte + conserto estimado. Compare com o preço de mercado em bom estado.",
                 "Confirme a elegibilidade: alguns lotes aceitam apenas PJ de determinado ramo. Habilitar-se em um lote para o qual você não é elegível desperdiça tempo e pode gerar impedimentos.",
-                "Planeje a logística de retirada antes de dar o lance, especialmente para bens em outras estados.",
+                "Planeje a logística de retirada antes de dar o lance, especialmente para bens em outros estados.",
                 "Só lance o que você pode pagar à vista. O prazo de pagamento via DARF não perdoa.",
               ].map((item) => (
                 <li key={item} style={{ fontSize: "15px", lineHeight: 1.7, color: "var(--t-mid)" }}>
@@ -825,7 +825,7 @@ export function ComoParticiparPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -834,6 +834,7 @@ export function ComoParticiparPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -841,7 +842,7 @@ export function ComoParticiparPage() {
               </a>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -850,6 +851,7 @@ export function ComoParticiparPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -857,7 +859,7 @@ export function ComoParticiparPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -866,13 +868,14 @@ export function ComoParticiparPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)
               </a>
               <a
                 href="/melhores-ferramentas-analisar-leiloes"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -881,6 +884,7 @@ export function ComoParticiparPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <ArrowRight size={15} aria-hidden="true" />
@@ -888,7 +892,7 @@ export function ComoParticiparPage() {
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -897,6 +901,7 @@ export function ComoParticiparPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 FAQ completo

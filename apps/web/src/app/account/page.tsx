@@ -98,7 +98,7 @@ const TABS: TabDef[] = [
   { id: "assinatura", label: "Assinatura" },
   { id: "aparencia", label: "Aparência" },
   { id: "notificacoes", label: "Notificações" },
-  { id: "privacidade", label: "Privacidade & Cookies" },
+  { id: "privacidade", label: "Privacidade e Cookies" },
   { id: "seguranca", label: "Segurança" },
   { id: "ajuda", label: "Ajuda" },
 ];
@@ -272,7 +272,7 @@ function TabPerfil({
 
   // Rótulo do badge de plano (exibido sob o email)
   const badgeLabel = planLoading
-    ? "Carregando..."
+    ? "Carregando…"
     : isPro
       ? trial
         ? "Teste ativo"
@@ -334,7 +334,6 @@ function TabPerfil({
             </span>
           </div>
         </div>
-        <TRow label="Membro desde" val="Junho 2026" />
         <TRow label="Plano atual" val={planRowVal} />
         <TRow label="Teste" val="7 dias grátis nos planos pagos" />
       </div>
@@ -439,7 +438,7 @@ interface TabAssinaturaProps {
 
 function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinaturaProps) {
   const badgeLabel = planLoading
-    ? "Carregando..."
+    ? "Carregando…"
     : isPro
       ? trial ? "Teste ativo" : "Ativo"
       : "Sem assinatura";
@@ -454,7 +453,7 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
     ? "Verificando seu plano…"
     : isPro
       ? trial && until !== undefined
-        ? `Acesso de teste (${planLabel(plan)}) ativo até ${formatUntil(until)}. Assine para manter sem interrupção.`
+        ? `Acesso de teste (${planLabel(plan)}) ativo até ${formatUntil(until)}. Assine para manter o acesso sem interrupção.`
         : `Você está no plano ${planLabel(plan)}. Gerencie ou cancele abaixo.`
       : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo.";
 
@@ -707,7 +706,7 @@ function TabPrivacidade() {
   return (
     <div className="panel" style={{ padding: 24 }}>
       <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>
-        Privacidade & Cookies
+        Privacidade e Cookies
       </div>
       <div
         style={{
@@ -805,6 +804,7 @@ function TabSeguranca({
         <div
           className="panel"
           role="dialog"
+          aria-modal="true"
           aria-label="Confirmar exclusão"
           style={{
             padding: 24,
@@ -1081,7 +1081,7 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
   }
 
   return (
-    <section className="page-panel account-page">
+    <section className="account-page" style={{ display: "flex", flexDirection: "column" }}>
       {/* ── Desktop: two-column layout ── */}
       <div
         className="account-tabs-layout"

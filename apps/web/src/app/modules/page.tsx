@@ -7,14 +7,19 @@ interface ModulesPageProps {
 
 export function ModulesPage({ selectedModuleId = "leiloes" }: ModulesPageProps) {
   return (
-    <section className="page-panel">
-      <div className="section-header">
-        <div>
-          <span className="section-label">Mapa do produto</span>
-          <h2>Um SaaS com varios SaaS dentro</h2>
-        </div>
+    <section style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <span className="eyebrow">Mapa do produto</span>
+        <h2 style={{ margin: "4px 0 0" }}>Um SaaS com vários SaaS dentro</h2>
       </div>
-      <div className="module-grid full">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))",
+          gap: 16,
+          alignItems: "start",
+        }}
+      >
         {PRODUCT_MODULES.map((module) => (
           <ModuleCard key={module.id} module={module} selected={module.id === selectedModuleId} />
         ))}

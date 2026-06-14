@@ -22,8 +22,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 7%, var(--surface-2))",
+        border: "1px solid color-mix(in srgb, var(--warn) 22%, transparent)",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -35,7 +35,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -322,7 +322,7 @@ export function PostValeAPenaPage() {
 
             <Warn>
               <strong style={{ color: "var(--t-hi)" }}>Sem garantia. Zero.</strong> O bem é
-              vendido "no estado em que se encontra". Se o eletrônico não ligar, se o veículo
+              vendido “no estado em que se encontra”. Se o eletrônico não ligar, se o veículo
               tiver defeito mecânico, se a mercadoria estiver danificada — é problema seu. A
               Receita Federal não dá garantia, não aceita devolução e não responde por vícios
               ocultos. Você comprou o risco junto com o lote.
@@ -340,7 +340,7 @@ export function PostValeAPenaPage() {
               Além do lance, você paga comissão do leiloeiro (geralmente 5%), custos de transporte
               (o bem fica em armazém da Receita, às vezes em outra cidade), eventual armazenagem
               por atraso na retirada e possível manutenção do bem. Uma TV comprada a R$ 400 pode
-              custar R$ 650 quando você colocar ela em casa.
+              custar R$ 650 quando você a colocar em casa.
             </P>
 
             <P>
@@ -522,7 +522,7 @@ export function PostValeAPenaPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/blog/erros-iniciantes-leilao"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -531,6 +531,7 @@ export function PostValeAPenaPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -538,7 +539,7 @@ export function PostValeAPenaPage() {
               </a>
               <a
                 href="/blog/como-ler-edital-leilao"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -547,6 +548,7 @@ export function PostValeAPenaPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -554,7 +556,7 @@ export function PostValeAPenaPage() {
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -563,6 +565,7 @@ export function PostValeAPenaPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Perguntas frequentes (FAQ)

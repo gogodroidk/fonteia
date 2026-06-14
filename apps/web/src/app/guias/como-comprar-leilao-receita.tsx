@@ -30,8 +30,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 12%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--warn) 28%, var(--surface))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -43,7 +43,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -57,8 +57,8 @@ function Info({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--accent) 6%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--accent) 20%, transparent)",
+        background: "color-mix(in srgb, var(--accent) 10%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--accent) 25%, var(--surface-2))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -240,7 +240,7 @@ export function GuiaComoComprarPage() {
         {
           question: "Posso visitar ou inspecionar o bem antes de dar o lance?",
           answer:
-            "Depende do edital. Alguns leilões permitem vistoria prévia em data e horário marcados (o edital informa onde e quando). Outros não permitem acesso ao bem antes do arremate. Mesmo quando a vistoria é permitida, você vê o bem 'no estado em que se encontra' — sem garantia de funcionamento. Confira a cláusula de vistoria no edital antes de qualquer decisão.",
+            "Depende do edital. Alguns leilões permitem vistoria prévia em data e horário marcados (o edital informa onde e quando). Outros não permitem acesso ao bem antes do arremate. Mesmo quando a vistoria é permitida, você vê o bem “no estado em que se encontra” — sem garantia de funcionamento. Confira a cláusula de vistoria no edital antes de qualquer decisão.",
         },
         {
           question: "Quanto é a comissão do leiloeiro?",
@@ -250,7 +250,7 @@ export function GuiaComoComprarPage() {
         {
           question: "Leilão da Receita Federal é confiável?",
           answer:
-            "O leilão é realizado por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O risco não está na idoneidade do órgão, mas nas características do bem: ele é vendido sem garantia, 'no estado em que se encontra'. Quem avalia o risco do lote é você — com base no edital, nas fotos disponíveis e, quando permitido, na vistoria.",
+            "O leilão é realizado por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O risco não está na idoneidade do órgão, mas nas características do bem: ele é vendido sem garantia, “no estado em que se encontra”. Quem avalia o risco do lote é você — com base no edital, nas fotos disponíveis e, quando permitido, na vistoria.",
         },
         {
           question: "O que acontece se eu ganhar o lance e não pagar?",
@@ -298,7 +298,7 @@ export function GuiaComoComprarPage() {
         <>
           Depende do edital. Alguns leilões permitem vistoria prévia em data e horário marcados
           (o edital informa onde e quando). Outros não permitem acesso ao bem antes do arremate.
-          Mesmo quando a vistoria é permitida, você vê o bem "no estado em que se encontra" — sem
+          Mesmo quando a vistoria é permitida, você vê o bem “no estado em que se encontra” — sem
           garantia de funcionamento. Confira a cláusula de vistoria no edital antes de qualquer
           decisão.
         </>
@@ -322,7 +322,7 @@ export function GuiaComoComprarPage() {
           O leilão é realizado por leiloeiros oficiais habilitados pela Receita Federal, com
           editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O
           risco não está na idoneidade do órgão, mas nas características do bem: ele é vendido sem
-          garantia, "no estado em que se encontra". Quem avalia o risco do lote é você — com base
+          garantia, “no estado em que se encontra”. Quem avalia o risco do lote é você — com base
           no edital, nas fotos disponíveis e, quando permitido, na vistoria.
         </>
       ),
@@ -520,13 +520,13 @@ export function GuiaComoComprarPage() {
             <Passo num={2} titulo="Ler o edital e analisar o lote com atenção">
               <P>
                 Antes de se habilitar, leia o edital inteiro. Preste atenção em: condição do bem
-                (geralmente "no estado em que se encontra", sem garantia), quem pode arrematar,
+                (geralmente “no estado em que se encontra”, sem garantia), quem pode arrematar,
                 se há restrição de CNPJ ou atividade, prazo de retirada, local de guarda do bem
                 e se há custos de armazenagem adicionais.
               </P>
               <Warn>
                 <strong style={{ color: "var(--t-hi)" }}>
-                  Bem comprado "no estado em que se encontra":
+                  Bem comprado “no estado em que se encontra”:
                 </strong>{" "}
                 nos leilões da Receita Federal, o arrematante aceita o bem como ele está —
                 sem garantia de funcionamento, sem nota fiscal do fabricante e sem direito de
@@ -752,7 +752,7 @@ export function GuiaComoComprarPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/leilao-receita-vs-judicial"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -761,6 +761,7 @@ export function GuiaComoComprarPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -768,7 +769,7 @@ export function GuiaComoComprarPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -777,6 +778,7 @@ export function GuiaComoComprarPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)

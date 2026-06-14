@@ -76,7 +76,7 @@ const REPORT_CONTENTS: Array<{ icon: typeof FileText; label: string; desc: strin
   {
     icon: Info,
     label: "Riscos detectados",
-    desc: "Lista de fatores de risco identificados automaticamente (prazo, elegibilidade, etc.).",
+    desc: "Lista de fatores de risco identificados automaticamente (prazo, elegibilidade etc.).",
   },
   {
     icon: ExternalLink,
@@ -85,7 +85,7 @@ const REPORT_CONTENTS: Array<{ icon: typeof FileText; label: string; desc: strin
   },
   {
     icon: CheckSquare,
-    label: "Checklist de due-diligence",
+    label: "Checklist de verificação",
     desc: "7 orientações antes de fazer uma proposta em leilão judicial.",
   },
 ];
@@ -156,7 +156,7 @@ function EmptyState({ onExplore }: { onExplore?: (() => void) | undefined }) {
 
 function ReportsTable({ reports }: { reports: ReportEntry[] }) {
   function goToLot(lotId: string) {
-    window.history.pushState(null, "", `/app/leiloes/${encodeURIComponent(lotId)}`);
+    window.history.pushState(null, "", `/app/lotes/${encodeURIComponent(lotId)}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   }
 
@@ -282,11 +282,11 @@ function ReportsTable({ reports }: { reports: ReportEntry[] }) {
                   <button
                     type="button"
                     className="btn btn--soft btn--sm"
-                    onClick={() => window.print()}
-                    title="Imprimir / salvar como PDF"
+                    onClick={() => goToLot(report.lotId)}
+                    title="Abrir o lote para reimprimir o PDF"
                   >
                     <Download size={13} aria-hidden="true" />
-                    Imprimir PDF
+                    Reimprimir no lote
                   </button>
                 </div>
               </td>
@@ -383,14 +383,14 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
   const hasReports = reports.length > 0;
 
   return (
-    <section className="page-panel">
+    <section style={{ display: "flex", flexDirection: "column" }}>
       {/* ── Page header ────────────────────────────────────────────────────── */}
       <div
         className="row between wrap"
         style={{ marginBottom: 20, gap: 12, alignItems: "flex-end" }}
       >
         <div>
-          <span className="section-label">Leilões judiciais</span>
+          <span className="eyebrow">Leilões judiciais</span>
           <h2 style={{ margin: "4px 0 0" }}>Relatórios</h2>
         </div>
         {hasReports && (

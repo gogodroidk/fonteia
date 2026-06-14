@@ -179,19 +179,47 @@ async function fetchDestaquesLive(): Promise<{ payload: ReceitaLeiloesDestaquesP
 // CORS + helpers de resposta JSON
 // ---------------------------------------------------------------------------
 
-const CORS_HEADERS: Record<string, string> = {
+// Origens permitidas para acesso à API.
+// TODO: rate limiting via Cloudflare (Workers Rate Limiting API ou Cloudflare Rules).
+const ALLOWED_ORIGINS = new Set([
+  "https://fontebrasil.online",
+  "https://www.fontebrasil.online",
+]);
+
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  // Subdomínios: *.fontebrasil.online e *.igoreluisa.workers.dev (preview/staging)
+  if (/^https:\/\/[a-z0-9-]+\.fontebrasil\.online$/.test(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.igoreluisa\.workers\.dev$/.test(origin)) return true;
+  return false;
+}
+
+function getCorsHeaders(requestOrigin: string | null): Record<string, string> {
+  const allowedOrigin = isAllowedOrigin(requestOrigin) ? (requestOrigin ?? "") : "https://fontebrasil.online";
+  return {
+    "access-control-allow-origin": allowedOrigin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "access-control-max-age": "86400",
+    "vary": "Origin",
+  };
+}
+
+// Mantido para rotas GET públicas (lotes/health) onde qualquer origem pode ler.
+const CORS_HEADERS_PUBLIC: Record<string, string> = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-methods": "GET, OPTIONS",
   "access-control-allow-headers": "content-type",
   "access-control-max-age": "86400",
 };
 
-function json(body: unknown, status = 200, extra: Record<string, string> = {}): Response {
+function json(body: unknown, status = 200, corsHeaders: Record<string, string> = CORS_HEADERS_PUBLIC, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       "content-type": "application/json; charset=utf-8",
-      ...CORS_HEADERS,
+      ...corsHeaders,
       ...extra,
     },
   });
@@ -335,9 +363,13 @@ const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const { pathname } = url;
+    const requestOrigin = request.headers.get("origin");
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      // Para preflight da rota de IA, retorna CORS restrito; para demais, público.
+      const isIaRoute = pathname === "/ia/raio-x";
+      const headers = isIaRoute ? getCorsHeaders(requestOrigin) : CORS_HEADERS_PUBLIC;
+      return new Response(null, { status: 204, headers });
     }
 
     // GET /health
@@ -364,10 +396,8 @@ const handler: ExportedHandler<Env> = {
           lots,
         });
       } catch (error) {
-        return json(
-          { error: "Nao foi possivel consultar a Receita agora.", detail: String(error) },
-          502,
-        );
+        console.error("[api] /leiloes/lotes failed:", error);
+        return json({ error: "Nao foi possivel consultar a Receita agora." }, 502);
       }
     }
 
@@ -384,34 +414,40 @@ const handler: ExportedHandler<Env> = {
         }
         return json(lot);
       } catch (error) {
-        return json(
-          { error: "Nao foi possivel consultar a Receita agora.", detail: String(error) },
-          502,
-        );
+        console.error("[api] /leiloes/lotes/:id failed:", error);
+        return json({ error: "Nao foi possivel consultar a Receita agora." }, 502);
       }
     }
 
     // POST /ia/raio-x  { lot: ReceitaLeilaoLot, question?: string }
     if (pathname === "/ia/raio-x" && request.method === "POST") {
+      const iaCors = getCorsHeaders(requestOrigin);
+
       let parsed: { lot?: ReceitaLeilaoLot; question?: string };
       try {
         parsed = (await request.json()) as { lot?: ReceitaLeilaoLot; question?: string };
       } catch {
-        return json({ error: "Corpo invalido: envie JSON com { lot }." }, 400);
+        return json({ error: "Corpo invalido: envie JSON com { lot }." }, 400, iaCors);
       }
 
       if (!parsed.lot || !parsed.lot.id) {
-        return json({ error: "Campo 'lot' ausente ou invalido." }, 400);
+        return json({ error: "Campo 'lot' ausente ou invalido." }, 400, iaCors);
       }
 
+      // Trunca a pergunta para evitar injeção de prompt longa ou abuso de tokens.
+      const MAX_QUESTION_LENGTH = 500;
+      const question = parsed.question
+        ? parsed.question.slice(0, MAX_QUESTION_LENGTH)
+        : undefined;
+
       try {
-        const { answer, model } = await analyzeLotWithClaude(parsed.lot, parsed.question, env);
+        const { answer, model } = await analyzeLotWithClaude(parsed.lot, question, env);
         return json({
           answer,
           model,
           disclaimer:
             "Analise gerada por IA a partir dos dados publicos da Receita. Confirme tudo no edital oficial antes de dar lance.",
-        });
+        }, 200, iaCors);
       } catch (error) {
         if (error instanceof IaNotConfiguredError) {
           return json(
@@ -421,9 +457,11 @@ const handler: ExportedHandler<Env> = {
                 "O assistente de IA ainda nao foi ativado. Configure o secret ANTHROPIC_API_KEY no Worker.",
             },
             503,
+            iaCors,
           );
         }
-        return json({ error: "Falha ao gerar a analise.", detail: String(error) }, 502);
+        console.error("[api] /ia/raio-x failed:", error);
+        return json({ error: "Falha ao gerar a analise." }, 502, iaCors);
       }
     }
 

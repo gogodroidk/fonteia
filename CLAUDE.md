@@ -54,7 +54,7 @@ Antes de responder sobre qualquer biblioteca, API, serviço ou tecnologia: **ver
 
 **Princípio cardinal:** Começar vendável. Primeiro módulo = leilões judiciais. 10 clientes pagantes antes de abrir o segundo módulo.
 
-**Monetização:** SaaS B2B — R$ 299/individual, R$ 699/escritório, R$ 1.499/corporativo
+**Monetização:** SaaS B2B — R$ 197/individual, R$ 597/escritório (2 planos)
 
 **Fontes de dados:** Portal da Transparência, CNPJ.ws, APIs de tribunais, Diário Oficial, INPI, IBAMA
 

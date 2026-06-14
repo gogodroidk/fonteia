@@ -240,7 +240,7 @@ function InlinePanel({ sourceUrl }: { sourceUrl: string }) {
             border: "1px solid var(--n-200)",
             borderTop: "none",
             borderRadius: "0 0 var(--r-lg) var(--r-lg)",
-            background: "var(--surface, #fff)",
+            background: "var(--surface)",
           }}
         >
           <Conteudo sourceUrl={sourceUrl} onClose={() => setExpanded(false)} />

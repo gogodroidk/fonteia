@@ -16,8 +16,8 @@ describe("Fonte.ia web shell", () => {
       </AuthProvider>,
     );
 
-    expect(html).toContain("Ultimos lotes publicados");
-    expect(html).toContain("Fonte antes de opiniao");
+    expect(html).toContain("Últimos lotes publicados");
+    expect(html).toContain("fonte antes de opinião");
     expect(html).toContain("Receita Federal SLE");
   });
 
@@ -34,7 +34,7 @@ describe("Fonte.ia web shell", () => {
   it("labels source statuses in product language", () => {
     const html = renderToStaticMarkup(<SourceStatusBadge status="fragile_operational" />);
 
-    expect(html).toContain("operacional fragil");
+    expect(html).toContain("operacional frágil");
   });
 
   it("renders billing plans with checkout CTAs", () => {

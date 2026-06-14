@@ -87,7 +87,7 @@ async function sha256OfString(text: string): Promise<string> {
 }
 
 async function sha256OfBytes(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const digest = await crypto.subtle.digest("SHA-256", bytes.buffer as ArrayBuffer);
   return `sha256:${toHex(new Uint8Array(digest))}`;
 }
 

@@ -15,12 +15,6 @@ export interface LeilaoLotResult extends LeiloesLoadResult {
   lot: ReceitaLeilaoLot | null;
 }
 
-// isDemo is kept for backwards compatibility but always false — no sample data is shown
-/** @deprecated Use `source === "empty"` instead */
-export function isLeiloesDemo(_result: LeiloesLoadResult): boolean {
-  return false;
-}
-
 interface SupabaseEntityRow {
   attributes: ReceitaLeilaoLot;
   updated_at?: string;
@@ -50,14 +44,19 @@ async function fetchApiLotById(lotId: string, fetcher: typeof fetch): Promise<Re
   return payload;
 }
 
+// Máximo de páginas por requisição — protege contra loop infinito em datasets grandes.
+// Com pageSize=1000 e maxPages=10 buscamos até 10.000 lotes, mais que suficiente para leilões da Receita.
+const MAX_SUPABASE_PAGES = 10;
+
 async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: ReceitaLeilaoLot[]; lastSyncedAt?: string | undefined }> {
   const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
 
   // Paginação por Range: o PostgREST corta em 1000 linhas por padrão (max-rows),
-  // então buscamos em páginas de 1000 até acabar — sem o teto de "1000 lotes".
+  // então buscamos em páginas de 1000 até acabar (limitado a MAX_SUPABASE_PAGES páginas).
   const pageSize = 1000;
   const rows: SupabaseEntityRow[] = [];
-  for (let offset = 0; offset < 50000; offset += pageSize) {
+  for (let page = 0; page < MAX_SUPABASE_PAGES; page++) {
+    const offset = page * pageSize;
     const query = "entities?kind=eq.auction_lot&select=attributes,updated_at&order=updated_at.desc";
     const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
       headers: {
@@ -76,6 +75,10 @@ async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: Receita
     const batch = (await response.json()) as SupabaseEntityRow[];
     rows.push(...batch);
     if (batch.length < pageSize) break;
+
+    if (page === MAX_SUPABASE_PAGES - 1) {
+      console.warn(`[leiloes-api] Atingido o limite de ${MAX_SUPABASE_PAGES} páginas (${rows.length} linhas). Pode haver mais lotes não carregados.`);
+    }
   }
   const lots = rows.map((row) => row.attributes).filter((lot) => lot?.sourceId === "receita-leiloes-sle");
 
@@ -92,7 +95,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "api",
         lots,
-        message: "Dados carregados pela API Fonte.ia com trilha de fonte e normalizacao do produto.",
+        message: "Dados carregados pela API Fonte.ia com trilha de fonte e normalização do produto.",
       };
     }
   } catch (error) {
@@ -106,7 +109,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "supabase",
         lots,
-        message: "Dados carregados do Supabase publico com RLS e evidencias da Receita Federal.",
+        message: "Dados carregados do Supabase público com RLS e evidências da Receita Federal.",
         lastSyncedAt,
         errors,
       };
@@ -118,7 +121,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
   return {
     source: "empty",
     lots: [],
-    message: "Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.",
+    message: "Nenhum lote disponível no momento. A coleta dos leilões da Receita roda periodicamente.",
     errors,
   };
 }
@@ -148,7 +151,7 @@ export async function getLeilaoLotById(lotId: string, fetcher: typeof fetch = fe
     errors: [...errors, ...(result.errors ?? [])],
     message: lot
       ? result.message
-      : `Nao encontramos o lote ${lotId} nas fontes carregadas agora.`,
+      : `Não encontramos o lote ${lotId} nas fontes carregadas agora.`,
   };
 }
 

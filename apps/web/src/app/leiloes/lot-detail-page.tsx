@@ -22,8 +22,7 @@ import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LotEconomia } from "@fonteia/scoring";
 import { EvidencePanel } from "../../components/evidence-panel";
-import { ScoreRing } from "../../components/score-ring";
-import { Bar, FonteDots } from "../../components/ui";
+import { Bar, FonteDots, ScoreRing } from "../../components/ui";
 import { getConfiguredApiUrl, getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
 import { displayCity } from "../../lib/receita-localidades";
 import { useAuth } from "../../auth/auth-context";
@@ -33,6 +32,7 @@ import { estimarCustoTotal } from "../../lib/custo-total";
 import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
 import { supabase } from "../../auth/supabase-client";
 import { usePlan } from "../../lib/use-plan";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -73,9 +73,17 @@ interface LotDetailPageProps {
 type AlertChannel = "in_app" | "email" | "whatsapp";
 
 const channelLabels: Record<AlertChannel, string> = {
-  in_app: "Notificacao no app",
+  in_app: "Notificação no app",
   email: "E-mail em breve",
   whatsapp: "WhatsApp em breve",
+};
+
+// Canais ainda não implementados no backend — exibidos como "em breve" e
+// desabilitados na seleção (não há fluxo real além do in-app/e-mail de prazo).
+const channelDisabled: Record<AlertChannel, boolean> = {
+  in_app: false,
+  email: true,
+  whatsapp: true,
 };
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -121,17 +129,17 @@ function daysUntilDeadline(value: string): number {
 function eligibilityLabel(lot: ReceitaLeilaoLot): string {
   const hasPf = lot.eligiblePersonTypes.includes("pf");
   const hasPj = lot.eligiblePersonTypes.includes("pj");
-  if (hasPf && hasPj) return "Pessoa fisica e juridica";
-  if (hasPf) return "Somente pessoa fisica";
-  return "Somente pessoa juridica";
+  if (hasPf && hasPj) return "Pessoa física e jurídica";
+  if (hasPf) return "Somente pessoa física";
+  return "Somente pessoa jurídica";
 }
 
 function eligibilityLong(lot: ReceitaLeilaoLot): string {
   const hasPf = lot.eligiblePersonTypes.includes("pf");
   const hasPj = lot.eligiblePersonTypes.includes("pj");
-  if (hasPf && hasPj) return "Pessoa fisica e pessoa juridica podem participar deste lote.";
-  if (hasPf) return "Apenas pessoa fisica pode participar. Pessoa juridica esta excluida.";
-  return "Restrito a pessoa juridica. Pessoa fisica nao pode participar.";
+  if (hasPf && hasPj) return "Pessoa física e pessoa jurídica podem participar deste lote.";
+  if (hasPf) return "Apenas pessoa física pode participar. Pessoa jurídica está excluída.";
+  return "Restrito a pessoa jurídica. Pessoa física não pode participar.";
 }
 
 // ─── Score impact icon ────────────────────────────────────────────────────────
@@ -155,8 +163,8 @@ function deadlineStatus(days: number): DeadlineStatus {
 
 function deadlineStatusLabel(days: number): string {
   if (days <= 0) return "Prazo vencido";
-  if (days === 1) return "Vence amanha";
-  if (days <= 6) return `Vence em ${days} dias — decisao urgente`;
+  if (days === 1) return "Vence amanhã";
+  if (days <= 6) return `Vence em ${days} dias — decisão urgente`;
   return `${days} dias restantes`;
 }
 
@@ -166,9 +174,13 @@ interface DeadlineTone {
 }
 
 function deadlineTone(status: DeadlineStatus): DeadlineTone {
-  if (status === "ok") return { bg: "var(--color-success-bg)", fg: "var(--color-success)" };
-  if (status === "expired") return { bg: "var(--color-error-bg)", fg: "var(--color-error)" };
-  return { bg: "var(--color-warning-bg)", fg: "var(--color-warning)" };
+  if (status === "ok") {
+    return { bg: "color-mix(in srgb, var(--ok) 14%, transparent)", fg: "var(--ok)" };
+  }
+  if (status === "expired") {
+    return { bg: "color-mix(in srgb, var(--danger) 12%, transparent)", fg: "var(--danger)" };
+  }
+  return { bg: "color-mix(in srgb, var(--warn) 16%, transparent)", fg: "var(--warn)" };
 }
 
 // ─── Score-derived risk bars (derived from scoring factors, no invented data) ──
@@ -190,7 +202,7 @@ function buildRiskBars(
   bars.push({
     label: "Elegibilidade de participantes",
     value: pjOnly ? 45 : 90,
-    color: pjOnly ? "var(--color-warning)" : "var(--g-500)",
+    color: pjOnly ? "var(--warn)" : "var(--ok)",
   });
 
   // Prazo
@@ -199,9 +211,9 @@ function buildRiskBars(
   const deadlineOk = scoring.factors.some((f) => f.id === "enough-time");
   const prazoVal = deadlineExpired ? 10 : deadlineSoon ? 40 : deadlineOk ? 85 : 50;
   bars.push({
-    label: "Prazo disponivel para analise",
+    label: "Prazo disponível para análise",
     value: prazoVal,
-    color: deadlineExpired ? "var(--color-error)" : deadlineSoon ? "var(--color-warning)" : "var(--g-500)",
+    color: deadlineExpired ? "var(--danger)" : deadlineSoon ? "var(--warn)" : "var(--ok)",
   });
 
   // Ticket de entrada
@@ -209,17 +221,17 @@ function buildRiskBars(
   const highTicket = scoring.factors.some((f) => f.id === "high-entry-ticket");
   const ticketVal = lowTicket ? 88 : highTicket ? 30 : 60;
   bars.push({
-    label: "Acessibilidade do valor minimo",
+    label: "Acessibilidade do valor mínimo",
     value: ticketVal,
-    color: highTicket ? "var(--color-error)" : lowTicket ? "var(--g-500)" : "var(--color-warning)",
+    color: highTicket ? "var(--danger)" : lowTicket ? "var(--ok)" : "var(--warn)",
   });
 
-  // Imagem disponivel
+  // Imagem disponível
   const hasImage = scoring.factors.some((f) => f.id === "has-image");
   bars.push({
     label: "Visibilidade do lote (imagem)",
     value: hasImage ? 80 : 40,
-    color: hasImage ? "var(--g-500)" : "var(--color-warning)",
+    color: hasImage ? "var(--ok)" : "var(--warn)",
   });
 
   return bars;
@@ -270,8 +282,12 @@ function asString(value: unknown): string | undefined {
  * inteira some. Faz narrowing seguro sobre `unknown` para passar no strict TS.
  */
 function extractLotItens(lot: ReceitaLeilaoLot): LotItensInfo | null {
-  const raw = lot.raw as unknown as Record<string, unknown>;
-  if (!raw || typeof raw !== "object") return null;
+  // `lot.raw` é o eco bruto da fonte: no destaque é `ReceitaLeiloesDestaqueRaw`,
+  // mas no catálogo completo traz campos ricos (itens, recinto) fora desse tipo.
+  // Lemos como dicionário aberto — o `unknown` intermediário é exigido porque a
+  // interface base não tem index signature.
+  const raw = (lot.raw ?? {}) as unknown as Record<string, unknown>;
+  if (typeof raw !== "object") return null;
 
   const recinto =
     asString(raw["recinto"]) ?? asString(raw["patio"]) ?? asString(raw["localRetirada"]);
@@ -346,7 +362,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
           borderRadius: "var(--r-lg)",
           overflow: "hidden",
           background: "linear-gradient(135deg, #1a2e52, #0c1c3a)",
-          border: "1px solid var(--n-100)",
+          border: "1px solid var(--border)",
         }}
       >
         {/* Placeholder always visible beneath the image; fades out once image loads */}
@@ -374,7 +390,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                 Sem foto publicada para este lote
               </span>
               <span style={{ fontSize: "0.72rem", opacity: 0.8 }}>
-                A fonte oficial nao disponibilizou imagem.
+                A fonte oficial não disponibilizou imagem.
               </span>
             </>
           )}
@@ -441,8 +457,8 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                   borderRadius: "var(--r-sm)",
                   overflow: "hidden",
                   cursor: "pointer",
-                  background: "var(--n-100)",
-                  border: selected ? "2px solid var(--g-500)" : "1px solid var(--n-200)",
+                  background: "var(--surface-2)",
+                  border: selected ? "2px solid var(--brand)" : "1px solid var(--border)",
                 }}
               >
                 {broken[i] === true ? (
@@ -454,7 +470,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                       height: "100%",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: "var(--n-400)",
+                      color: "var(--t-low)",
                     }}
                   >
                     <ImageOff size={16} />
@@ -462,7 +478,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                 ) : (
                   <img
                     src={url}
-                    alt=""
+                    alt={`Foto ${i + 1} do lote`}
                     loading="lazy"
                     onError={() => {
                       setBroken((prev) => ({ ...prev, [i]: true }));
@@ -498,7 +514,7 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
       <div className="report-header">
         <div>
           <div className="report-title">Fonte.ia — Raio-X do Lote</div>
-          <div className="report-sub">by Olli · {today} · Dados rastreados a fonte oficial</div>
+          <div className="report-sub">by Olli · {today} · Dados rastreados à fonte oficial</div>
         </div>
         <div style={{ textAlign: "right", fontSize: "9pt", color: "#5A6B82" }}>
           <div style={{ fontWeight: 800, fontSize: "14pt", color: "#0B2240" }}>
@@ -509,7 +525,7 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
       </div>
 
       <div className="report-section">
-        <div className="report-section-title">Identificacao do lote</div>
+        <div className="report-section-title">Identificação do lote</div>
         {lot.category ? (
           <div className="report-row">
             <span>Categoria</span>
@@ -531,7 +547,7 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
           <b>{lot.edle}</b>
         </div>
         <div className="report-row">
-          <span>Orgao responsavel</span>
+          <span>Órgão responsável</span>
           <b>{lot.agency}</b>
         </div>
         <div className="report-row">
@@ -553,11 +569,11 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
         {economia ? (
           <>
             <div className="report-row">
-              <span>Avaliacao oficial</span>
+              <span>Avaliação oficial</span>
               <b>{formatBRL(economia.avaliacaoCents / 100)}</b>
             </div>
             <div className="report-row">
-              <span>Economia (avaliacao − minimo)</span>
+              <span>Economia (avaliação − mínimo)</span>
               <b>
                 {formatBRL(economia.economiaCents / 100)} ({economia.descontoPct}%)
               </b>
@@ -565,7 +581,7 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
           </>
         ) : null}
         <div className="report-row">
-          <span>Lance minimo (fonte oficial)</span>
+          <span>Lance mínimo (fonte oficial)</span>
           <b>{formatBRL(lot.minimumBidCents / 100)}</b>
         </div>
         <div className="report-row">
@@ -615,8 +631,8 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
       <div className="report-footer">
         <span>Fonte.ia by Olli</span>
         <span>
-          Relatorio gerado a partir de dados publicos oficiais. Nao constitui assessoria juridica ou
-          financeira. Confirme tudo na fonte oficial antes de tomar qualquer decisao.
+          Relatório gerado a partir de dados públicos oficiais. Não constitui assessoria jurídica ou
+          financeira. Confirme tudo na fonte oficial antes de tomar qualquer decisão.
         </span>
         <span>{today}</span>
       </div>
@@ -642,7 +658,7 @@ export function LotDetailPage({
     scoring.label === "alto"
       ? { className: "badge--ok", label: "Alta oportunidade" }
       : scoring.label === "medio"
-        ? { className: "badge--warn", label: "Oportunidade media" }
+        ? { className: "badge--warn", label: "Oportunidade média" }
         : { className: "badge--neutral", label: "Avaliar com cautela" };
   const riskBars = buildRiskBars(scoring, lot);
 
@@ -729,8 +745,19 @@ export function LotDetailPage({
     };
   }, [lot, buildHashInput]);
 
-  // Alert modal
+  // Alert modal — foco preso, autofocus no 1º campo, restaura foco ao fechar.
   const [alertOpen, setAlertOpen] = useState(false);
+  const alertModalRef = useFocusTrap<HTMLDivElement>(alertOpen);
+
+  // Fecha o modal de alerta no Esc (o focus trap não cobre Esc).
+  useEffect(() => {
+    if (!alertOpen) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") setAlertOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [alertOpen]);
   const [editalLoading, setEditalLoading] = useState(false);
   const [relacaoLoading, setRelacaoLoading] = useState(false);
   const [editalIA, setEditalIA] = useState<string | null>(null);
@@ -757,7 +784,7 @@ export function LotDetailPage({
     try {
       const base = getConfiguredApiUrl();
       if (!base) {
-        throw new Error("Backend nao configurado.");
+        throw new Error("Backend não configurado.");
       }
       const trimmed = question?.trim();
       // A função `fonteia` tem verify_jwt: a página é logada, então mandamos o
@@ -824,7 +851,7 @@ export function LotDetailPage({
   async function handleSaveAlert() {
     setAlertOpen(false);
     if (!isPro) {
-      setSuccessMessage("Alertas por e-mail sao do plano Profissional. Assine (ou use o cupom de teste) para receber avisos de prazo.");
+      setSuccessMessage("Alertas por e-mail são do plano Profissional. Assine (ou use o cupom de teste) para receber avisos de prazo.");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 6000);
       return;
     }
@@ -843,10 +870,10 @@ export function LotDetailPage({
         setSuccessMessage(
           !error && d.ok
             ? `✓ ${d.message ?? "Alerta criado!"} (${email})`
-            : d.message ?? "Nao consegui criar o alerta agora. Tente de novo.",
+            : d.message ?? "Não consegui criar o alerta agora. Tente novamente.",
         );
       } catch {
-        setSuccessMessage("Nao consegui criar o alerta agora. Tente de novo.");
+        setSuccessMessage("Não consegui criar o alerta agora. Tente novamente.");
       }
     } else {
       setSuccessMessage("Entre na sua conta para receber alertas por e-mail deste lote.");
@@ -867,8 +894,8 @@ export function LotDetailPage({
       if (!res.ok) {
         setSuccessMessage(
           res.status === 404
-            ? "Este edital ainda nao tem PDF publicado no SLE."
-            : "Nao consegui baixar o edital agora.",
+            ? "Este edital ainda não tem PDF publicado no SLE."
+            : "Não consegui baixar o edital agora.",
         );
         successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
         return;
@@ -883,7 +910,7 @@ export function LotDetailPage({
       document.body.removeChild(a);
       URL.revokeObjectURL(objUrl);
     } catch {
-      setSuccessMessage("Nao consegui baixar o edital agora.");
+      setSuccessMessage("Não consegui baixar o edital agora.");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setEditalLoading(false);
@@ -901,8 +928,8 @@ export function LotDetailPage({
       if (!res.ok) {
         setSuccessMessage(
           res.status === 404
-            ? "Este edital nao tem relacao de itens publicada no SLE."
-            : "Nao consegui baixar a relacao de itens agora.",
+            ? "Este edital não tem relação de itens publicada no SLE."
+            : "Não consegui baixar a relação de itens agora.",
         );
         successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
         return;
@@ -917,7 +944,7 @@ export function LotDetailPage({
       document.body.removeChild(a);
       URL.revokeObjectURL(objUrl);
     } catch {
-      setSuccessMessage("Nao consegui baixar a relacao de itens agora.");
+      setSuccessMessage("Não consegui baixar a relação de itens agora.");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setRelacaoLoading(false);
@@ -927,7 +954,7 @@ export function LotDetailPage({
   async function analisarEdital() {
     if (!isPro) {
       setEditalIA(null);
-      setEditalIAError("A analise do edital por IA e do plano Profissional. Assine (ou use o cupom de teste) para destravar.");
+      setEditalIAError("A análise do edital por IA é do plano Profissional. Assine (ou use o cupom de teste) para liberar.");
       return;
     }
     setEditalIALoading(true);
@@ -935,7 +962,7 @@ export function LotDetailPage({
     setEditalIA(null);
     try {
       const base = getConfiguredApiUrl();
-      if (!base) throw new Error("Backend nao configurado.");
+      if (!base) throw new Error("Backend não configurado.");
       const { key } = getSupabasePublicConfig();
       const res = await fetch(`${trimTrailingSlash(base)}/ia/edital`, {
         method: "POST",
@@ -949,15 +976,15 @@ export function LotDetailPage({
       });
       const data = (await res.json()) as { answer?: string; error?: string; message?: string };
       if (res.status === 403) {
-        setEditalIAError("A analise do edital por IA e do plano Profissional. Assine (ou use o cupom de teste) para destravar.");
+        setEditalIAError("A análise do edital por IA é do plano Profissional. Assine (ou use o cupom de teste) para liberar.");
         return;
       }
       if (res.status === 404) {
-        setEditalIAError("Este edital ainda nao tem PDF publicado no SLE.");
+        setEditalIAError("Este edital ainda não tem PDF publicado no SLE.");
         return;
       }
       if (res.status === 503) {
-        setEditalIAError("A analise por IA ainda nao foi ativada.");
+        setEditalIAError("A análise por IA ainda não foi ativada.");
         return;
       }
       if (!res.ok || !data.answer) throw new Error(data.message ?? data.error ?? `Erro ${res.status}`);
@@ -981,7 +1008,7 @@ export function LotDetailPage({
       kind: "api_payload" as const,
       collectedAt: lot.collectedAt,
       rawRecordId: lot.id,
-      quote: `Lote ${lot.displayNumber} — edital ${lot.edital}, lance minimo ${formatBRL(lot.minimumBidCents / 100)}, prazo ${formatDeadline(lot.proposalDeadline)}.`,
+      quote: `Lote ${lot.displayNumber} — edital ${lot.edital}, lance mínimo ${formatBRL(lot.minimumBidCents / 100)}, prazo ${formatDeadline(lot.proposalDeadline)}.`,
       confidence: 1 as const,
       ...(contentHash !== null ? { hash: `sha256:${contentHash}` } : {}),
     },
@@ -991,8 +1018,8 @@ export function LotDetailPage({
   const fonteDotsSources = [
     {
       sigla: "SLE",
-      cor: "#0f5f4a",
-      nome: "Receita Federal — Sistema de Leiloes Eletronicos",
+      cor: "#1D5FE0",
+      nome: "Receita Federal — Sistema de Leilão Eletrônico",
     },
   ];
 
@@ -1006,7 +1033,7 @@ export function LotDetailPage({
         {/* ── Main column ─────────────────────────────────────────────────── */}
         <div className="lot-detail-main">
           {/* Back button */}
-          <button className="ghost-button lot-back-button" onClick={onBack} type="button">
+          <button className="btn btn--ghost lot-back-button" onClick={onBack} type="button">
             <ArrowLeft aria-hidden="true" size={16} />
             Voltar
           </button>
@@ -1015,7 +1042,7 @@ export function LotDetailPage({
               HERO — foto + identidade + valor + ações (tudo no topo)
               ════════════════════════════════════════════════════════════════ */}
           <section
-            className="lot-detail-header"
+            className="panel"
             style={{ display: "flex", flexDirection: "column", gap: "var(--s-5)", padding: "var(--s-5)" }}
           >
             {/* Foto / galeria com overlays */}
@@ -1052,19 +1079,19 @@ export function LotDetailPage({
                         position: "absolute",
                         top: "var(--s-3)",
                         right: "var(--s-3)",
-                        background: "var(--g-700)",
-                        color: "#fff",
+                        background: "var(--accent)",
+                        color: "#04231F",
                         fontWeight: 800,
                         boxShadow: "var(--shadow-sm)",
                       }}
                     >
-                      <TrendingDown aria-hidden="true" size={12} />-{economia.descontoPct}% vs avaliacao
+                      <TrendingDown aria-hidden="true" size={12} />−{economia.descontoPct}% vs. avaliação
                     </span>
                   ) : null}
 
                   {/* Score — canto inferior direito */}
                   <div style={{ position: "absolute", bottom: "var(--s-3)", right: "var(--s-3)" }}>
-                    <ScoreRing score={scoring.score} size="lg" />
+                    <ScoreRing value={scoring.score} size={96} />
                   </div>
                 </>
               }
@@ -1092,7 +1119,7 @@ export function LotDetailPage({
               )}
               <span
                 className={`badge score-label-${scoring.label}`}
-                style={{ background: "var(--n-50)", border: "1px solid var(--n-100)" }}
+                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
               >
                 Oportunidade {scoring.label.toUpperCase()}
               </span>
@@ -1101,9 +1128,9 @@ export function LotDetailPage({
             {/* Título — o que é o lote (descrição real dos bens), com o edital de subtítulo */}
             {itemTitle ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-1)" }}>
-                <span className="section-label">O que e este lote</span>
+                <span className="eyebrow">O que é este lote</span>
                 <h2 style={{ margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>{itemTitle}</h2>
-                <span style={{ fontSize: "0.8rem", color: "var(--n-400)", fontFamily: "monospace" }}>
+                <span style={{ fontSize: "0.8rem", color: "var(--t-low)", fontFamily: "monospace" }}>
                   {lotTitle}
                 </span>
               </div>
@@ -1117,7 +1144,7 @@ export function LotDetailPage({
                 display: "flex",
                 flexWrap: "wrap",
                 gap: "var(--s-4)",
-                color: "var(--n-500)",
+                color: "var(--t-mid)",
                 fontSize: "0.9rem",
                 marginTop: "calc(-1 * var(--s-2))",
               }}
@@ -1141,19 +1168,19 @@ export function LotDetailPage({
                   gap: "var(--s-2)",
                   padding: "var(--s-3) var(--s-4)",
                   borderRadius: "var(--r-md)",
-                  background: "var(--color-warning-bg)",
-                  border: "1px solid var(--color-warning)",
+                  background: "color-mix(in srgb, var(--warn) 16%, transparent)",
+                  border: "1px solid var(--warn)",
                 }}
               >
                 <span
-                  className="section-label"
-                  style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)", color: "var(--color-warning)" }}
+                  className="eyebrow"
+                  style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-2)", color: "var(--warn)" }}
                 >
                   <ShieldCheck aria-hidden="true" size={13} />
                   Avisos da fonte oficial
                 </span>
                 {avisos.map((aviso, i) => (
-                  <p key={i} style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.5, color: "var(--n-700)" }}>
+                  <p key={i} style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.5, color: "var(--t-mid)" }}>
                     {aviso}
                   </p>
                 ))}
@@ -1173,21 +1200,21 @@ export function LotDetailPage({
                 style={{
                   flex: "1 1 200px",
                   minWidth: 0,
-                  background: "var(--g-50)",
-                  border: "1px solid var(--n-100)",
-                  borderLeft: "3px solid var(--g-500)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  borderLeft: "3px solid var(--brand)",
                   borderRadius: "0 var(--r-md) var(--r-md) 0",
                   padding: "var(--s-3) var(--s-4)",
                 }}
               >
-                <span className="section-label">Lance minimo</span>
+                <span className="eyebrow">Lance mínimo</span>
                 <strong
                   style={{
                     display: "block",
                     marginTop: "var(--s-1)",
                     fontSize: "1.5rem",
                     fontWeight: 800,
-                    color: "var(--g-700)",
+                    color: "var(--brand-ink)",
                     fontVariantNumeric: "tabular-nums",
                     lineHeight: 1.1,
                   }}
@@ -1202,15 +1229,15 @@ export function LotDetailPage({
                   style={{
                     flex: "1 1 200px",
                     minWidth: 0,
-                    background: "var(--color-success-bg)",
-                    border: "1px solid var(--g-200)",
-                    borderLeft: "3px solid var(--g-600)",
+                    background: "color-mix(in srgb, var(--ok) 14%, transparent)",
+                    border: "1px solid var(--border)",
+                    borderLeft: "3px solid var(--brand)",
                     borderRadius: "0 var(--r-md) var(--r-md) 0",
                     padding: "var(--s-3) var(--s-4)",
                   }}
                 >
                   <span
-                    className="section-label"
+                    className="eyebrow"
                     style={{ display: "inline-flex", alignItems: "center", gap: "var(--s-1)" }}
                   >
                     <TrendingDown aria-hidden="true" size={12} />
@@ -1222,15 +1249,15 @@ export function LotDetailPage({
                       marginTop: "var(--s-1)",
                       fontSize: "1.5rem",
                       fontWeight: 800,
-                      color: "var(--color-success)",
+                      color: "var(--ok)",
                       fontVariantNumeric: "tabular-nums",
                       lineHeight: 1.1,
                     }}
                   >
                     {formatBRL(economia.economiaCents / 100)}
                   </strong>
-                  <span style={{ fontSize: "0.75rem", color: "var(--n-500)" }}>
-                    -{economia.descontoPct}% sobre avaliacao de {formatBRL(economia.avaliacaoCents / 100)}
+                  <span style={{ fontSize: "0.75rem", color: "var(--t-mid)" }}>
+                    −{economia.descontoPct}% sobre avaliação de {formatBRL(economia.avaliacaoCents / 100)}
                   </span>
                 </div>
               ) : null}
@@ -1264,13 +1291,13 @@ export function LotDetailPage({
                 href={lot.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="primary-button lot-hero-action"
+                className="btn btn--primary lot-hero-action"
               >
                 <ExternalLink aria-hidden="true" size={16} />
-                Participar no leilao
+                Participar no leilão
               </a>
               <button
-                className="ghost-button lot-hero-action"
+                className="btn btn--ghost lot-hero-action"
                 onClick={() => {
                   setAlertOpen(true);
                 }}
@@ -1280,7 +1307,7 @@ export function LotDetailPage({
                 Criar alerta de prazo
               </button>
               <button
-                className="ghost-button lot-hero-action"
+                className="btn btn--ghost lot-hero-action"
                 onClick={() => void baixarEdital()}
                 type="button"
                 disabled={editalLoading}
@@ -1293,7 +1320,7 @@ export function LotDetailPage({
                 Baixar edital (PDF)
               </button>
               <button
-                className="ghost-button lot-hero-action"
+                className="btn btn--ghost lot-hero-action"
                 onClick={() => void baixarRelacao()}
                 type="button"
                 disabled={relacaoLoading}
@@ -1303,10 +1330,10 @@ export function LotDetailPage({
                 ) : (
                   <FileText aria-hidden="true" size={16} />
                 )}
-                Baixar relacao de itens (PDF)
+                Baixar relação de itens (PDF)
               </button>
               <button
-                className="ghost-button lot-hero-action"
+                className="btn btn--ghost lot-hero-action"
                 onClick={() => void analisarEdital()}
                 type="button"
                 disabled={editalIALoading}
@@ -1320,14 +1347,14 @@ export function LotDetailPage({
                 Analisar edital com IA
               </button>
               <button
-                className="ghost-button lot-hero-action"
+                className="btn btn--ghost lot-hero-action"
                 onClick={() => {
                   window.print();
                 }}
                 type="button"
               >
                 <Printer aria-hidden="true" size={16} />
-                Gerar relatorio PDF
+                Gerar relatório PDF
               </button>
             </div>
 
@@ -1341,7 +1368,7 @@ export function LotDetailPage({
               destaque antes de qualquer outra seção (desktop e mobile).
               ══════════════════════════════════════════════════════════════════ */}
           <section
-            className="lot-detail-header raio-x-featured"
+            className="panel raio-x-featured"
             aria-label="Assistente Fonte.ia — Raio-X do lote"
             style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
           >
@@ -1358,7 +1385,7 @@ export function LotDetailPage({
                   width: 40,
                   height: 40,
                   borderRadius: "var(--r-md)",
-                  background: iaAnswer ? "var(--g-700)" : "linear-gradient(135deg, var(--g-600), var(--g-500))",
+                  background: iaAnswer ? "var(--brand-ink)" : "linear-gradient(135deg, var(--brand), var(--accent))",
                   color: "#fff",
                   display: "flex",
                   alignItems: "center",
@@ -1370,16 +1397,16 @@ export function LotDetailPage({
                 <Sparkles aria-hidden="true" size={20} />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={{ display: "block", fontSize: "1rem", color: "var(--n-900)", fontWeight: 800 }}>
+                <strong style={{ display: "block", fontSize: "1rem", color: "var(--t-hi)", fontWeight: 800 }}>
                   Assistente Fonte.ia
                 </strong>
-                <span style={{ fontSize: "0.78rem", color: iaAnswer ? "var(--g-700)" : "var(--n-400)", fontWeight: iaAnswer ? 700 : 400 }}>
+                <span style={{ fontSize: "0.78rem", color: iaAnswer ? "var(--brand-ink)" : "var(--t-low)", fontWeight: iaAnswer ? 700 : 400 }}>
                   {iaLoading
                     ? "Analisando o lote…"
                     : iaAnswer
                     ? "Raio-X gerado com IA"
                     : iaUnavailable
-                    ? "Em ativacao"
+                    ? "Em ativação"
                     : "Raio-X do lote com IA — entenda este lote em segundos"}
                 </span>
               </div>
@@ -1394,11 +1421,11 @@ export function LotDetailPage({
                   justifyContent: "center",
                   gap: "var(--s-2)",
                   padding: "var(--s-5)",
-                  background: "var(--n-50)",
-                  border: "1px solid var(--n-100)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
                   borderRadius: "var(--r-md)",
                   fontSize: "0.85rem",
-                  color: "var(--n-500)",
+                  color: "var(--t-mid)",
                 }}
               >
                 <Loader2 aria-hidden="true" size={18} className="spin" />
@@ -1408,14 +1435,14 @@ export function LotDetailPage({
               /* Estado: resposta da IA */
               <div
                 style={{
-                  background: "var(--g-50)",
-                  border: "1px solid var(--g-200)",
-                  borderLeft: "4px solid var(--g-500)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  borderLeft: "4px solid var(--brand)",
                   borderRadius: "0 var(--r-md) var(--r-md) 0",
                   padding: "var(--s-4) var(--s-5)",
                   fontSize: "0.88rem",
                   lineHeight: 1.65,
-                  color: "var(--n-700)",
+                  color: "var(--t-mid)",
                 }}
               >
                 {iaAnswer.split("\n").map((line, i) =>
@@ -1432,8 +1459,8 @@ export function LotDetailPage({
                     style={{
                       margin: "var(--s-3) 0 0",
                       fontSize: "0.72rem",
-                      color: "var(--n-400)",
-                      borderTop: "1px solid var(--n-100)",
+                      color: "var(--t-low)",
+                      borderTop: "1px solid var(--border)",
                       paddingTop: "var(--s-2)",
                     }}
                   >
@@ -1443,24 +1470,24 @@ export function LotDetailPage({
                 ) : null}
               </div>
             ) : iaUnavailable ? (
-              /* Estado: IA ainda nao configurada */
+              /* Estado: IA ainda não configurada */
               <div
                 style={{
-                  background: "var(--n-50)",
-                  border: "1px dashed var(--n-200)",
+                  background: "var(--surface-2)",
+                  border: "1px dashed var(--border)",
                   borderRadius: "var(--r-md)",
                   padding: "var(--s-4)",
                   fontSize: "0.85rem",
-                  color: "var(--n-500)",
+                  color: "var(--t-mid)",
                   lineHeight: 1.55,
                   textAlign: "center",
                 }}
               >
                 <p style={{ margin: "0 0 var(--s-2)" }}>
-                  O assistente de IA ainda nao foi ativado nesta conta.
+                  O assistente de IA ainda não foi ativado nesta conta.
                 </p>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--n-400)" }}>
-                  Os dados acima vem direto da fonte oficial. A analise por IA liga assim que a
+                <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--t-low)" }}>
+                  Os dados acima vêm direto da fonte oficial. A análise por IA é ativada assim que a
                   chave da Anthropic for configurada no servidor.
                 </p>
               </div>
@@ -1472,17 +1499,17 @@ export function LotDetailPage({
                   flexDirection: "column",
                   gap: "var(--s-3)",
                   padding: "var(--s-4)",
-                  background: "var(--g-50)",
-                  border: "1px solid var(--g-200)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
                   borderRadius: "var(--r-md)",
                 }}
               >
-                <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--n-600)", lineHeight: 1.55 }}>
-                  Gere uma leitura em linguagem simples deste lote — o que e, quem pode dar lance,
+                <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--t-mid)", lineHeight: 1.55 }}>
+                  Gere uma leitura em linguagem simples deste lote — o que é, quem pode dar lance,
                   prazo, valor de partida e o que conferir no edital.
                 </p>
                 <button
-                  className="primary-button raio-x-cta"
+                  className="btn btn--primary raio-x-cta"
                   onClick={() => { void runRaioX(); }}
                   type="button"
                 >
@@ -1498,13 +1525,13 @@ export function LotDetailPage({
                 style={{
                   margin: 0,
                   fontSize: "0.78rem",
-                  color: "var(--color-error)",
+                  color: "var(--danger)",
                   padding: "var(--s-2) var(--s-3)",
-                  background: "var(--color-error-bg)",
+                  background: "color-mix(in srgb, var(--danger) 12%, transparent)",
                   borderRadius: "var(--r-sm)",
                 }}
               >
-                Nao consegui gerar agora: {iaError}
+                Não consegui gerar agora: {iaError}
               </p>
             ) : null}
 
@@ -1529,15 +1556,14 @@ export function LotDetailPage({
                     minWidth: 0,
                     padding: "10px var(--s-3)",
                     fontSize: "0.88rem",
-                    border: "1.5px solid var(--n-200)",
+                    border: "1.5px solid var(--border)",
                     borderRadius: "var(--r-md)",
-                    background: "var(--surface, #fff)",
-                    color: "var(--n-900)",
-                    outline: "none",
+                    background: "var(--surface)",
+                    color: "var(--t-hi)",
                   }}
                 />
                 <button
-                  className="ghost-button"
+                  className="btn btn--ghost"
                   type="submit"
                   disabled={iaLoading || !iaQuestion.trim()}
                   aria-label="Enviar pergunta"
@@ -1551,21 +1577,21 @@ export function LotDetailPage({
 
           {/* ── Análise do edital por IA (Pro: Gemini lê o PDF inteiro) ────── */}
           {editalIA || editalIAError || editalIALoading ? (
-            <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+            <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)", padding: "var(--s-5)" }}>
               <div>
-                <span className="section-label">Análise do edital por IA</span>
+                <span className="eyebrow">Análise do edital por IA</span>
                 <h3 style={{ marginTop: "var(--s-1)", display: "flex", alignItems: "center", gap: "var(--s-2)" }}>
                   <Sparkles aria-hidden="true" size={16} /> O que diz o edital
                 </h3>
               </div>
               {editalIALoading ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", color: "var(--n-500)", fontSize: "0.85rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", color: "var(--t-mid)", fontSize: "0.85rem" }}>
                   <Loader2 size={16} className="spin" aria-hidden="true" /> Lendo o edital oficial…
                 </div>
               ) : editalIAError ? (
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--n-600)" }}>{editalIAError}</p>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--t-mid)" }}>{editalIAError}</p>
               ) : editalIA ? (
-                <div style={{ fontSize: "0.88rem", lineHeight: 1.65, color: "var(--n-700)" }}>
+                <div style={{ fontSize: "0.88rem", lineHeight: 1.65, color: "var(--t-mid)" }}>
                   {editalIA.split("\n").map((line, i) =>
                     line.trim() === "" ? (
                       <div key={i} style={{ height: "var(--s-2)" }} />
@@ -1573,7 +1599,7 @@ export function LotDetailPage({
                       <p key={i} style={{ margin: "0 0 var(--s-2)" }}>{renderInline(line)}</p>
                     ),
                   )}
-                  <p style={{ margin: "var(--s-2) 0 0", fontSize: "0.72rem", color: "var(--n-400)" }}>
+                  <p style={{ margin: "var(--s-2) 0 0", fontSize: "0.72rem", color: "var(--t-low)" }}>
                     Análise por IA do PDF oficial do edital. Confirme tudo no edital antes de dar lance.
                   </p>
                 </div>
@@ -1585,9 +1611,9 @@ export function LotDetailPage({
           <ComoDarLance sourceUrl={lot.sourceUrl} />
 
           {/* ── Custo total estimado (o que realmente sai do bolso) ───────── */}
-          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)", padding: "var(--s-5)" }}>
             <div>
-              <span className="section-label">Quanto voce paga de verdade</span>
+              <span className="eyebrow">Quanto você paga de verdade</span>
               <h3 style={{ marginTop: "var(--s-1)" }}>Custo total estimado</h3>
             </div>
             {(() => {
@@ -1595,33 +1621,33 @@ export function LotDetailPage({
               const rowTd: React.CSSProperties = {
                 padding: "10px 0",
                 fontSize: "0.9rem",
-                color: "var(--n-600)",
-                borderBottom: "1px solid var(--n-100)",
+                color: "var(--t-mid)",
+                borderBottom: "1px solid var(--border)",
               };
               const valTd: React.CSSProperties = {
                 padding: "10px 0",
                 textAlign: "right",
                 fontWeight: 700,
-                color: "var(--n-700)",
+                color: "var(--t-mid)",
                 fontVariantNumeric: "tabular-nums",
-                borderBottom: "1px solid var(--n-100)",
+                borderBottom: "1px solid var(--border)",
               };
               return (
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <tbody>
                     <tr>
-                      <td style={rowTd}>Lance minimo</td>
+                      <td style={rowTd}>Lance mínimo</td>
                       <td style={valTd}>{formatBRL(custo.lanceCents / 100)}</td>
                     </tr>
                     <tr>
-                      <td style={rowTd}>Comissao do leiloeiro (5%)</td>
+                      <td style={rowTd}>Comissão do leiloeiro (5%)</td>
                       <td style={valTd}>{formatBRL(custo.comissaoCents / 100)}</td>
                     </tr>
                     <tr>
-                      <td style={{ ...rowTd, borderBottom: "none", fontWeight: 800, color: "var(--n-900)" }}>
-                        Custo estimado (no minimo)
+                      <td style={{ ...rowTd, borderBottom: "none", fontWeight: 800, color: "var(--t-hi)" }}>
+                        Custo estimado (no mínimo)
                       </td>
-                      <td style={{ ...valTd, borderBottom: "none", fontWeight: 800, fontSize: "1.1rem", color: "var(--g-700)" }}>
+                      <td style={{ ...valTd, borderBottom: "none", fontWeight: 800, fontSize: "1.1rem", color: "var(--brand-ink)" }}>
                         {formatBRL(custo.totalCents / 100)}
                       </td>
                     </tr>
@@ -1629,8 +1655,8 @@ export function LotDetailPage({
                 </table>
               );
             })()}
-            <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
-              Estimativa: lance + comissao padrao de 5% do leiloeiro. <strong>Nao inclui</strong> tributos
+            <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
+              Estimativa: lance + comissão padrão de 5% do leiloeiro. <strong>Não inclui</strong> tributos
               (ICMS/IOF), retirada, frete e encargos — que variam por edital. Confirme no edital antes de propor.
             </p>
 
@@ -1641,28 +1667,28 @@ export function LotDetailPage({
                   marginTop: "var(--s-2)",
                   padding: "var(--s-3) var(--s-4)",
                   borderRadius: "0 var(--r-md) var(--r-md) 0",
-                  background: "var(--g-50)",
-                  border: "1px solid var(--n-100)",
-                  borderLeft: "3px solid var(--g-500)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  borderLeft: "3px solid var(--brand)",
                 }}
               >
-                <span className="section-label">Referencia de mercado (FIPE)</span>
+                <span className="eyebrow">Referência de mercado (FIPE)</span>
                 <strong
                   style={{
                     display: "block",
                     marginTop: "var(--s-1)",
                     fontSize: "1.2rem",
                     fontWeight: 800,
-                    color: "var(--g-700)",
+                    color: "var(--brand-ink)",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {formatBRL(fipe.fipeCents / 100)}
                 </strong>
-                <span style={{ fontSize: "0.78rem", color: "var(--n-500)" }}>{fipe.modelo}</span>
-                <p style={{ fontSize: "0.72rem", color: "var(--n-400)", margin: "var(--s-2) 0 0", lineHeight: 1.5 }}>
-                  Valor FIPE de referencia — nao e o valor do bem leiloado (pode ter avarias ou faltar
-                  documento). Use como orientacao e confirme.
+                <span style={{ fontSize: "0.78rem", color: "var(--t-mid)" }}>{fipe.modelo}</span>
+                <p style={{ fontSize: "0.72rem", color: "var(--t-low)", margin: "var(--s-2) 0 0", lineHeight: 1.5 }}>
+                  Valor FIPE de referência — não é o valor do bem leiloado (pode ter avarias ou faltar
+                  documento). Use como orientação e confirme.
                 </p>
               </div>
             ) : null}
@@ -1671,11 +1697,11 @@ export function LotDetailPage({
           {/* ── Itens do lote (gracioso: só quando a fonte traz os dados) ──── */}
           {itensInfo ? (
             <section
-              className="lot-detail-header"
-              style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}
+              className="panel"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
             >
               <div>
-                <span className="section-label">Conteudo</span>
+                <span className="eyebrow">Conteúdo</span>
                 <h3
                   style={{
                     marginTop: "var(--s-1)",
@@ -1696,12 +1722,12 @@ export function LotDetailPage({
                     alignItems: "center",
                     gap: "var(--s-2)",
                     fontSize: "0.875rem",
-                    color: "var(--n-600)",
+                    color: "var(--t-mid)",
                   }}
                 >
                   <MapPin aria-hidden="true" size={14} />
                   <span>
-                    Recinto / patio: <strong style={{ color: "var(--n-900)" }}>{itensInfo.recinto}</strong>
+                    Recinto / pátio: <strong style={{ color: "var(--t-hi)" }}>{itensInfo.recinto}</strong>
                   </span>
                 </div>
               ) : null}
@@ -1726,11 +1752,11 @@ export function LotDetailPage({
                         justifyContent: "space-between",
                         gap: "var(--s-3)",
                         padding: "10px var(--s-3)",
-                        background: "var(--n-50)",
-                        border: "1px solid var(--n-100)",
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border)",
                         borderRadius: "var(--r-md)",
                         fontSize: "0.875rem",
-                        color: "var(--n-700)",
+                        color: "var(--t-mid)",
                         lineHeight: 1.45,
                       }}
                     >
@@ -1749,8 +1775,8 @@ export function LotDetailPage({
                 </ul>
               ) : null}
 
-              <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
-                Descricoes conforme publicadas na fonte oficial. Confirme quantidades e estado dos bens
+              <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
+                Descrições conforme publicadas na fonte oficial. Confirme quantidades e estado dos bens
                 no edital antes de propor.
               </p>
             </section>
@@ -1758,25 +1784,25 @@ export function LotDetailPage({
 
           {/* ── Resumo factual + riscos por regra + checklist ─────────────── */}
           <section
-            className="lot-detail-header"
-            style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}
+            className="panel"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
           >
             <div>
-              <span className="section-label">Relatorio por template</span>
+              <span className="eyebrow">Relatório por template</span>
               <h3 style={{ marginTop: "var(--s-1)" }}>Resumo factual do lote</h3>
             </div>
 
             {/* Factual summary */}
             <div
               style={{
-                background: "var(--g-50)",
-                border: "1px solid var(--n-100)",
-                borderLeft: "3px solid var(--g-500)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                borderLeft: "3px solid var(--brand)",
                 borderRadius: "0 var(--r-md) var(--r-md) 0",
                 padding: "var(--s-4)",
                 fontSize: "0.9rem",
                 lineHeight: 1.65,
-                color: "var(--n-700)",
+                color: "var(--t-mid)",
               }}
             >
               <p style={{ margin: 0 }}>
@@ -1789,24 +1815,24 @@ export function LotDetailPage({
                     Categoria do bem: <strong>{lot.category}</strong>.{" "}
                   </>
                 ) : null}
-                O prazo final para propostas e{" "}
+                O prazo final para propostas é{" "}
                 <strong>{formatDeadline(lot.proposalDeadline)}</strong>. O lance
-                minimo definido na fonte oficial e de{" "}
+                mínimo definido na fonte oficial é de{" "}
                 <strong>{formatBRL(lot.minimumBidCents / 100)}</strong>.{" "}
                 {economia ? (
                   <>
-                    A avaliacao oficial e de{" "}
+                    A avaliação oficial é de{" "}
                     <strong>{formatBRL(economia.avaliacaoCents / 100)}</strong>, o que representa uma
                     economia potencial de{" "}
                     <strong>{formatBRL(economia.economiaCents / 100)}</strong> ({economia.descontoPct}%
-                    abaixo da avaliacao).{" "}
+                    abaixo da avaliação).{" "}
                   </>
                 ) : null}
                 {eligibilityLong(lot)}
               </p>
-              <p style={{ marginTop: "var(--s-3)", marginBottom: 0, fontSize: "0.8rem", color: "var(--n-400)" }}>
+              <p style={{ marginTop: "var(--s-3)", marginBottom: 0, fontSize: "0.8rem", color: "var(--t-low)" }}>
                 Fonte: Receita Federal — SLE (receita-leiloes-sle). Coletado em{" "}
-                {formatDateShort(lot.collectedAt)}. Todos os dados acima sao exatamente os
+                {formatDateShort(lot.collectedAt)}. Todos os dados acima são exatamente os
                 publicados na fonte — sem estimativas ou complementos.
               </p>
             </div>
@@ -1838,18 +1864,18 @@ export function LotDetailPage({
               <p
                 style={{
                   fontSize: "0.75rem",
-                  color: "var(--n-400)",
+                  color: "var(--t-low)",
                   marginTop: "var(--s-2)",
                 }}
               >
-                Estes riscos sao calculados automaticamente por regras fixas — nao sao opiniao de
-                IA nem analise humana. Consulte o edital para confirmacao.
+                Estes riscos são calculados automaticamente por regras fixas — não são opinião de
+                IA nem análise humana. Consulte o edital para confirmação.
               </p>
             </div>
 
             {/* Generic checklist */}
             <div>
-              <span className="section-label">Orientacoes gerais</span>
+              <span className="eyebrow">Orientações gerais</span>
               <h3 style={{ marginTop: "var(--s-1)", marginBottom: "var(--s-3)" }}>
                 Checklist antes de propor
               </h3>
@@ -1865,12 +1891,12 @@ export function LotDetailPage({
               >
                 {[
                   "Leia o edital oficial completo antes de qualquer proposta.",
-                  "Confirme as regras de retirada, patio de armazenagem e frete.",
-                  "Verifique documentos exigidos para participacao e habilitacao.",
-                  "Pesquise o valor de mercado do bem para definir seu lance maximo.",
-                  "Cheque tributos, onus e encargos que possam recair sobre o lote.",
-                  "Certifique-se de que voce atende ao criterio de elegibilidade (PF/PJ).",
-                  "O score e um apoio de decisao — nao substitui a leitura do edital.",
+                  "Confirme as regras de retirada, pátio de armazenagem e frete.",
+                  "Verifique documentos exigidos para participação e habilitação.",
+                  "Pesquise o valor de mercado do bem para definir seu lance máximo.",
+                  "Cheque tributos, ônus e encargos que possam recair sobre o lote.",
+                  "Certifique-se de que você atende ao critério de elegibilidade (PF/PJ).",
+                  "O score é um apoio à decisão — não substitui a leitura do edital.",
                 ].map((item) => (
                   <li
                     key={item}
@@ -1879,7 +1905,7 @@ export function LotDetailPage({
                       alignItems: "flex-start",
                       gap: "var(--s-2)",
                       fontSize: "0.875rem",
-                      color: "var(--n-700)",
+                      color: "var(--t-mid)",
                       lineHeight: 1.5,
                     }}
                   >
@@ -1889,7 +1915,7 @@ export function LotDetailPage({
                       style={{
                         flexShrink: 0,
                         marginTop: 2,
-                        color: "var(--g-600)",
+                        color: "var(--brand)",
                       }}
                     />
                     {item}
@@ -1900,9 +1926,9 @@ export function LotDetailPage({
           </section>
 
           {/* ── Financeiro ────────────────────────────────────────────────── */}
-          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}>
             <div>
-              <span className="section-label">Financeiro</span>
+              <span className="eyebrow">Financeiro</span>
               <h3 style={{ marginTop: "var(--s-1)" }}>Valores do lote</h3>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1914,11 +1940,11 @@ export function LotDetailPage({
                         style={{
                           padding: "12px 0",
                           fontSize: "0.9rem",
-                          color: "var(--n-600)",
-                          borderBottom: "1px solid var(--n-100)",
+                          color: "var(--t-mid)",
+                          borderBottom: "1px solid var(--border)",
                         }}
                       >
-                        Avaliacao oficial
+                        Avaliação oficial
                       </td>
                       <td
                         style={{
@@ -1926,9 +1952,9 @@ export function LotDetailPage({
                           textAlign: "right",
                           fontSize: "1rem",
                           fontWeight: 700,
-                          color: "var(--n-700)",
+                          color: "var(--t-mid)",
                           fontVariantNumeric: "tabular-nums",
-                          borderBottom: "1px solid var(--n-100)",
+                          borderBottom: "1px solid var(--border)",
                         }}
                       >
                         {formatBRL(economia.avaliacaoCents / 100)}
@@ -1939,12 +1965,12 @@ export function LotDetailPage({
                         style={{
                           padding: "12px 0",
                           fontSize: "0.9rem",
-                          color: "var(--n-600)",
-                          borderBottom: "1px solid var(--n-100)",
+                          color: "var(--t-mid)",
+                          borderBottom: "1px solid var(--border)",
                         }}
                       >
-                        Economia (avaliacao − minimo){" "}
-                        <span style={{ fontSize: "0.72rem", color: "var(--n-400)", fontWeight: 400 }}>
+                        Economia (avaliação − mínimo){" "}
+                        <span style={{ fontSize: "0.72rem", color: "var(--t-low)", fontWeight: 400 }}>
                           ({economia.descontoPct}% de desconto)
                         </span>
                       </td>
@@ -1954,9 +1980,9 @@ export function LotDetailPage({
                           textAlign: "right",
                           fontSize: "1rem",
                           fontWeight: 800,
-                          color: "var(--color-success)",
+                          color: "var(--ok)",
                           fontVariantNumeric: "tabular-nums",
-                          borderBottom: "1px solid var(--n-100)",
+                          borderBottom: "1px solid var(--border)",
                         }}
                       >
                         {formatBRL(economia.economiaCents / 100)}
@@ -1969,11 +1995,11 @@ export function LotDetailPage({
                     style={{
                       padding: "12px 0",
                       fontSize: "0.9rem",
-                      color: "var(--n-600)",
-                      borderBottom: "1px solid var(--n-100)",
+                      color: "var(--t-mid)",
+                      borderBottom: "1px solid var(--border)",
                     }}
                   >
-                    Lance minimo (fonte oficial)
+                    Lance mínimo (fonte oficial)
                   </td>
                   <td
                     style={{
@@ -1981,9 +2007,9 @@ export function LotDetailPage({
                       textAlign: "right",
                       fontSize: "1.1rem",
                       fontWeight: 800,
-                      color: "var(--g-700)",
+                      color: "var(--brand-ink)",
                       fontVariantNumeric: "tabular-nums",
-                      borderBottom: "1px solid var(--n-100)",
+                      borderBottom: "1px solid var(--border)",
                     }}
                   >
                     {formatBRL(lot.minimumBidCents / 100)}
@@ -1994,14 +2020,14 @@ export function LotDetailPage({
                     style={{
                       padding: "12px 0",
                       fontSize: "0.9rem",
-                      color: "var(--n-600)",
+                      color: "var(--t-mid)",
                     }}
                   >
                     Teto sugerido por regra{" "}
                     <span
                       style={{
                         fontSize: "0.72rem",
-                        color: "var(--n-400)",
+                        color: "var(--t-low)",
                         fontWeight: 400,
                       }}
                     >
@@ -2021,7 +2047,7 @@ export function LotDetailPage({
                       fontSize: "1rem",
                       fontWeight: 700,
                       fontVariantNumeric: "tabular-nums",
-                      color: "var(--n-700)",
+                      color: "var(--t-mid)",
                     }}
                   >
                     {formatBRL(scoring.maxSuggestedBidCents / 100)}
@@ -2029,19 +2055,19 @@ export function LotDetailPage({
                 </tr>
               </tbody>
             </table>
-            <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
+            <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
               {economia
-                ? "Tributos, onus e custos de remocao nao estao inclusos. Consulte o edital para os valores completos."
-                : "Avaliacao oficial, descontos, tributos e custos adicionais nao estao disponiveis nesta fonte. Consulte o edital para valores completos."}
+                ? "Tributos, ônus e custos de remoção não estão inclusos. Consulte o edital para os valores completos."
+                : "Avaliação oficial, descontos, tributos e custos adicionais não estão disponíveis nesta fonte. Consulte o edital para valores completos."}
             </p>
           </section>
 
           {/* ── Analise de risco (barras por regra) ──────────────────────── */}
-          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}>
             <div>
-              <span className="section-label">Analise de risco</span>
+              <span className="eyebrow">Análise de risco</span>
               <h3 style={{ marginTop: "var(--s-1)" }}>
-                Dimensoes calculadas por regra
+                Dimensões calculadas por regra
               </h3>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}>
@@ -2049,14 +2075,14 @@ export function LotDetailPage({
                 <Bar key={bar.label} label={bar.label} value={bar.value} color={bar.color} />
               ))}
             </div>
-            <p style={{ fontSize: "0.75rem", color: "var(--n-400)", margin: 0 }}>
-              Valores calculados por regras fixas do scoring — nao por analise semantica. Use como
-              orientacao inicial, nao como avaliacao definitiva.
+            <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
+              Valores calculados por regras fixas do scoring — não por análise semântica. Use como
+              orientação inicial, não como avaliação definitiva.
             </p>
           </section>
 
           {/* ── Rastreabilidade ───────────────────────────────────────────── */}
-          <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+          <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)", padding: "var(--s-5)" }}>
             <div
               style={{
                 display: "flex",
@@ -2067,7 +2093,7 @@ export function LotDetailPage({
               }}
             >
               <div>
-                <span className="section-label">Rastreabilidade</span>
+                <span className="eyebrow">Rastreabilidade</span>
                 <h3 style={{ marginTop: "var(--s-1)" }}>Origem dos dados</h3>
               </div>
               <span className="badge badge--ok">
@@ -2082,18 +2108,18 @@ export function LotDetailPage({
                 alignItems: "center",
                 gap: "var(--s-4)",
                 padding: "var(--s-4)",
-                background: "var(--n-50)",
-                border: "1px solid var(--n-100)",
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
                 borderRadius: "var(--r-md)",
                 flexWrap: "wrap",
               }}
             >
               <FonteDots fontes={fonteDotsSources} size={32} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={{ display: "block", fontSize: "0.9rem", color: "var(--n-900)" }}>
-                  Receita Federal — Sistema de Leiloes Eletronicos (SLE)
+                <strong style={{ display: "block", fontSize: "0.9rem", color: "var(--t-hi)" }}>
+                  Receita Federal — Sistema de Leilão Eletrônico (SLE)
                 </strong>
-                <span style={{ fontSize: "0.78rem", color: "var(--n-400)" }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--t-low)" }}>
                   {lot.sourceId} · Coletado em {formatDateShort(lot.collectedAt)}
                 </span>
               </div>
@@ -2101,7 +2127,7 @@ export function LotDetailPage({
                 href={lot.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="ghost-button"
+                className="btn btn--ghost"
                 style={{ fontSize: "0.8rem", flexShrink: 0 }}
               >
                 <ExternalLink aria-hidden="true" size={13} />
@@ -2115,7 +2141,7 @@ export function LotDetailPage({
         <div className="evidence-panel">
           <EvidencePanel
             evidence={evidenceItems}
-            title={`Evidencia — Lote ${lot.displayNumber}`}
+            title={`Evidência — Lote ${lot.displayNumber}`}
           />
         </div>
       </div>
@@ -2131,13 +2157,14 @@ export function LotDetailPage({
           aria-modal="true"
           aria-label="Criar alerta de prazo"
         >
-          <div className="alert-modal">
+          <div className="alert-modal" ref={alertModalRef}>
             <h3>Criar alerta de prazo</h3>
             <div className="alert-modal-field">
               <label htmlFor="alert-name">Nome do alerta</label>
               <input
                 id="alert-name"
                 type="text"
+                autoFocus
                 value={alertName}
                 onChange={(e) => {
                   setAlertName(e.target.value);
@@ -2145,7 +2172,7 @@ export function LotDetailPage({
               />
             </div>
             <div className="alert-modal-field">
-              <label htmlFor="alert-channel">Canal de notificacao</label>
+              <label htmlFor="alert-channel">Canal de notificação</label>
               <select
                 id="alert-channel"
                 value={alertChannel}
@@ -2154,7 +2181,7 @@ export function LotDetailPage({
                 }}
               >
                 {(Object.keys(channelLabels) as AlertChannel[]).map((key) => (
-                  <option key={key} value={key}>
+                  <option key={key} value={key} disabled={channelDisabled[key]}>
                     {channelLabels[key]}
                   </option>
                 ))}
@@ -2162,7 +2189,7 @@ export function LotDetailPage({
             </div>
             <div className="alert-modal-actions">
               <button
-                className="ghost-button"
+                className="btn btn--ghost"
                 onClick={() => {
                   setAlertOpen(false);
                 }}
@@ -2170,7 +2197,7 @@ export function LotDetailPage({
               >
                 Cancelar
               </button>
-              <button className="primary-button" onClick={handleSaveAlert} type="button">
+              <button className="btn btn--primary" onClick={handleSaveAlert} type="button">
                 Salvar alerta
               </button>
             </div>
@@ -2200,7 +2227,7 @@ export function LotDetailPage({
           .lot-hero-actions .lot-hero-action:first-child {
             flex: 1 1 100%;
           }
-          .lot-hero-actions .ghost-button.lot-hero-action {
+          .lot-hero-actions .btn--ghost.lot-hero-action {
             flex: 1 1 0;
           }
         }

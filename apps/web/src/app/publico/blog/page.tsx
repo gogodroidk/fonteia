@@ -42,6 +42,7 @@ function PostCard({ post }: { post: PostCard }) {
   return (
     <a
       href={post.href}
+      className="card--hover"
       style={{
         display: "block",
         textDecoration: "none",
@@ -49,17 +50,6 @@ function PostCard({ post }: { post: PostCard }) {
         border: "1px solid var(--border)",
         borderRadius: "16px",
         padding: "28px 28px 24px",
-        transition: "border-color .18s, box-shadow .18s",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLAnchorElement).style.borderColor =
-          "color-mix(in srgb, var(--accent) 40%, var(--border))";
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow =
-          "0 4px 24px color-mix(in srgb, var(--accent) 8%, transparent)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLAnchorElement).style.borderColor = "var(--border)";
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none";
       }}
     >
       <div
@@ -72,15 +62,7 @@ function PostCard({ post }: { post: PostCard }) {
           gap: "8px",
         }}
       >
-        <span
-          style={{
-            fontSize: "11px",
-            fontWeight: 700,
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "var(--accent-ink)",
-          }}
-        >
+        <span className="eyebrow">
           {post.eyebrow}
         </span>
         <span style={{ fontSize: "12px", color: "var(--t-low)" }}>{post.readTime} de leitura</span>
@@ -256,17 +238,7 @@ export function BlogIndexPage() {
 
         {/* Herói */}
         <header style={{ marginBottom: "52px" }}>
-          <span
-            style={{
-              display: "block",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.12em",
-              textTransform: "uppercase",
-              color: "var(--accent-ink)",
-              marginBottom: "14px",
-            }}
-          >
+          <span className="eyebrow" style={{ display: "block", marginBottom: "14px" }}>
             Blog · Leilões da Receita Federal
           </span>
 
@@ -300,14 +272,8 @@ export function BlogIndexPage() {
         <section aria-labelledby="posts-heading">
           <h2
             id="posts-heading"
-            style={{
-              fontSize: "13px",
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--t-low)",
-              marginBottom: "20px",
-            }}
+            className="eyebrow"
+            style={{ marginBottom: "20px" }}
           >
             Todos os artigos
           </h2>
@@ -330,17 +296,7 @@ export function BlogIndexPage() {
             marginTop: "56px",
           }}
         >
-          <span
-            style={{
-              display: "block",
-              fontSize: "11px",
-              fontWeight: 700,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: "var(--accent-ink)",
-              marginBottom: "10px",
-            }}
-          >
+          <span className="eyebrow" style={{ display: "block", marginBottom: "10px" }}>
             Fonte.ia — Raio-X com IA
           </span>
           <p

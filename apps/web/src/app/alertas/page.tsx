@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { scoreReceitaLeilaoLot } from "@fonteia/scoring";
-import { FonteDots, ScoreRing, riscoBadge } from "../../components/ui";
+import { FonteDots, ScoreRing } from "../../components/ui";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { formatBRL } from "../../data/leiloes-seed";
 import { supabase } from "../../auth/supabase-client";
@@ -132,6 +132,19 @@ function daysUntil(value: string): number {
   return Math.ceil((deadline - Date.now()) / 86_400_000);
 }
 
+// ─── Confidence badge ─────────────────────────────────────────────────────────
+// O `label` do scoring é CONFIANÇA DA OPORTUNIDADE ("alto" = melhor), não risco.
+// O antigo `riscoBadge` pintava os melhores lotes de vermelho ("Risco alto") —
+// semântica invertida. Este helper devolve um selo POSITIVO de confiança.
+function confidenceBadge(label: "baixo" | "medio" | "alto"): {
+  className: string;
+  label: string;
+} {
+  if (label === "alto") return { className: "badge--ok", label: "Confiança alta" };
+  if (label === "medio") return { className: "badge--warn", label: "Confiança média" };
+  return { className: "badge--neutral", label: "Cautela" };
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 interface ToggleRowProps {
@@ -186,7 +199,7 @@ interface WatchlistCardProps {
 }
 
 function WatchlistCard({ lot, score, scoreLabel, onSelect, onRemove }: WatchlistCardProps) {
-  const badge = riscoBadge(scoreLabel);
+  const badge = confidenceBadge(scoreLabel);
   const days = daysUntil(lot.proposalDeadline);
   const deadlineColor =
     days <= 3 ? "var(--danger)" : days <= 7 ? "var(--warn)" : "var(--t-mid)";
@@ -249,9 +262,9 @@ function WatchlistCard({ lot, score, scoreLabel, onSelect, onRemove }: Watchlist
         <button
           className="btn btn--icon btn--ghost btn--sm"
           type="button"
-          title="Remover da watchlist"
+          title="Deixar de acompanhar"
           onClick={onRemove}
-          aria-label="Remover da watchlist"
+          aria-label="Deixar de acompanhar este lote"
         >
           <BookmarkX size={15} />
         </button>
@@ -292,7 +305,7 @@ function EmptyWatchlist({ onExplore }: EmptyWatchlistProps) {
       >
         <Star size={24} style={{ color: "var(--t-mid)" }} />
       </div>
-      <div style={{ fontWeight: 700, fontSize: 16 }}>Watchlist vazia</div>
+      <div style={{ fontWeight: 700, fontSize: 16 }}>Nenhum lote acompanhado</div>
       <div
         style={{
           fontSize: 13.5,
@@ -301,7 +314,7 @@ function EmptyWatchlist({ onExplore }: EmptyWatchlistProps) {
           lineHeight: 1.5,
         }}
       >
-        Marque lotes com a estrela na tela de leilões para acompanhá-los aqui e
+        Marque lotes com a estrela na tela Lotes para acompanhá-los aqui e
         receber alertas quando algo mudar.
       </div>
       {onExplore !== undefined ? (
@@ -328,7 +341,7 @@ function EmptyWatchlist({ onExplore }: EmptyWatchlistProps) {
           }}
         >
           <Search size={14} />
-          Acesse Leilões para explorar os lotes disponíveis.
+          Acesse Lotes para explorar os lotes disponíveis.
         </div>
       )}
     </div>
@@ -426,7 +439,7 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
           }}
         >
           {demoMode
-            ? "Alertas por e-mail não estão disponíveis no modo demonstração. Configure o Supabase para habilitar esta funcionalidade."
+            ? "Alertas por e-mail não estão disponíveis no modo demonstração."
             : "Faça login para ver e gerenciar seus alertas de prazo por e-mail."}
         </div>
       </div>
@@ -481,7 +494,7 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
             fontSize: 14,
           }}
         >
-          Carregando alertas...
+          Carregando alertas…
         </div>
       ) : fetchError !== undefined ? (
         <div
@@ -531,7 +544,7 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
               lineHeight: 1.5,
             }}
           >
-            Você ainda não criou alertas. Abra um lote e clique em "Criar alerta de prazo".
+            Você ainda não criou alertas. Abra um lote e clique em “Criar alerta de prazo”.
           </div>
         </div>
       ) : (
@@ -728,12 +741,12 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
                   marginBottom: 2,
                 }}
               >
-                Watchlist & Alertas
+                Lotes acompanhados e alertas
               </h1>
               <p style={{ fontSize: 13.5, color: "var(--t-mid)" }}>
                 {watchlistIds.length > 0
                   ? `${watchlistIds.length} lote${watchlistIds.length !== 1 ? "s" : ""} acompanhado${watchlistIds.length !== 1 ? "s" : ""}`
-                  : "Nenhum lote na watchlist"}
+                  : "Nenhum lote acompanhado"}
               </p>
             </div>
             {watchlistIds.length > 0 ? (
@@ -754,7 +767,7 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
                 fontSize: 14,
               }}
             >
-              Carregando lotes...
+              Carregando lotes…
             </div>
           ) : loadError !== undefined ? (
             <div
@@ -783,9 +796,9 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
               }}
             >
               <div style={{ fontWeight: 600, fontSize: 14, color: "var(--t-mid)" }}>
-                {watchlistIds.length} lote{watchlistIds.length !== 1 ? "s" : ""} na
-                watchlist, mas não encontrado{watchlistIds.length !== 1 ? "s" : ""} na
-                fonte atual.
+                {watchlistIds.length} lote{watchlistIds.length !== 1 ? "s" : ""} sendo
+                acompanhado{watchlistIds.length !== 1 ? "s" : ""}, mas não
+                encontrado{watchlistIds.length !== 1 ? "s" : ""} na fonte atual.
               </div>
               <div style={{ fontSize: 13, color: "var(--t-low)" }}>
                 Os editais podem ter encerrado ou os IDs estão desatualizados.
@@ -798,7 +811,7 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
                   saveWatchlistIds([]);
                 }}
               >
-                Limpar watchlist
+                Limpar lista
               </button>
             </div>
           ) : (
@@ -905,8 +918,8 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
             }}
           >
             <Clock size={14} style={{ flexShrink: 0 }} />
-            {closingSoonCount} lote{closingSoonCount !== 1 ? "s" : ""} da
-            watchlist encerra{closingSoonCount !== 1 ? "m" : ""} esta semana.
+            {closingSoonCount} lote{closingSoonCount !== 1 ? "s" : ""} que você
+            acompanha encerra{closingSoonCount !== 1 ? "m" : ""} esta semana.
           </div>
         ) : null}
       </div>

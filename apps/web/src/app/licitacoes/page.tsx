@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PncpLicitacao } from "@fonteia/sources";
-import { Building2, ExternalLink, Loader2, MapPin, Search } from "lucide-react";
+import { Building2, ExternalLink, Loader2, MapPin, Search, X } from "lucide-react";
 import { listLicitacoes } from "../../features/licitacoes/licitacoes-api";
 import { FonteDots } from "../../components/ui";
 import { formatBRLc, FONTES } from "../../data/leiloes-seed";
@@ -210,7 +210,8 @@ function LicitacaoCard({ licitacao, onSelect }: LicitacaoCardProps) {
         cursor: onSelect ? "pointer" : "default",
         display: "flex",
         flexDirection: "column",
-        opacity: encerrada ? 0.78 : 1,
+        // Não esmaecer o card inteiro (derrubava o contraste do texto abaixo do AA).
+        // O estado "encerrada" já é sinalizado pelo selo vermelho e pela cor do prazo.
       }}
       onClick={onSelect}
       role={onSelect ? "button" : undefined}
@@ -396,7 +397,6 @@ function FilterSelect<T extends string>({
           fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
-          outline: "none",
           maxWidth: 180,
         }}
       >
@@ -637,7 +637,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
               type="button"
               aria-label="Limpar busca"
             >
-              ×
+              <X size={16} aria-hidden="true" />
             </button>
           )}
         </div>
