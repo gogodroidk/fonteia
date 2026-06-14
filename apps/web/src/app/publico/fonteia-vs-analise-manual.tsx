@@ -94,7 +94,7 @@ function Td({
       <CheckCircle2
         size={14}
         aria-hidden="true"
-        style={{ color: "var(--ok, #16a34a)", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--ok)", flexShrink: 0, marginTop: "2px" }}
       />
     );
   } else if (negative === true) {
@@ -102,7 +102,7 @@ function Td({
       <XCircle
         size={14}
         aria-hidden="true"
-        style={{ color: "#dc2626", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--danger)", flexShrink: 0, marginTop: "2px" }}
       />
     );
   }
@@ -118,7 +118,7 @@ function Td({
         borderBottom: "1px solid var(--border)",
         background:
           accent === true
-            ? "color-mix(in srgb, var(--accent) 4%, transparent)"
+            ? "color-mix(in srgb, var(--accent) 8%, var(--surface))"
             : "transparent",
         verticalAlign: "top",
       }}
@@ -350,7 +350,7 @@ export function FonteiaVsManualPage() {
               }}
             >
               <a href="/guias" className="link small" style={{ fontSize: "13px" }}>
-                Comparações
+                Guias
               </a>
               <span style={{ color: "var(--t-low)", fontSize: "13px" }} aria-hidden="true">›</span>
               <span className="small" style={{ color: "var(--t-low)", fontSize: "13px" }}>
@@ -545,7 +545,7 @@ export function FonteiaVsManualPage() {
 
             <P>
               Ela também vale quando a rastreabilidade importa: saber que dado veio de qual versão
-              do edital, quando você analisou e por quê decidiu não arrematar. Essa memória de
+              do edital, quando você analisou e por que decidiu não arrematar. Essa memória de
               análise não existe no processo manual, a não ser que você mesmo a construa.
             </P>
 
@@ -647,13 +647,14 @@ export function FonteiaVsManualPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/fonteia-vs-planilha"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -663,13 +664,14 @@ export function FonteiaVsManualPage() {
               </a>
               <a
                 href="/riscos-leiloes-publicos"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -678,13 +680,14 @@ export function FonteiaVsManualPage() {
               </a>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -693,13 +696,14 @@ export function FonteiaVsManualPage() {
               </a>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}

@@ -27,17 +27,11 @@ function GuideCard({ href, eyebrow, title, description, icon }: GuideCardProps) 
       aria-label={title}
     >
       <div
-        className="card card--pad"
+        className="card card--pad card--hover"
         style={{
           padding: "28px",
           transition: "box-shadow .2s, border-color .2s",
           cursor: "pointer",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = "var(--accent)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = "";
         }}
       >
         <div
@@ -296,17 +290,11 @@ export function GuiasPage() {
             aria-label="Calculadora de lance — ferramenta gratuita"
           >
             <div
-              className="panel"
+              className="panel card--hover"
               style={{
                 padding: "28px",
                 borderColor: "color-mix(in srgb, var(--brand) 30%, var(--border))",
                 transition: "border-color .2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = "var(--brand)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = "";
               }}
             >
               <div style={{ display: "flex", alignItems: "flex-start", gap: "18px", flexWrap: "wrap" }}>
@@ -351,10 +339,11 @@ export function GuiasPage() {
                       marginBottom: "14px",
                     }}
                   >
-                    Informe o lance mínimo e o valor que você toparia pagar. A
-                    calculadora estima o impacto da comissão do leiloeiro (~5%) e
-                    do ICMS sobre o total. Dados de referência — confirme valores
-                    exatos no edital.
+                    Informe o valor de mercado estimado do bem e os custos extras
+                    — comissão do leiloeiro, tributos (ICMS, IOF etc.), retirada/logística
+                    e reforma — mais a margem desejada. A calculadora devolve o lance
+                    máximo que ainda faz sentido pagar. Dados de referência — confirme
+                    valores exatos no edital.
                   </p>
                   <span
                     className="link"

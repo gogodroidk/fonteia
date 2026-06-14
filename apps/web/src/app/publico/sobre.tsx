@@ -75,7 +75,7 @@ function EmpresaBox() {
         style={{
           width: "100%",
           borderCollapse: "collapse",
-          fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
           fontSize: "13.5px",
         }}
       >

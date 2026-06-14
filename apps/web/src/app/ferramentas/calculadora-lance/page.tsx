@@ -15,8 +15,13 @@ function brl(value: number): string {
 }
 
 function parsePct(raw: string): number {
-  const n = parseFloat(raw);
-  return Number.isFinite(n) ? Math.max(0, n) : 0;
+  // Aceita decimal pt-BR ("5,5") e teclado numérico ("5.5"). Limita a 0–100:
+  // percentuais acima de 100% não fazem sentido aqui e geram detalhamento
+  // enganoso (folga = valor de mercado inteiro).
+  const cleaned = raw.replace(",", ".");
+  const n = parseFloat(cleaned);
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(100, Math.max(0, n));
 }
 
 function parseBRL(raw: string): number {
@@ -113,6 +118,7 @@ function Campo({
         {ajuda}
       </p>
       <div
+        className="calc-field"
         style={{
           display: "flex",
           alignItems: "center",
@@ -257,11 +263,11 @@ function CapturaEmail({
           gap: 12,
           padding: "18px 20px",
           borderRadius: 12,
-          background: "color-mix(in srgb, #22c55e 8%, transparent)",
-          border: "1px solid color-mix(in srgb, #22c55e 25%, transparent)",
+          background: "color-mix(in srgb, var(--ok) 8%, transparent)",
+          border: "1px solid color-mix(in srgb, var(--ok) 25%, transparent)",
         }}
       >
-        <CheckCircle size={20} style={{ color: "#22c55e", flexShrink: 0 }} aria-hidden="true" />
+        <CheckCircle size={20} style={{ color: "var(--ok)", flexShrink: 0 }} aria-hidden="true" />
         <p style={{ margin: 0, fontSize: 14, color: "var(--t-hi)", fontWeight: 500 }}>
           Pronto! Você vai receber por e-mail.
         </p>
@@ -308,8 +314,9 @@ function CapturaEmail({
             disabled={status === "sending"}
             aria-label="Seu e-mail"
             aria-describedby={emailError ? "email-captura-erro" : undefined}
+            className="calc-email"
             style={{
-              border: emailError ? "1px solid #f97316" : "1px solid var(--border)",
+              border: emailError ? "1px solid var(--danger)" : "1px solid var(--border)",
               borderRadius: 10,
               background: "var(--surface)",
               padding: "0 14px",
@@ -325,7 +332,7 @@ function CapturaEmail({
             <span
               id="email-captura-erro"
               role="alert"
-              style={{ fontSize: 12, color: "#f97316", paddingLeft: 2 }}
+              style={{ fontSize: 12, color: "var(--danger)", paddingLeft: 2 }}
             >
               {emailError}
             </span>
@@ -333,9 +340,9 @@ function CapturaEmail({
           {status === "error" && (
             <span
               role="alert"
-              style={{ fontSize: 12, color: "#f97316", paddingLeft: 2 }}
+              style={{ fontSize: 12, color: "var(--danger)", paddingLeft: 2 }}
             >
-              Não consegui agora, tente de novo.
+              Não consegui agora, tente novamente.
             </span>
           )}
         </div>
@@ -375,10 +382,10 @@ function CtaImediato({ lanceMaximo }: { lanceMaximo: number }) {
         gap: 16,
         padding: "20px 22px",
         borderRadius: 14,
-        background: "var(--accent-ink, #2563eb)",
+        background: "var(--brand)",
         color: "#fff",
         textDecoration: "none",
-        boxShadow: "0 4px 20px color-mix(in srgb, var(--accent-ink, #2563eb) 30%, transparent)",
+        boxShadow: "0 4px 20px color-mix(in srgb, var(--brand) 30%, transparent)",
         transition: "filter .15s, transform .15s",
       }}
       onMouseEnter={(e) => {
@@ -500,6 +507,17 @@ export function CalculadoraLancePage() {
           }
         }
 
+        /* Foco visível nos campos: o <input> tem outline:none, então o anel
+           aparece no wrapper (WCAG 2.4.7). */
+        .calc-root .calc-field:focus-within {
+          border-color: var(--brand-ink);
+          box-shadow: 0 0 0 4px var(--ring);
+        }
+        .calc-root .calc-email:focus {
+          border-color: var(--brand-ink) !important;
+          box-shadow: 0 0 0 4px var(--ring);
+        }
+
         .calc-root .result-pulse {
           animation: pulse-accent .35s ease;
         }
@@ -510,8 +528,8 @@ export function CalculadoraLancePage() {
         }
 
         .calc-root .aviso-negativo {
-          background: color-mix(in srgb, #f97316 8%, transparent);
-          border: 1px solid color-mix(in srgb, #f97316 25%, transparent);
+          background: color-mix(in srgb, var(--warn) 8%, transparent);
+          border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
           border-radius: 10px;
           padding: 14px 18px;
         }
@@ -762,8 +780,7 @@ export function CalculadoraLancePage() {
               }}
             >
               <div
-                className="display num result-pulse"
-                key={lanceMaximo.toFixed(0)}
+                className="display num"
                 style={{
                   fontSize: "clamp(32px, 8vw, 48px)",
                   fontWeight: 800,
@@ -772,14 +789,21 @@ export function CalculadoraLancePage() {
                   lineHeight: 1,
                 }}
               >
-                {temEntrada ? brl(lanceMaximo) : "—"}
+                {temEntrada ? brl(lanceMaximo) : "R$ —"}
               </div>
-              {temEntrada && (
+              {temEntrada ? (
                 <p
                   className="muted small"
                   style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}
                 >
                   valor máximo de lance para manter sua margem de {brl(folga > 0 ? folga : 0)}
+                </p>
+              ) : (
+                <p
+                  className="muted small"
+                  style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}
+                >
+                  Preencha o valor de mercado do bem acima para ver o lance máximo recomendado.
                 </p>
               )}
             </div>
@@ -792,7 +816,7 @@ export function CalculadoraLancePage() {
                     margin: 0,
                     fontSize: 14,
                     lineHeight: 1.55,
-                    color: "#f97316",
+                    color: "var(--warn)",
                     fontWeight: 600,
                   }}
                 >
@@ -876,7 +900,7 @@ export function CalculadoraLancePage() {
                 <strong style={{ color: "var(--t-hi)" }}>Isso é uma estimativa, não uma garantia de lucro.</strong>{" "}
                 Comissão do leiloeiro, tributos e condições do bem variam por edital —{" "}
                 <strong style={{ color: "var(--t-hi)" }}>confira sempre o edital oficial</strong>{" "}
-                antes de dar qualquer lance. O valor de mercado é de sua responsabilidade verificar.
+                antes de dar qualquer lance. A verificação do valor de mercado é de sua responsabilidade.
                 Nunca arremate sem ler o edital completo.
               </p>
             </div>

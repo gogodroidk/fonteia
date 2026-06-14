@@ -124,7 +124,7 @@ const FAQ_SECOES: FaqData[] = [
             Qualquer pessoa física com CPF e conta gov.br nível prata ou ouro pode participar dos
             lotes sem restrição. Não é preciso ser revendedor, importador ou ter autorização
             especial. O único pré-requisito é se habilitar no{" "}
-            <strong>Sistema de Leilões Eletrônicos (SLE)</strong> antes do prazo indicado no edital.
+            <strong>Sistema de Leilão Eletrônico (SLE)</strong> antes do prazo indicado no edital.
           </>
         ),
       },
@@ -134,9 +134,9 @@ const FAQ_SECOES: FaqData[] = [
           <>
             A conta gov.br é o login unificado do governo federal. Para participar dos leilões é
             necessário nível prata ou ouro (identidade verificada). Você eleva para prata pelo
-            app gov.br, usando reconhecimento facial comparado com a base do DENATRAN ou da Receita
-            Federal. O processo é gratuito e leva alguns minutos. Acesse gov.br/contagovbr para
-            começar.
+            app gov.br, usando reconhecimento facial comparado com a base da sua CNH (SENATRAN) ou
+            da Receita Federal. O processo é gratuito e leva alguns minutos. Acesse
+            gov.br/contagovbr para começar.
           </>
         ),
       },
@@ -200,14 +200,14 @@ const FAQ_SECOES: FaqData[] = [
             Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com
             editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O
             risco não está na idoneidade do órgão — está nas características do bem: vendido{" "}
-            <strong>"no estado em que se encontra"</strong>, sem garantia de funcionamento e sem
+            <strong>“no estado em que se encontra”</strong>, sem garantia de funcionamento e sem
             direito de devolução. Cuidado com sites não oficiais que simulam leilões da Receita —
             acesse sempre pelo SLE oficial.
           </>
         ),
       },
       {
-        pergunta: "O que significa comprar um bem 'no estado em que se encontra'?",
+        pergunta: "O que significa comprar um bem “no estado em que se encontra”?",
         resposta: (
           <>
             Significa que você compra o risco. O bem não tem garantia de funcionamento, não vem
@@ -255,7 +255,7 @@ const FAQ_SECOES: FaqData[] = [
             Não. A Fonte.ia entrega informação organizada e rastreável — não garante resultado
             financeiro. A decisão de dar o lance e o risco associado são inteiramente seus. O que
             fazemos é ajudar você a encontrar lotes relevantes mais rápido, entender as condições
-            do edital e calcular os custos antes de propor. Qualquer plataforma que "garanta lucro"
+            do edital e calcular os custos antes de propor. Qualquer plataforma que “garanta lucro”
             em leilão está mentindo.
           </>
         ),
@@ -265,7 +265,7 @@ const FAQ_SECOES: FaqData[] = [
         resposta: (
           <>
             Sim. Os dados de lotes, editais, lances mínimos e prazos vêm do{" "}
-            <strong>Sistema de Leilões Eletrônicos (SLE)</strong> da Receita Federal — a mesma
+            <strong>Sistema de Leilão Eletrônico (SLE)</strong> da Receita Federal — a mesma
             fonte que o governo disponibiliza publicamente. Cada lote na Fonte.ia tem link direto
             para o edital original, para você conferir na fonte quando quiser. Atualizamos os dados
             regularmente e indicamos a data de atualização em cada lote.
@@ -325,12 +325,12 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "Qualquer pessoa pode participar ou precisa de autorização especial?",
     answer:
-      "Qualquer pessoa física com CPF e conta gov.br nível prata ou ouro pode participar dos lotes sem restrição. O único pré-requisito é se habilitar no Sistema de Leilões Eletrônicos (SLE) antes do prazo do edital.",
+      "Qualquer pessoa física com CPF e conta gov.br nível prata ou ouro pode participar dos lotes sem restrição. O único pré-requisito é se habilitar no Sistema de Leilão Eletrônico (SLE) antes do prazo do edital.",
   },
   {
     question: "O que é conta gov.br e como elevar para nível prata?",
     answer:
-      "A conta gov.br é o login unificado do governo federal. Você eleva para prata pelo app gov.br, usando reconhecimento facial comparado com a base do DENATRAN ou da Receita Federal. O processo é gratuito e leva alguns minutos.",
+      "A conta gov.br é o login unificado do governo federal. Você eleva para prata pelo app gov.br, usando reconhecimento facial comparado com a base da sua CNH (SENATRAN) ou da Receita Federal. O processo é gratuito e leva alguns minutos.",
   },
   {
     question: "Dá para parcelar o valor do arremate?",
@@ -355,10 +355,10 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "Leilão da Receita Federal é confiável? Pode ser golpe?",
     answer:
-      "Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. O risco está nas características do bem, vendido 'no estado em que se encontra', sem garantia. Cuidado com sites não oficiais — acesse sempre pelo SLE oficial.",
+      "Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. O risco está nas características do bem, vendido “no estado em que se encontra”, sem garantia. Cuidado com sites não oficiais — acesse sempre pelo SLE oficial.",
   },
   {
-    question: "O que significa comprar um bem 'no estado em que se encontra'?",
+    question: "O que significa comprar um bem “no estado em que se encontra”?",
     answer:
       "Significa que você compra o risco. O bem não tem garantia de funcionamento, não vem com nota fiscal do fabricante e não pode ser devolvido. Avalie as fotos, leia a descrição do lote e, quando permitido, faça a vistoria antes de dar o lance.",
   },
@@ -375,12 +375,12 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "A Fonte.ia garante que vou lucrar com os leilões?",
     answer:
-      "Não. A Fonte.ia entrega informação organizada e rastreável — não garante resultado financeiro. A decisão de dar o lance e o risco associado são inteiramente seus. Qualquer plataforma que 'garanta lucro' em leilão está mentindo.",
+      "Não. A Fonte.ia entrega informação organizada e rastreável — não garante resultado financeiro. A decisão de dar o lance e o risco associado são inteiramente seus. Qualquer plataforma que “garanta lucro” em leilão está mentindo.",
   },
   {
     question: "Os dados da Fonte.ia são oficiais? De onde vêm?",
     answer:
-      "Sim. Os dados de lotes, editais, lances mínimos e prazos vêm do Sistema de Leilões Eletrônicos (SLE) da Receita Federal. Cada lote tem link direto para o edital original. Atualizamos os dados regularmente e indicamos a data de atualização em cada lote.",
+      "Sim. Os dados de lotes, editais, lances mínimos e prazos vêm do Sistema de Leilão Eletrônico (SLE) da Receita Federal. Cada lote tem link direto para o edital original. Atualizamos os dados regularmente e indicamos a data de atualização em cada lote.",
   },
   {
     question: "Preciso ter experiência com leilões para usar a Fonte.ia?",
@@ -398,7 +398,7 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
 export function FaqPage() {
   useSeo({
     title:
-      "Perguntas frequentes sobre leilões da Receita Federal e Fonte.ia (2026) | FAQ",
+      "Perguntas frequentes sobre leilões da Receita Federal e Fonte.ia (2026) | Fonte.ia",
     description:
       "Tire suas dúvidas sobre leilões da Receita Federal: precisa de CNPJ? Dá para parcelar? Posso ver o bem antes? Quanto custa a Fonte.ia? Respostas diretas e honestas.",
     canonicalPath: "/faq",
@@ -427,7 +427,13 @@ export function FaqPage() {
           .faq-header { padding-left: 20px !important; padding-right: 20px !important; }
           .faq-main   { padding-left: 20px !important; padding-right: 20px !important; }
           .faq-footer { padding-left: 20px !important; padding-right: 20px !important; }
-          .faq-header nav { display: none !important; }
+          .faq-header .faq-ghost-cta { display: none !important; }
+        }
+        .faq-footer nav a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 44px;
+          padding: 4px 2px;
         }
       `}</style>
 
@@ -477,7 +483,7 @@ export function FaqPage() {
           aria-label="Ações rápidas"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
-          <a href="/guias/como-comprar-leilao-receita" className="btn btn--ghost btn--sm">
+          <a href="/guias/como-comprar-leilao-receita" className="btn btn--ghost btn--sm faq-ghost-cta">
             ← Guia de compra
           </a>
           <a href="/entrar" className="btn btn--accent btn--sm">
@@ -661,13 +667,14 @@ export function FaqPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -677,13 +684,14 @@ export function FaqPage() {
               </a>
               <a
                 href="/glossario-leiloes"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -692,13 +700,14 @@ export function FaqPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -707,13 +716,14 @@ export function FaqPage() {
               </a>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}

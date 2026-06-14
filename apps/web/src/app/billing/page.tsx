@@ -66,7 +66,7 @@ export function BillingPage() {
             <strong>Plano {chosen} selecionado.</strong>{" "}
             <span className="muted small">
               Para concluir, fale com <a className="link" href="mailto:contato@fontebrasil.online">contato@fontebrasil.online</a> — o
-              checkout automatico entra no ar assim que o link do Stripe for conectado.
+              checkout automático entra no ar assim que o link do Stripe for conectado.
             </span>
           </div>
           <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setChosen(null)} aria-label="Fechar">
@@ -80,8 +80,8 @@ export function BillingPage() {
         <h2 className="h1" style={{ marginTop: 8 }}>Escolha seu plano. Cancele quando quiser.</h2>
         <p className="muted" style={{ maxWidth: 560, margin: "10px auto 0", lineHeight: 1.6 }}>
           Acesso completo aos leilões da Receita Federal: Raio-X com IA, análise do edital, alertas por e-mail
-          e relatório PDF com rastreabilidade de fonte. Tudo pago, sem plano grátis.
-          Comece com 7 dias grátis — só cobramos depois, cancele antes e não paga nada.
+          e relatório PDF com rastreabilidade de fonte. Todos os recursos inclusos, com 7 dias grátis para testar —
+          só cobramos depois, cancele antes e não paga nada.
         </p>
       </div>
 

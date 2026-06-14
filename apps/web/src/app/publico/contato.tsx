@@ -4,7 +4,7 @@ import {
   breadcrumbJsonLd,
   SITE_URL,
 } from "../../lib/seo";
-import { Mail, MessageSquare, HelpCircle, FileText } from "lucide-react";
+import { Mail, HelpCircle, FileText } from "lucide-react";
 
 /* ── Primitivos ───────────────────────────────────────────────────────────── */
 function P({ children }: { children: React.ReactNode }) {
@@ -87,7 +87,7 @@ function LinkRapido({
   return (
     <a
       href={href}
-      className="card card--pad link"
+      className="card card--pad"
       style={{
         display: "flex",
         alignItems: "center",
@@ -111,7 +111,7 @@ function LinkRapido({
 export function ContatoPage() {
   const TITLE = "Contato — Fale com a Fonte.ia | Fonte.ia";
   const DESCRIPTION =
-    "Entre em contato com a Fonte.ia por e-mail ou WhatsApp. Olli Inteligência Digital Sistemas LTDA · CNPJ 65.361.266/0001-05 · contato@fontebrasil.online.";
+    "Entre em contato com a Fonte.ia por e-mail. Olli Inteligência Digital Sistemas LTDA · CNPJ 65.361.266/0001-05 · contato@fontebrasil.online.";
 
   useSeo({
     title: TITLE,
@@ -278,13 +278,6 @@ export function ContatoPage() {
               link="mailto:contato@fontebrasil.online"
               linkLabel="contato@fontebrasil.online"
             />
-            <CanalCard
-              icon={<MessageSquare size={20} />}
-              titulo="WhatsApp"
-              descricao="Disponível para assinantes do plano Corporativo e para conversas comerciais iniciais. Se você está avaliando a plataforma, manda uma mensagem."
-              link="https://wa.me/5511999999999?text=Ol%C3%A1%2C%20quero%20saber%20mais%20sobre%20a%20Fonte.ia"
-              linkLabel="Abrir conversa no WhatsApp →"
-            />
           </div>
         </section>
 
@@ -309,7 +302,7 @@ export function ContatoPage() {
               border: "1px solid var(--border)",
               borderRadius: "12px",
               padding: "22px 26px",
-              fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
               fontSize: "13.5px",
             }}
           >

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, X } from "lucide-react";
+import { Inbox, Loader2, Search, SearchX, Sparkles, X } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
@@ -269,7 +269,13 @@ function ResultCard({ entry, onOpen }: ResultCardProps) {
         {/* Prazo + fonte */}
         <div className="row between" style={{ gap: 6, marginTop: 2 }}>
           <div className={`tiny ${urgencyClass}`} style={{ fontWeight: 600 }}>
-            {days <= 0 ? "Prazo vencido" : days === 1 ? "Vence amanhã" : `${deadlineLabel} · ${days}d`}
+            {days < 0
+              ? "Prazo vencido"
+              : days === 0
+                ? "Vence hoje"
+                : days === 1
+                  ? "Vence amanhã"
+                  : `${deadlineLabel} · ${days}d`}
           </div>
           <FonteDots fontes={FONTE_DOTS_RFB} size={20} />
         </div>
@@ -361,11 +367,11 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
       <div className="panel" style={{ padding: 24 }}>
         <span className="eyebrow">Busca por palavra-chave</span>
         <h2 className="h2" style={{ margin: "8px 0 4px" }}>
-          Pergunte em português e encontre os lotes
+          Encontre lotes por cidade, órgão ou categoria
         </h2>
         <p className="muted small" style={{ margin: 0, maxWidth: 560 }}>
-          Busca por palavra-chave nos dados oficiais. O Raio-X com IA (resposta em texto) acende
-          quando ativado.
+          Busca por palavra-chave nos dados oficiais — digite uma cidade, um órgão, “mais barato” ou
+          “pessoa física”. O Raio-X com IA fica no detalhe de cada lote.
         </p>
 
         <form
@@ -427,22 +433,25 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
       {/* Estados de carregamento das fontes */}
       {loadState === "loading" ? (
         <div className="panel search-kw__state" role="status">
-          <span className="spinner" aria-hidden="true" />
+          <Loader2 className="spin" size={22} style={{ color: "var(--t-mid)" }} aria-hidden="true" />
           <span>Carregando lotes das fontes oficiais…</span>
         </div>
       ) : null}
 
       {loadState === "error" ? (
         <div className="panel search-kw__state search-kw__state--error" role="alert">
-          Não foi possível carregar os lotes agora{loadMessage ? `: ${loadMessage}` : "."}
+          Não foi possível carregar os lotes agora.
+          {loadMessage ? (
+            <span className="tiny muted" style={{ display: "block", marginTop: 4 }}>
+              Detalhe técnico: {loadMessage}
+            </span>
+          ) : null}
         </div>
       ) : null}
 
       {loadState === "empty" ? (
         <div className="panel search-kw__state">
-          <div style={{ fontSize: 28 }} aria-hidden="true">
-            🗂️
-          </div>
+          <Inbox size={28} style={{ color: "var(--t-mid)" }} aria-hidden="true" />
           <strong>Nenhum lote disponível no momento</strong>
           <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
             {loadMessage || "A coleta dos leilões da Receita roda periodicamente. Volte em breve."}
@@ -468,9 +477,7 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
 
           {results.length === 0 ? (
             <div className="panel search-kw__state">
-              <div style={{ fontSize: 28 }} aria-hidden="true">
-                🔍
-              </div>
+              <SearchX size={28} style={{ color: "var(--t-mid)" }} aria-hidden="true" />
               <strong>Nenhum lote bate com essa busca</strong>
               <p className="muted small" style={{ margin: 0, maxWidth: 380 }}>
                 Tente termos mais simples — uma cidade, um órgão, “mais barato” ou “pessoa física”.

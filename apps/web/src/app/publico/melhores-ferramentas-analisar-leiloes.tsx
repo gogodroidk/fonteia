@@ -11,6 +11,9 @@ import {
   Calculator,
   FileText,
   BarChart2,
+  Check,
+  X,
+  Minus,
 } from "lucide-react";
 import {
   useSeo,
@@ -40,8 +43,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 7%, var(--surface-2))",
+        border: "1px solid color-mix(in srgb, var(--warn) 22%, transparent)",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -53,7 +56,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -228,11 +231,11 @@ const TABELA: LinhaTabela[] = [
   { criterio: "Histórico de lotes arrematados",    sle: "nao",     planilha: "manual", fonteia: "parcial" },
 ];
 
-const ROTULOS: Record<NivelSuporte, { texto: string; cor: string }> = {
-  sim:     { texto: "Sim",     cor: "#16a34a" },
-  parcial: { texto: "Parcial", cor: "#d97706" },
-  manual:  { texto: "Manual",  cor: "#6b7280" },
-  nao:     { texto: "Não",     cor: "#dc2626" },
+const ROTULOS: Record<NivelSuporte, { texto: string; cor: string; icone: React.ReactNode }> = {
+  sim:     { texto: "Sim",     cor: "var(--ok)",     icone: <Check  size={13} aria-hidden="true" style={{ color: "var(--ok)",     flexShrink: 0 }} /> },
+  parcial: { texto: "Parcial", cor: "var(--warn)",   icone: <Minus  size={13} aria-hidden="true" style={{ color: "var(--warn)",   flexShrink: 0 }} /> },
+  manual:  { texto: "Manual",  cor: "var(--t-mid)",  icone: <Minus  size={13} aria-hidden="true" style={{ color: "var(--t-mid)",  flexShrink: 0 }} /> },
+  nao:     { texto: "Não",     cor: "var(--danger)", icone: <X      size={13} aria-hidden="true" style={{ color: "var(--danger)", flexShrink: 0 }} /> },
 };
 
 function TabelaComparativa() {
@@ -292,7 +295,7 @@ function TabelaComparativa() {
                 background:
                   i % 2 === 0
                     ? "transparent"
-                    : "color-mix(in srgb, var(--border) 30%, transparent)",
+                    : "var(--surface-2)",
               }}
             >
               <td
@@ -306,7 +309,7 @@ function TabelaComparativa() {
               </td>
               {(["sle", "planilha", "fonteia"] as const).map((col) => {
                 const nivel = linha[col];
-                const { texto, cor } = ROTULOS[nivel];
+                const { texto, cor, icone } = ROTULOS[nivel];
                 return (
                   <td
                     key={col}
@@ -318,7 +321,10 @@ function TabelaComparativa() {
                       fontSize: "13px",
                     }}
                   >
-                    {texto}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                      {icone}
+                      {texto}
+                    </span>
                   </td>
                 );
               })}
@@ -442,7 +448,7 @@ export function MelhoresFerramentasPage() {
           Verifique três coisas: os dados são rastreáveis ao edital oficial (com link para ele)?
           A ferramenta deixa claro quando os dados foram atualizados? A plataforma é honesta sobre
           o que não faz — não promete lucro, não garante resultado? Desconfie de plataformas que
-          vendem "oportunidades" sem mostrar de onde vêm os dados.
+          vendem “oportunidades” sem mostrar de onde vêm os dados.
         </>
       ),
     },
@@ -753,7 +759,7 @@ export function MelhoresFerramentasPage() {
             <P>
               O ponto forte é a flexibilidade total: você controla os critérios, as fórmulas e o
               que analisar. O custo de manutenção, por outro lado, é real: cada edital exige que
-              você acesse o SLE, extraia os dados manualmente e atualize a planilha. A medida que
+              você acesse o SLE, extraia os dados manualmente e atualize a planilha. À medida que
               o volume de lotes cresce, esse trabalho se torna a principal atividade — em vez da
               análise em si.
             </P>
@@ -1012,7 +1018,7 @@ export function MelhoresFerramentasPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1021,6 +1027,7 @@ export function MelhoresFerramentasPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -1028,7 +1035,7 @@ export function MelhoresFerramentasPage() {
               </a>
               <a
                 href="/como-participar-leilao-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1037,6 +1044,7 @@ export function MelhoresFerramentasPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <ArrowRight size={15} aria-hidden="true" />
@@ -1044,7 +1052,7 @@ export function MelhoresFerramentasPage() {
               </a>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1053,6 +1061,7 @@ export function MelhoresFerramentasPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -1060,7 +1069,7 @@ export function MelhoresFerramentasPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1069,13 +1078,14 @@ export function MelhoresFerramentasPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1084,6 +1094,7 @@ export function MelhoresFerramentasPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 FAQ completo

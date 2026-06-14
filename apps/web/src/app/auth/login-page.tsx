@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Eye, EyeOff, ArrowLeft, CheckCircle2, AlertCircle, User, Phone } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Check, CheckCircle2, AlertCircle, User, Phone, Gift } from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { LogoMark } from "../../components/ui/logo-mark";
@@ -70,7 +70,7 @@ function BrandLockup({
           }}
         >
           Fonte
-          <span style={{ color: "var(--accent-2, #2DD4BF)" }}>.ia</span>
+          <span style={{ color: "var(--accent-ink)" }}>.ia</span>
         </div>
         <div
           style={{
@@ -182,8 +182,8 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
       <div style={{ position: "relative", zIndex: 1, flex: 1, display: "flex", alignItems: "center", padding: "48px 0" }}>
         <div>
           {/* Eyebrow tag */}
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--accent-2, #14CBB1)", marginBottom: 22, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 20, height: 2, background: "var(--accent-2, #14CBB1)", borderRadius: 2, display: "inline-block", flexShrink: 0 }} />
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--accent-ink)", marginBottom: 22, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 20, height: 2, background: "var(--accent-ink)", borderRadius: 2, display: "inline-block", flexShrink: 0 }} />
             {heroTag}
           </div>
 
@@ -206,7 +206,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
                     width: 7,
                     height: 7,
                     borderRadius: "50%",
-                    background: "var(--accent-2, #14CBB1)",
+                    background: "var(--accent-ink)",
                     flexShrink: 0,
                     marginTop: 6,
                     display: "inline-block",
@@ -229,7 +229,7 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
             key={item}
             style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}
           >
-            <span style={{ color: "var(--accent-2, #14CBB1)", fontWeight: 800 }}>✓</span>
+            <Check size={13} strokeWidth={3} aria-hidden="true" style={{ color: "var(--accent-ink)", flexShrink: 0 }} />
             {item}
           </span>
         ))}
@@ -341,21 +341,16 @@ function SignupBanner() {
         gap: 12,
         padding: "13px 16px",
         borderRadius: "var(--r-md)",
-        background: "color-mix(in srgb, var(--accent-2, #14CBB1) 10%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--accent-2, #14CBB1) 22%, transparent)",
+        background: "color-mix(in srgb, var(--accent-ink) 10%, transparent)",
+        border: "1px solid color-mix(in srgb, var(--accent-ink) 22%, transparent)",
         marginBottom: 22,
       }}
     >
-      <span
-        style={{
-          fontSize: 22,
-          lineHeight: 1,
-          flexShrink: 0,
-        }}
+      <Gift
+        size={20}
         aria-hidden="true"
-      >
-        🎯
-      </span>
+        style={{ color: "var(--accent-ink)", flexShrink: 0 }}
+      />
       <div>
         <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t-hi)", marginBottom: 2 }}>
           7 dias grátis, sem cartão de crédito
@@ -386,7 +381,7 @@ function IconField({
   return (
     <div className="auth-field" style={{ marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
-        <span style={{ color: "var(--accent-2, #14CBB1)", display: "flex", alignItems: "center" }} aria-hidden="true">
+        <span style={{ color: "var(--accent-ink)", display: "flex", alignItems: "center" }} aria-hidden="true">
           {icon}
         </span>
         <label htmlFor={id} className="auth-label" style={{ margin: 0 }}>
@@ -763,8 +758,8 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             <div
               role="alert"
               style={{
-                background: "rgba(239,68,68,.1)",
-                border: "1px solid rgba(239,68,68,.28)",
+                background: "color-mix(in srgb, var(--danger) 10%, transparent)",
+                border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
                 borderRadius: "var(--r-md)",
                 padding: "11px 14px",
                 fontSize: 13,
@@ -1066,8 +1061,8 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           flex-direction: column;
         }
         .input--error {
-          border-color: var(--danger, #ef4444) !important;
-          box-shadow: 0 0 0 2px rgba(239,68,68,.15);
+          border-color: var(--danger) !important;
+          box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 15%, transparent);
         }
       `}</style>
     </div>

@@ -16,8 +16,8 @@ describe("Fonte.ia web shell", () => {
       </AuthProvider>,
     );
 
-    expect(html).toContain("Ultimos lotes publicados");
-    expect(html).toContain("Fonte antes de opiniao");
+    expect(html).toContain("Últimos lotes publicados");
+    expect(html).toContain("fonte antes de opinião");
     expect(html).toContain("Receita Federal SLE");
   });
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Landmark, SearchX } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import { Bar, CountUp, FonteDots, ScoreRing } from "../components/ui";
@@ -415,7 +416,7 @@ export function DashboardPage(props: {
         <div>
           <h1 className="display">{greetingPeriod()}, {greetingName(user)}</h1>
           <p className="muted" style={{ marginTop: 4 }}>
-            Leiloes governamentais monitorados em tempo real — Fonte antes de opiniao.
+            Leilões governamentais monitorados em tempo real — fonte antes de opinião.
           </p>
         </div>
         {onAsk ? (
@@ -538,7 +539,7 @@ export function DashboardPage(props: {
             >
               <div className="inset" style={{ padding: 14 }}>
                 <div className="tiny muted" style={{ marginBottom: 4 }}>
-                  Lance minimo
+                  Lance mínimo
                 </div>
                 <div className="num" style={{ fontWeight: 800, fontSize: 18 }}>
                   {formatBRL(featuredEntry.lot.minimumBidCents / 100)}
@@ -701,7 +702,7 @@ export function DashboardPage(props: {
       <section className="lot-table-section">
         <div className="row between" style={{ marginBottom: 14 }}>
           <h2 style={{ fontWeight: 700, fontSize: 15 }}>
-            Ultimos lotes publicados
+            Últimos lotes publicados
           </h2>
           <span className="small muted">
             {isLoading
@@ -715,8 +716,8 @@ export function DashboardPage(props: {
         {/* Filtros */}
         <div className="leiloes-filter-row" style={{ marginBottom: 14 }}>
           <input
-            aria-label="Filtrar por edital, cidade ou orgao"
-            placeholder="Buscar edital, cidade ou orgao"
+            aria-label="Filtrar por edital, cidade ou órgão"
+            placeholder="Buscar por edital, cidade ou órgão"
             value={term}
             onChange={(e) => setTerm(e.target.value)}
           />
@@ -761,7 +762,7 @@ export function DashboardPage(props: {
               >
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    {["Lote", "Orgao / Cidade", "Lance min.", "Prazo", "Score", ""].map((h, i) => (
+                    {["Lote", "Órgão / Cidade", "Lance min.", "Prazo", "Score", ""].map((h, i) => (
                       <th
                         key={`${h}-${i}`}
                         style={{
@@ -842,14 +843,13 @@ export function DashboardPage(props: {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 26,
               }}
             >
-              🏛
+              <Landmark size={26} aria-hidden="true" />
             </div>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote disponivel agora</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote disponível agora</div>
             <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
-              A coleta dos leiloes da Receita roda periodicamente. Novos lotes aparecem a cada sincronizacao.
+              A coleta dos leilões da Receita roda periodicamente. Novos lotes aparecem a cada sincronização.
             </p>
           </div>
         ) : sortedEntries.length === 0 ? (
@@ -875,10 +875,9 @@ export function DashboardPage(props: {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 26,
               }}
             >
-              🔍
+              <SearchX size={26} aria-hidden="true" />
             </div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lote com esses filtros</div>
             <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
@@ -910,7 +909,7 @@ export function DashboardPage(props: {
             >
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                  {["Lote", "Orgao / Cidade", "Lance min.", "Prazo", "Score", ""].map(
+                  {["Lote", "Órgão / Cidade", "Lance min.", "Prazo", "Score", ""].map(
                     (h, i) => (
                       <th
                         key={`${h}-${i}`}
@@ -948,10 +947,16 @@ export function DashboardPage(props: {
                       }
                       role={isClickable ? "button" : undefined}
                       tabIndex={isClickable ? 0 : undefined}
+                      aria-label={
+                        isClickable
+                          ? `Ver detalhes do lote ${lot.lotNumber} — ${lot.agency}, ${displayCity(lot.city)}`
+                          : undefined
+                      }
                       onKeyDown={
                         isClickable
                           ? (e) => {
                               if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
                                 onSelectLot(lot);
                               }
                             }
@@ -1103,7 +1108,7 @@ export function DashboardPage(props: {
       {scoredLots.length > 0 ? (
         <section className="panel" style={{ padding: 22 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
-            Distribuicao de confianca
+            Distribuição de confiança
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <Bar

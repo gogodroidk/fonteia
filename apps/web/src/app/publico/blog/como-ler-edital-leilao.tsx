@@ -22,8 +22,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 7%, var(--surface-2))",
+        border: "1px solid color-mix(in srgb, var(--warn) 22%, transparent)",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -35,7 +35,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -366,8 +366,8 @@ export function PostComoLerEditalPage() {
             </EditalItem>
 
             <EditalItem label="3. Condição do bem">
-              A frase mais importante do edital é esta, em alguma variação: "o bem é vendido no
-              estado em que se encontra, sem garantia de funcionamento e sem direito a devolução".
+              A frase mais importante do edital é esta, em alguma variação: “o bem é vendido no
+              estado em que se encontra, sem garantia de funcionamento e sem direito a devolução”.
               Isso significa que qualquer defeito descoberto depois do arremate é responsabilidade
               exclusivamente sua. Leia a descrição do lote com esse contexto em mente.
             </EditalItem>
@@ -644,7 +644,7 @@ export function PostComoLerEditalPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/blog/leilao-receita-vale-a-pena"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -653,6 +653,7 @@ export function PostComoLerEditalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -660,7 +661,7 @@ export function PostComoLerEditalPage() {
               </a>
               <a
                 href="/blog/erros-iniciantes-leilao"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -669,6 +670,7 @@ export function PostComoLerEditalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -676,7 +678,7 @@ export function PostComoLerEditalPage() {
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -685,6 +687,7 @@ export function PostComoLerEditalPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Perguntas frequentes (FAQ)

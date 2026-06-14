@@ -40,8 +40,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 12%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--warn) 30%, var(--surface))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -53,7 +53,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -168,7 +168,7 @@ function Comparacao({
       >
         {titulo}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+      <div className="aeia-comparacao" style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
         <div
           style={{
             padding: "14px 16px",
@@ -176,16 +176,16 @@ function Comparacao({
             lineHeight: 1.65,
             color: "var(--t-mid)",
             borderRight: "1px solid var(--border)",
-            background: "color-mix(in srgb, #ef4444 4%, transparent)",
+            background: "color-mix(in srgb, var(--danger) 12%, var(--surface))",
           }}
         >
           <div
             style={{
-              fontSize: "10px",
+              fontSize: "12px",
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
-              color: "#ef4444",
+              color: "var(--danger)",
               marginBottom: "6px",
             }}
           >
@@ -204,7 +204,7 @@ function Comparacao({
         >
           <div
             style={{
-              fontSize: "10px",
+              fontSize: "12px",
               fontWeight: 700,
               letterSpacing: "0.08em",
               textTransform: "uppercase",
@@ -682,12 +682,12 @@ export function AnaliseEditalIAPage() {
                 color: "var(--t-hi)",
               }}
             >
-              Por que isso ajuda quem tem medo das "letras miúdas"
+              Por que isso ajuda quem tem medo das “letras miúdas”
             </h2>
 
             <P>
               A barreira real para a maioria das pessoas não é falta de dinheiro ou de interesse
-              em leilões — é a sensação de que o edital "parece armadilha". Dezenas de cláusulas,
+              em leilões — é a sensação de que o edital “parece armadilha”. Dezenas de cláusulas,
               remissões a normas que você nunca viu, linguagem que soa como foi escrita para
               confundir.
             </P>
@@ -729,7 +729,7 @@ export function AnaliseEditalIAPage() {
             </h2>
 
             <P>
-              Prefiro te dizer isso antes de você começar:
+              Vale dizer isso antes de você começar:
             </P>
 
             <ul
@@ -870,7 +870,7 @@ export function AnaliseEditalIAPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -879,6 +879,7 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -886,7 +887,7 @@ export function AnaliseEditalIAPage() {
               </a>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -895,13 +896,14 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Como comprar passo a passo
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -910,13 +912,14 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Calculadora de lance (grátis)
               </a>
               <a
                 href="/glossario-leiloes"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -925,13 +928,14 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Glossário de termos
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -940,13 +944,14 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 FAQ
               </a>
               <a
                 href="/guias/leilao-receita-vs-judicial"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -955,6 +960,7 @@ export function AnaliseEditalIAPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Receita vs judicial vs banco

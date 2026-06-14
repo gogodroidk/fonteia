@@ -55,7 +55,7 @@ function TableOfContents({ entries }: { entries: TocEntry[] }) {
             key={e.id}
             href={`#${e.id}`}
             className="link"
-            style={{ display: "block", fontSize: "14px", padding: "4px 0" }}
+            style={{ display: "block", fontSize: "14px", padding: "10px 0" }}
           >
             {e.label}
           </a>
@@ -119,7 +119,7 @@ function Section({ id, title, children }: SectionProps) {
 
 function Sub({ title }: { title: string }) {
   return (
-    <h3 className="h3" style={{ marginBottom: "10px", color: "var(--t-mid)", marginTop: "18px" }}>
+    <h3 className="h3" style={{ marginBottom: "10px", color: "var(--t-hi)", marginTop: "18px" }}>
       {title}
     </h3>
   );
@@ -210,7 +210,7 @@ function Privacidade() {
         <Sub title="2.3 Dados que NÃO coletamos" />
         <Ul>
           <Li>CPF, RG ou qualquer documento de identificação nacional — não solicitamos.</Li>
-          <Li>Dados biométricos ou sensíveis conforme art. 5º, II da LGPD.</Li>
+          <Li>Dados biométricos ou sensíveis conforme o art. 5º, II, da LGPD.</Li>
         </Ul>
       </Section>
 
@@ -500,10 +500,10 @@ function Termos() {
               fontSize: "14.5px",
               lineHeight: 1.7,
               margin: 0,
-              color: "color-mix(in srgb, var(--danger) 80%, var(--t-hi))",
+              color: "var(--t-mid)",
             }}
           >
-            <strong style={{ color: "inherit" }}>Importante:</strong> a Fonte.ia não é uma
+            <strong style={{ color: "var(--danger)" }}>Importante:</strong> a Fonte.ia não é uma
             plataforma de leilão, não executa lances em seu nome, não presta assessoria jurídica
             nem financeira. As análises e scores gerados são ferramentas informativas — a decisão
             de arrematar qualquer lote é de responsabilidade exclusiva do usuário.
@@ -520,30 +520,26 @@ function Termos() {
             Notifique imediatamente a Fonte.ia em caso de uso não autorizado:{" "}
             <a href="mailto:contato@olli.com.br" className="link">contato@olli.com.br</a>.
           </Li>
-          <Li>É proibido criar múltiplas contas para contornar limitações do plano gratuito.</Li>
+          <Li>É proibido criar múltiplas contas para contornar limitações do período de teste.</Li>
         </Ul>
       </Section>
 
       <Section id="t4" title="4. Planos e pagamento">
-        <Sub title="4.1 Plano de Avaliação (gratuito)" />
-        <P>
-          Inclui análises de demonstração sem cartão de crédito. As análises são vinculadas à
-          conta. Não é permitida a criação de múltiplas contas para acumular benefícios gratuitos.
-        </P>
-        <Sub title="4.2 Planos pagos" />
+        <Sub title="4.1 Planos pagos" />
         <P>
           O plano Profissional (R$ 197/mês) e o Corporativo (R$ 597/mês) são cobrados
-          mensalmente via cartão ou Pix; o plano Avaliação é gratuito. O cancelamento pode ser
-          feito a qualquer momento no painel da conta, sem multa ou fidelidade.
+          mensalmente via cartão ou Pix. O cancelamento pode ser feito a qualquer momento no
+          painel da conta, sem multa ou fidelidade.
         </P>
-        <Sub title="4.3 Teste gratuito de 7 dias" />
+        <Sub title="4.2 Teste gratuito de 7 dias" />
         <P>
           Os planos pagos começam com 7 dias de teste gratuito: você não é cobrado nos primeiros
           7 dias e pode cancelar a qualquer momento durante esse período, sem nenhum custo. Após o
-          teste, a cobrança mensal é iniciada automaticamente. Dúvidas:{" "}
+          teste, a cobrança mensal é iniciada automaticamente. Não é permitida a criação de
+          múltiplas contas para acumular períodos de teste. Dúvidas:{" "}
           <a href="mailto:financeiro@olli.com.br" className="link">financeiro@olli.com.br</a>.
         </P>
-        <Sub title="4.4 Alterações de preço" />
+        <Sub title="4.3 Alterações de preço" />
         <P>
           Eventuais ajustes de preço serão comunicados com 30 dias de antecedência por e-mail.
           Você pode cancelar antes da vigência do novo preço sem ônus.
@@ -641,12 +637,6 @@ function Termos() {
 
 /* ---------- MAIN PAGE ---------- */
 export function LegalPage({ kind, onHome }: LegalPageProps) {
-  const titles: Record<LegalKind, string> = {
-    privacidade: "Política de Privacidade",
-    cookies: "Política de Cookies",
-    termos: "Termos de Uso",
-  };
-
   return (
     <div
       className="legal-root"
@@ -749,9 +739,7 @@ export function LegalPage({ kind, onHome }: LegalPageProps) {
           padding: "60px 28px 100px",
         }}
       >
-        {/* hidden doc title for screen readers / SEO */}
-        <h1 className="visually-hidden" aria-hidden="true">{titles[kind]}</h1>
-
+        {/* The visible <h1> is rendered by DocHeader inside each document. */}
         {kind === "privacidade" && <Privacidade />}
         {kind === "cookies" && <Cookies />}
         {kind === "termos" && <Termos />}

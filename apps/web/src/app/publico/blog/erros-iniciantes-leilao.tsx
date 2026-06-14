@@ -22,8 +22,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 7%, var(--surface-2))",
+        border: "1px solid color-mix(in srgb, var(--warn) 22%, transparent)",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -35,7 +35,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -90,7 +90,7 @@ function ErroItem({
           width: "40px",
           height: "40px",
           borderRadius: "12px",
-          background: "linear-gradient(135deg, #ef4444, #dc2626)",
+          background: "linear-gradient(135deg, var(--danger), var(--danger))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -363,7 +363,7 @@ export function PostErrosIniciantesPage() {
               <Warn>
                 <strong style={{ color: "var(--t-hi)" }}>Como evitar:</strong> defina seu lance
                 máximo antes de entrar na sessão ou de abrir o formulário de proposta. Escreva
-                esse número. Não ultrapasse ele, nem que pareça que vai perder por pouco. Perder
+                esse número. Não o ultrapasse, nem que pareça que vai perder por pouco. Perder
                 um lance dentro do limite é melhor do que ganhar fora dele.
               </Warn>
             </ErroItem>
@@ -376,7 +376,7 @@ export function PostErrosIniciantesPage() {
                 ângulo favorável ou estado diferente do real.
               </P>
               <P>
-                O bem é vendido "no estado em que se encontra", sem garantia. Qualquer defeito
+                O bem é vendido “no estado em que se encontra”, sem garantia. Qualquer defeito
                 descoberto depois do arremate é problema do comprador. Isso não significa que todo
                 lote é ruim — significa que a análise prévia é parte do trabalho.
               </P>
@@ -548,7 +548,7 @@ export function PostErrosIniciantesPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/blog/leilao-receita-vale-a-pena"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -557,6 +557,7 @@ export function PostErrosIniciantesPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -564,7 +565,7 @@ export function PostErrosIniciantesPage() {
               </a>
               <a
                 href="/blog/como-ler-edital-leilao"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -573,6 +574,7 @@ export function PostErrosIniciantesPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
@@ -580,7 +582,7 @@ export function PostErrosIniciantesPage() {
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -589,6 +591,7 @@ export function PostErrosIniciantesPage() {
                   textDecoration: "none",
                   fontSize: "14px",
                   fontWeight: 600,
+                  color: "var(--t-hi)",
                 }}
               >
                 Perguntas frequentes (FAQ)

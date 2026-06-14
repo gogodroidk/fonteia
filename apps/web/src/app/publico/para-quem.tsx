@@ -104,7 +104,7 @@ function SegmentoCard({ icon, perfil, dor, beneficios }: SegmentoCardProps) {
             fontStyle: "italic",
           }}
         >
-          "{dor}"
+          “{dor}”
         </p>
       </div>
 

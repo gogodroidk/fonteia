@@ -30,8 +30,8 @@ function Warn({ children }: { children: React.ReactNode }) {
     <div
       role="note"
       style={{
-        background: "color-mix(in srgb, var(--warn, #f59e0b) 7%, transparent)",
-        border: "1px solid color-mix(in srgb, var(--warn, #f59e0b) 22%, transparent)",
+        background: "color-mix(in srgb, var(--warn) 12%, var(--surface))",
+        border: "1px solid color-mix(in srgb, var(--warn) 30%, var(--border))",
         borderRadius: "12px",
         padding: "16px 20px",
         marginBottom: "20px",
@@ -43,7 +43,7 @@ function Warn({ children }: { children: React.ReactNode }) {
       <AlertTriangle
         size={17}
         aria-hidden="true"
-        style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }}
+        style={{ color: "var(--warn)", flexShrink: 0, marginTop: "2px" }}
       />
       <div style={{ fontSize: "14.5px", lineHeight: 1.65, color: "var(--t-mid)" }}>
         {children}
@@ -106,7 +106,7 @@ function RiscoCard({ titulo, oque, protecao }: RiscoCardProps) {
         <AlertTriangle
           size={16}
           aria-hidden="true"
-          style={{ color: "#d97706", flexShrink: 0 }}
+          style={{ color: "var(--warn)", flexShrink: 0 }}
         />
         {titulo}
       </h3>
@@ -114,11 +114,11 @@ function RiscoCard({ titulo, oque, protecao }: RiscoCardProps) {
         <div>
           <span
             style={{
-              fontSize: "11px",
+              fontSize: "12px",
               fontWeight: 700,
               letterSpacing: "0.07em",
               textTransform: "uppercase",
-              color: "var(--t-low)",
+              color: "var(--t-mid)",
               display: "block",
               marginBottom: "4px",
             }}
@@ -137,7 +137,7 @@ function RiscoCard({ titulo, oque, protecao }: RiscoCardProps) {
         >
           <span
             style={{
-              fontSize: "11px",
+              fontSize: "12px",
               fontWeight: 700,
               letterSpacing: "0.07em",
               textTransform: "uppercase",
@@ -238,8 +238,8 @@ const FAQ_ITEMS: FaqItemProps[] = [
       <>
         Sim — os leilões são conduzidos por leiloeiros oficiais habilitados pelo governo e os
         editais são publicados no portal oficial da Receita (receita.fazenda.gov.br). O risco não
-        está na idoneidade do órgão, mas no estado do bem: ele é vendido sem garantia, "no estado
-        em que se encontra". Quem avalia o risco é você, com base no edital e nas fotos
+        está na idoneidade do órgão, mas no estado do bem: ele é vendido sem garantia, “no estado
+        em que se encontra”. Quem avalia o risco é você, com base no edital e nas fotos
         disponíveis.
       </>
     ),
@@ -249,7 +249,7 @@ const FAQ_ITEMS: FaqItemProps[] = [
     resposta: (
       <>
         O site oficial do leilão da Receita Federal usa domínio <strong>.gov.br</strong>. Qualquer
-        site fora desse domínio que diz "leilão da Receita" ou "Receita Federal" deve ser tratado
+        site fora desse domínio que diz “leilão da Receita” ou “Receita Federal” deve ser tratado
         com desconfiança. Verifique o URL antes de inserir CPF, CNPJ ou dados de pagamento.
         Golpistas criam cópias visuais convincentes — o domínio é a única confirmação válida.
       </>
@@ -259,7 +259,7 @@ const FAQ_ITEMS: FaqItemProps[] = [
     pergunta: "Posso devolver o bem se ele chegar com defeito?",
     resposta: (
       <>
-        Não. Nos leilões da Receita Federal, o bem é vendido "no estado em que se encontra", sem
+        Não. Nos leilões da Receita Federal, o bem é vendido “no estado em que se encontra”, sem
         garantia de funcionamento e sem direito de devolução. Esse é o risco principal da
         modalidade. Avalie o edital, as fotos e, quando permitido, faça a vistoria presencial
         antes de dar qualquer lance.
@@ -281,12 +281,26 @@ const FAQ_ITEMS: FaqItemProps[] = [
     resposta: (
       <>
         O edital estipula um prazo de retirada. Atrasos podem gerar cobrança de armazenagem
-        (custodia do bem no local de guarda) e, em casos extremos, perda do bem sem reembolso.
+        (custódia do bem no local de guarda) e, em casos extremos, perda do bem sem reembolso.
         Planeje a logística antes de dar o lance.
       </>
     ),
   },
 ];
+
+/* ── Texto plano das respostas para o JSON-LD (sem JSX) ──────────────────── */
+const FAQ_JSON_LD_ANSWERS: Record<string, string> = {
+  "O leilão da Receita Federal é confiável?":
+    "Sim — os leilões são conduzidos por leiloeiros oficiais habilitados pelo governo e os editais são publicados no portal oficial da Receita. O risco não está na idoneidade do órgão, mas no estado do bem: ele é vendido sem garantia, “no estado em que se encontra”. Quem avalia o risco é você, com base no edital e nas fotos disponíveis.",
+  "Como identificar um site falso de leilão?":
+    "O site oficial do leilão da Receita Federal usa domínio .gov.br. Qualquer site fora desse domínio que diz “leilão da Receita” ou “Receita Federal” deve ser tratado com desconfiança. Verifique o URL antes de inserir CPF, CNPJ ou dados de pagamento. Golpistas criam cópias visuais convincentes — o domínio é a única confirmação válida.",
+  "Posso devolver o bem se ele chegar com defeito?":
+    "Não. Nos leilões da Receita Federal, o bem é vendido “no estado em que se encontra”, sem garantia de funcionamento e sem direito de devolução. Esse é o risco principal da modalidade. Avalie o edital, as fotos e, quando permitido, faça a vistoria presencial antes de dar qualquer lance.",
+  "Quais custos existem além do lance?":
+    "Os principais são: comissão do leiloeiro (geralmente cerca de 5% sobre o valor do arremate), eventuais tributos ou taxas de desembaraço, transporte e logística para retirada, e possíveis custos de conserto ou reforma. Some tudo antes de calcular seu lance máximo.",
+  "O que acontece se eu não retirar o bem no prazo?":
+    "O edital estipula um prazo de retirada. Atrasos podem gerar cobrança de armazenagem (custódia do bem no local de guarda) e, em casos extremos, perda do bem sem reembolso. Planeje a logística antes de dar o lance.",
+};
 
 /* ── JSON-LD para SEO ────────────────────────────────────────────────────── */
 const PAGE_TITLE =
@@ -310,10 +324,7 @@ const JSON_LD = [
   faqJsonLd(
     FAQ_ITEMS.map((f) => ({
       question: f.pergunta,
-      answer:
-        typeof f.resposta === "string"
-          ? f.resposta
-          : "Veja a resposta completa na página.",
+      answer: FAQ_JSON_LD_ANSWERS[f.pergunta] ?? "",
     })),
   ),
 ] as const;
@@ -426,11 +437,11 @@ export function RiscosLeiloesPage() {
               }}
             >
               <a href="/guias" className="link small" style={{ fontSize: "13px" }}>
-                Central de guias
+                Guias
               </a>
               <span style={{ color: "var(--t-low)", fontSize: "13px" }} aria-hidden="true">›</span>
               <span className="small" style={{ color: "var(--t-low)", fontSize: "13px" }}>
-                Riscos e cuidados
+                Riscos dos leilões públicos
               </span>
             </div>
 
@@ -481,7 +492,7 @@ export function RiscosLeiloesPage() {
 
             <RiscoCard
               titulo="Bem vendido sem garantia"
-              oque={`O lote é vendido "no estado em que se encontra". Eletrônicos podem não ligar, veículos podem ter vícios ocultos, roupas podem estar com avaria. A Receita Federal não se responsabiliza pelo funcionamento do bem após o arremate.`}
+              oque={`O lote é vendido “no estado em que se encontra”. Eletrônicos podem não ligar, veículos podem ter vícios ocultos, roupas podem estar com avaria. A Receita Federal não se responsabiliza pelo funcionamento do bem após o arremate.`}
               protecao="Leia a descrição do lote com atenção. Confira as fotos. Quando o edital permitir vistoria presencial, vá. Nunca presuma que o bem está funcionando — presuma o contrário e decida a partir disso."
             />
 
@@ -499,7 +510,7 @@ export function RiscosLeiloesPage() {
 
             <RiscoCard
               titulo="Restrições e pendências do bem"
-              oque="Alguns lotes têm restrições legais. Mercadorias sem nota fiscal de origem podem ter impedimento de revenda. Veículos podem ter débitos de licenciamento ou multa não quitados. Certos bens exigem autorização especial para uso ou comércio (ex.: equipamentos de radiodifusão, remédios)."
+              oque="Alguns lotes têm restrições legais. Mercadorias sem nota fiscal de origem podem ter impedimento de revenda. Veículos podem ter débitos de licenciamento ou multa não quitados. Certos bens exigem autorização especial para uso ou comércio (ex.: equipamentos de radiodifusão, medicamentos)."
               protecao="Leia o edital até o fim — essas restrições aparecem nas cláusulas específicas do lote. Se não estiver claro, não arremate: ambiguidade no edital é risco para o arrematante, não para a Receita."
             />
 
@@ -703,13 +714,14 @@ export function RiscosLeiloesPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -719,13 +731,14 @@ export function RiscosLeiloesPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -734,13 +747,14 @@ export function RiscosLeiloesPage() {
               </a>
               <a
                 href="/leiloes-receita-federal"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}

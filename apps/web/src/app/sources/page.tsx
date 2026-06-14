@@ -207,9 +207,14 @@ export function SourcesPage() {
   const activeSourceId = "receita-leiloes-sle";
 
   // Runtime health-check: call listLeilaoLots() once on mount. If it returns
-  // real data (source !== "empty"), the Receita source is "connected"; if it
-  // fails or returns empty, it's "deprecated" (unreachable). Other sources
-  // keep their static catalog status — no extra requests needed.
+  // dados reais (source !== "empty"), promovemos a Receita para "conectado".
+  //
+  // IMPORTANTE: "empty" (a coleta rodou mas não há lote AGORA) e uma falha de
+  // rede NÃO significam que a fonte oficial foi descontinuada. Marcar a Receita
+  // como "descontinuado" nesses casos destrói a credibilidade do produto. Por
+  // isso, sem dados, mantemos o status estático do catálogo ("operacional
+  // frágil"), em vez de aplicar um override enganoso. As demais fontes mantêm o
+  // status estático — sem requisições extras.
   const [runtimeStatus, setRuntimeStatus] = useState<Record<string, SourceStatus>>({});
   const [checkLoading, setCheckLoading] = useState(true);
 
@@ -220,12 +225,15 @@ export function SourcesPage() {
     listLeilaoLots()
       .then((result) => {
         if (cancelled) return;
-        const status: SourceStatus = result.source !== "empty" ? "connected" : "deprecated";
-        setRuntimeStatus({ [activeSourceId]: status });
+        // Só fazemos override quando há dados confirmados; sem lotes no momento,
+        // o status estático ("operacional frágil") já é honesto.
+        if (result.source !== "empty") {
+          setRuntimeStatus({ [activeSourceId]: "connected" });
+        }
       })
       .catch(() => {
-        if (cancelled) return;
-        setRuntimeStatus({ [activeSourceId]: "deprecated" });
+        // Falha transitória de rede não é "descontinuado": preservamos o
+        // status estático do catálogo.
       })
       .finally(() => {
         if (!cancelled) setCheckLoading(false);
@@ -274,7 +282,7 @@ export function SourcesPage() {
         >
           {/* text block */}
           <div style={{ maxWidth: 540 }}>
-            <span className="eyebrow">Fontes &amp; Rastreabilidade</span>
+            <span className="eyebrow">Fontes e Rastreabilidade</span>
             <h1
               className="h1"
               style={{ marginTop: 8, fontSize: 24, lineHeight: 1.2 }}
@@ -443,7 +451,7 @@ export function SourcesPage() {
           </span>{" "}
           dependem de coleta de portais sem API documentada e podem apresentar
           instabilidade. Fontes em integração ainda não estão ativas na plataforma.
-          Nenhum dado é inferido ou estimado — só repercutimos o que o órgão publica.
+          Nenhum dado é inferido ou estimado — só exibimos o que o órgão publica.
         </p>
       </div>
     </section>

@@ -16,15 +16,15 @@ const TERMOS: TermoGlossario[] = [
   },
   {
     termo: "EDLE",
-    sigla: "Escritório de Leilões e Disposições de Perdidos",
+    sigla: "Edital de Leilão Eletrônico",
     definicao:
-      "Unidade da Receita Federal responsável por organizar e conduzir os leilões de mercadorias apreendidas e bens perdidos. É o EDLE quem publica os editais, habilita os leiloeiros e homologa os arremates.",
+      "É o edital que rege um leilão eletrônico específico da Receita Federal. Reúne, num único documento, as regras daquele certame: lotes disponíveis, lance mínimo, prazos, quem pode participar e condições de pagamento e retirada. É o documento que você deve ler antes de se habilitar.",
   },
   {
     termo: "SLE",
-    sigla: "Sistema de Leilões Eletrônicos",
+    sigla: "Sistema de Leilão Eletrônico",
     definicao:
-      "Plataforma online do governo federal onde ocorrem os leilões da Receita Federal. É no SLE que você se habilita, consulta editais e registra seus lances. Acesso em leiloes.receita.fazenda.gov.br com login via conta gov.br.",
+      "Plataforma online da Receita Federal onde ocorrem os leilões eletrônicos. É no SLE que você se habilita, consulta editais e registra seus lances, com login via conta gov.br.",
   },
   {
     termo: "gov.br (níveis prata e ouro)",
@@ -137,23 +137,24 @@ export function GlossarioLeiloesPage() {
           .gloss-header { padding-left: 20px !important; padding-right: 20px !important; }
           .gloss-main   { padding-left: 20px !important; padding-right: 20px !important; }
           .gloss-footer { padding-left: 20px !important; padding-right: 20px !important; }
-          .gloss-header nav { display: none !important; }
-          .gloss-jump-nav { column-count: 2 !important; }
+          .gloss-header .gloss-ghost-cta { display: none !important; }
         }
-        @media (max-width: 420px) {
-          .gloss-jump-nav { column-count: 1 !important; }
+        .gloss-jump-nav {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
         }
         .gloss-jump-link {
-          display: block;
+          display: inline-flex;
+          align-items: center;
           min-height: 44px;
-          padding: 10px 12px;
-          border-radius: 6px;
+          padding: 10px 14px;
+          border-radius: 8px;
           font-size: 13px;
           font-weight: 600;
           color: var(--t-mid);
           text-decoration: none;
           line-height: 1.3;
-          break-inside: avoid;
           transition: background 0.12s, color 0.12s;
         }
         .gloss-jump-link:hover,
@@ -176,6 +177,12 @@ export function GlossarioLeiloesPage() {
         .gloss-term-card:focus-within {
           border-left-color: var(--accent);
           outline: none;
+        }
+        .gloss-footer nav a {
+          display: inline-flex;
+          align-items: center;
+          min-height: 44px;
+          padding: 4px 2px;
         }
       `}</style>
 
@@ -225,7 +232,7 @@ export function GlossarioLeiloesPage() {
           aria-label="Ações rápidas"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
-          <a href="/guias/como-comprar-leilao-receita" className="btn btn--ghost btn--sm">
+          <a href="/guias/como-comprar-leilao-receita" className="btn btn--ghost btn--sm gloss-ghost-cta">
             ← Guia de compra
           </a>
           <a href="/entrar" className="btn btn--accent btn--sm">
@@ -331,10 +338,7 @@ export function GlossarioLeiloesPage() {
             >
               Pular para o termo
             </p>
-            <div
-              className="gloss-jump-nav"
-              style={{ columnCount: 3, columnGap: "4px" }}
-            >
+            <div className="gloss-jump-nav">
               {TERMOS.map((t) => (
                 <a
                   key={t.termo}
@@ -491,13 +495,14 @@ export function GlossarioLeiloesPage() {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
                 href="/guias/como-comprar-leilao-receita"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -507,13 +512,14 @@ export function GlossarioLeiloesPage() {
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
@@ -522,13 +528,14 @@ export function GlossarioLeiloesPage() {
               </a>
               <a
                 href="/faq"
-                className="card card--pad link"
+                className="card card--pad"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "8px",
                   padding: "10px 16px",
                   textDecoration: "none",
+                  color: "var(--t-hi)",
                   fontSize: "14px",
                   fontWeight: 600,
                 }}
