@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
+  BadgeCheck,
   Bell,
   Building2,
   Check,
@@ -16,6 +17,7 @@ import {
   MapPin,
   Menu,
   Search,
+  Scale,
   ShieldCheck,
   Sparkles,
   User,
@@ -134,6 +136,12 @@ const EmpresasPage = lazy(() =>
 const AmbientalPage = lazy(() =>
   import("./app/ambiental/page").then((m) => ({ default: m.AmbientalPage })),
 );
+const JuridicoPage = lazy(() =>
+  import("./app/juridico/page").then((m) => ({ default: m.JuridicoPage })),
+);
+const InpiPage = lazy(() =>
+  import("./app/inpi/page").then((m) => ({ default: m.InpiPage })),
+);
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -216,7 +224,9 @@ type RouteKey =
   | "municipios"
   | "politica"
   | "empresas"
-  | "ambiental";
+  | "ambiental"
+  | "juridico"
+  | "inpi";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
@@ -226,6 +236,8 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
   { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
   { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
+  { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
+  { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
   { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
@@ -256,6 +268,8 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   politica: "Política",
   empresas: "Empresas",
   ambiental: "Ambiental",
+  juridico: "Jurídico",
+  inpi: "INPI",
 };
 
 function pathToRoute(path: string): RouteKey {
@@ -266,6 +280,8 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/municipios")) return "municipios";
   if (path.startsWith("/app/empresas")) return "empresas";
   if (path.startsWith("/app/ambiental")) return "ambiental";
+  if (path.startsWith("/app/juridico")) return "juridico";
+  if (path.startsWith("/app/inpi")) return "inpi";
   if (path.startsWith("/app/alertas")) return "alertas";
   if (path.startsWith("/app/relatorios")) return "relatorios";
   if (path.startsWith("/app/fontes")) return "fontes";
@@ -600,6 +616,8 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "municipios" && <MunicipiosPage />}
                 {route === "empresas" && <EmpresasPage />}
                 {route === "ambiental" && <AmbientalPage />}
+                {route === "juridico" && <JuridicoPage />}
+                {route === "inpi" && <InpiPage />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
                 {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
                 {route === "fontes" && <SourcesPage />}
