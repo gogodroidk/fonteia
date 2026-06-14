@@ -630,7 +630,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 )}
                 {route === "lot-detail" &&
                   (selectedLot ? (
-                    <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onAsk={goToSearch} />
+                    <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onAsk={goToSearch} onSelectLot={handleSelectLot} />
                   ) : (
                     <section className="panel" style={{ padding: 28 }}>
                       <span className="eyebrow">{isLoadingLot ? "Carregando lote" : "Lote não encontrado"}</span>

@@ -7,6 +7,7 @@ import {
   CheckSquare,
   ExternalLink,
   ImageOff,
+  Layers,
   Loader2,
   MapPin,
   Package,
@@ -27,6 +28,11 @@ import { getConfiguredApiUrl, getSupabasePublicConfig, trimTrailingSlash } from 
 import { displayCity } from "../../lib/receita-localidades";
 import { useAuth } from "../../auth/auth-context";
 import { fetchLoteDetalhe, type LoteDetalhe } from "../../features/leiloes/lote-detalhe-api";
+import {
+  fetchLotesParecidos,
+  type LotesParecidosResult,
+  type FaixaValor,
+} from "../../features/leiloes/lotes-parecidos-api";
 import { ComoDarLance } from "../../components/como-dar-lance";
 import { estimarCustoTotal } from "../../lib/custo-total";
 import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
@@ -66,6 +72,8 @@ interface LotDetailPageProps {
   lot: ReceitaLeilaoLot;
   onBack: () => void;
   onAsk?: ((question: string) => void) | undefined;
+  /** Navega para outro lote (usado pela seção "Lotes parecidos"). */
+  onSelectLot?: ((lot: ReceitaLeilaoLot) => void) | undefined;
 }
 
 // ─── Alert modal state ───────────────────────────────────────────────────────
@@ -94,6 +102,12 @@ function formatBRL(value: number): string {
     currency: "BRL",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+/** Formata uma faixa min–max em BRL; mostra valor único quando min === max. */
+function formatFaixa(faixa: FaixaValor): string {
+  if (faixa.minCents === faixa.maxCents) return formatBRL(faixa.minCents / 100);
+  return `${formatBRL(faixa.minCents / 100)} – ${formatBRL(faixa.maxCents / 100)}`;
 }
 
 function formatDeadline(value: string): string {
@@ -646,6 +660,7 @@ export function LotDetailPage({
   lot,
   onBack,
   onAsk: _onAsk,
+  onSelectLot,
 }: LotDetailPageProps) {
   const scoring = scoreReceitaLeilaoLot(lot);
   const economia = lotEconomia(lot);
@@ -717,6 +732,20 @@ export function LotDetailPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lot.id, lot.category, detalhe?.titulo]);
+
+  // Lotes parecidos — reusa o embedding salvo do próprio lote (RPC similar_entities_by_external).
+  // Gracioso: vazio quando o lote não tem embedding ou não há parecidos (a seção some).
+  const [parecidos, setParecidos] = useState<LotesParecidosResult | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setParecidos(null);
+    void fetchLotesParecidos(lot, { count: 6, accessToken: session?.access_token }).then((r) => {
+      if (!cancelled) setParecidos(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lot, session?.access_token]);
 
   // SHA-256 hash do conteúdo factual exibido (prova de integridade do que está na tela).
   // Computado async via Web Crypto a partir de campos estáveis do lote (sem inferências).
@@ -2080,6 +2109,171 @@ export function LotDetailPage({
               orientação inicial, não como avaliação definitiva.
             </p>
           </section>
+
+          {/* ── Lotes parecidos (referência de valor) ─────────────────────────
+              Reusa o embedding salvo do próprio lote — sem gastar embedding por
+              visualização. Some por completo quando não há parecidos honestos. */}
+          {parecidos && parecidos.parecidos.length > 0 ? (
+            <section
+              className="panel"
+              style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
+            >
+              <div>
+                <span className="eyebrow">Referência de valor</span>
+                <h3
+                  style={{
+                    marginTop: "var(--s-1)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--s-2)",
+                  }}
+                >
+                  <Layers aria-hidden="true" size={16} />
+                  Lotes parecidos
+                </h3>
+              </div>
+
+              {/* Resumo: faixa de valor dos parecidos (lance mínimo) */}
+              {parecidos.faixaLanceMinimo ? (
+                <div
+                  style={{
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    borderLeft: "3px solid var(--brand)",
+                    borderRadius: "0 var(--r-md) var(--r-md) 0",
+                    padding: "var(--s-3) var(--s-4)",
+                  }}
+                >
+                  <span className="eyebrow">Lance mínimo de lotes parecidos</span>
+                  <strong
+                    style={{
+                      display: "block",
+                      marginTop: "var(--s-1)",
+                      fontSize: "1.1rem",
+                      fontWeight: 800,
+                      color: "var(--brand-ink)",
+                      fontVariantNumeric: "tabular-nums",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {formatFaixa(parecidos.faixaLanceMinimo)}
+                  </strong>
+                  <span style={{ fontSize: "0.75rem", color: "var(--t-mid)" }}>
+                    Mediana {formatBRL(parecidos.faixaLanceMinimo.medianCents / 100)} ·{" "}
+                    {parecidos.parecidos.length} lote
+                    {parecidos.parecidos.length > 1 ? "s" : ""} semelhante
+                    {parecidos.parecidos.length > 1 ? "s" : ""} já vistos
+                  </span>
+                </div>
+              ) : null}
+
+              {/* Lista de parecidos — clicáveis, navegam para o lote */}
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--s-2)",
+                }}
+              >
+                {parecidos.parecidos.map((p) => {
+                  const sim = p.lot;
+                  const cidade = displayCity(sim.city);
+                  return (
+                    <li key={p.entityId}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectLot?.(sim)}
+                        disabled={!onSelectLot}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "var(--s-3)",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "var(--s-3)",
+                          minHeight: 44,
+                          background: "var(--surface-2)",
+                          border: "1px solid var(--border)",
+                          borderRadius: "var(--r-md)",
+                          color: "var(--t-mid)",
+                          cursor: onSelectLot ? "pointer" : "default",
+                        }}
+                      >
+                        <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span
+                            style={{
+                              fontSize: "0.875rem",
+                              fontWeight: 700,
+                              color: "var(--t-hi)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            Lote {sim.displayNumber}
+                            {sim.category ? ` · ${sim.category}` : ""}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--t-low)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "var(--s-1)",
+                            }}
+                          >
+                            <MapPin aria-hidden="true" size={11} />
+                            {cidade}
+                          </span>
+                        </span>
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "flex-end",
+                            gap: 2,
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.875rem",
+                              fontWeight: 800,
+                              color: "var(--brand-ink)",
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {formatBRL(sim.minimumBidCents / 100)}
+                          </span>
+                          {typeof sim.valorAvaliacaoCents === "number" && sim.valorAvaliacaoCents > 0 ? (
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                color: "var(--t-low)",
+                                fontVariantNumeric: "tabular-nums",
+                              }}
+                            >
+                              aval. {formatBRL(sim.valorAvaliacaoCents / 100)}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
+                Lotes semanticamente parecidos já vistos na base, ordenados por similaridade. Use os
+                valores apenas como referência — cada lote tem estado e condições próprios. Confirme no
+                edital antes de propor.
+              </p>
+            </section>
+          ) : null}
 
           {/* ── Rastreabilidade ───────────────────────────────────────────── */}
           <section className="panel" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)", padding: "var(--s-5)" }}>
