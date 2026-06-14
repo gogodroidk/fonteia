@@ -29,11 +29,12 @@ import { STRIPE_CUSTOMER_PORTAL_URL } from "../../config/stripe";
 import { CouponRedeem } from "../../components/coupon-redeem";
 import { usePlan } from "../../lib/use-plan";
 import type { PlanId } from "../../lib/use-plan";
+import { requestStripePortalUrl } from "../../lib/stripe-portal-client";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 /** Contato de suporte do produto (público, honesto). */
-const SUPPORT_EMAIL = "contato@fontebrasil.online";
+const SUPPORT_EMAIL = "contato@olli.com.br";
 
 /** Rótulo legível do plano vindo do hook usePlan(). */
 function planLabel(plan: PlanId): string {
@@ -437,6 +438,38 @@ interface TabAssinaturaProps {
 }
 
 function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinaturaProps) {
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
+
+  // Abre o Stripe Customer Portal: pede a URL ao backend e redireciona. Degrada com
+  // elegância — sem assinatura/portal indisponível mostra um aviso com o contato.
+  async function handleManageSubscription() {
+    setPortalError(null);
+    setPortalLoading(true);
+    try {
+      const result = await requestStripePortalUrl();
+      if (result.ok) {
+        window.location.href = result.url;
+        return; // navegação em curso; mantém o loading até sair da página
+      }
+      if (result.reason === "sem_assinatura") {
+        setPortalError(
+          `Não encontramos uma assinatura ativa para gerenciar. Se você assinou, fale com ${SUPPORT_EMAIL}.`,
+        );
+      } else if (result.reason === "nao_autenticado") {
+        setPortalError("Sua sessão expirou. Entre novamente para gerenciar a assinatura.");
+      } else {
+        setPortalError(
+          `Não foi possível abrir o portal agora. Tente de novo em instantes ou fale com ${SUPPORT_EMAIL}.`,
+        );
+      }
+    } catch {
+      setPortalError(`Não foi possível abrir o portal agora. Fale com ${SUPPORT_EMAIL}.`);
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
   const badgeLabel = planLoading
     ? "Carregando…"
     : isPro
@@ -512,6 +545,33 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
             <Zap size={15} aria-hidden="true" />
             Assinar agora
           </button>
+        </div>
+      )}
+
+      {/* Gerenciar assinatura: visível para quem tem assinatura (isPro). Abre o
+          Stripe Customer Portal via Edge Function. Se o dono definir um link estático
+          em STRIPE_CUSTOMER_PORTAL_URL, ele vira fallback (abre em nova aba). */}
+      {isPro && !STRIPE_CUSTOMER_PORTAL_URL && (
+        <div style={{ marginBottom: 18 }}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--block"
+            onClick={handleManageSubscription}
+            disabled={portalLoading}
+            aria-busy={portalLoading}
+          >
+            <ExternalLink size={15} aria-hidden="true" />
+            {portalLoading ? "Abrindo portal…" : "Gerenciar assinatura"}
+          </button>
+          {portalError && (
+            <div
+              role="alert"
+              className="small"
+              style={{ marginTop: 8, color: "var(--danger,#b42318)", lineHeight: 1.5 }}
+            >
+              {portalError}
+            </div>
+          )}
         </div>
       )}
 

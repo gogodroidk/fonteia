@@ -205,7 +205,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     path: "/contato",
     title: "Contato — Fonte.ia | fale com a Olli Inteligência Digital",
     description:
-      "Fale com a Fonte.ia: contato@fontebrasil.online. Dados da empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05) e canais de atendimento.",
+      "Fale com a Fonte.ia: contato@olli.com.br. Dados da empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05) e canais de atendimento.",
     Component: ContatoPage,
   },
 ];

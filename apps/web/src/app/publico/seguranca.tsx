@@ -455,13 +455,13 @@ export function SegurancaPage() {
             <LgpdItem label="Direitos do titular">
               Acesso, retificação, portabilidade e exclusão dos seus dados pessoais. Envie solicitação
               para{" "}
-              <a href="mailto:contato@fontebrasil.online" className="link">
-                contato@fontebrasil.online
+              <a href="mailto:contato@olli.com.br" className="link">
+                contato@olli.com.br
               </a>{" "}
               — respondemos em até 15 dias úteis.
             </LgpdItem>
             <LgpdItem label="Encarregado (DPO)">
-              Equipe Fonte.ia · contato@fontebrasil.online
+              Equipe Fonte.ia · contato@olli.com.br
             </LgpdItem>
             <LgpdItem label="Política completa">
               <a href="/privacidade" className="link">
@@ -540,8 +540,8 @@ export function SegurancaPage() {
           >
             <p style={{ margin: 0, fontSize: "14.5px", color: "var(--t-mid)" }}>
               <strong style={{ color: "var(--t-hi)" }}>E-mail: </strong>
-              <a href="mailto:contato@fontebrasil.online" className="link">
-                contato@fontebrasil.online
+              <a href="mailto:contato@olli.com.br" className="link">
+                contato@olli.com.br
               </a>
             </p>
             <p style={{ margin: 0, fontSize: "14.5px", color: "var(--t-mid)" }}>

@@ -483,6 +483,80 @@ async function matchEntities(
   return (await res.json()) as MatchRow[];
 }
 
+/* ─── Rate limit por IP nas rotas de IA ─────────────────────────────────────
+ * Janela fixa de RATE_WINDOW_SECONDS, RATE_LIMIT_PER_WINDOW hits por IP.
+ * Estado fica na tabela public.ai_rate_limits; o incremento atômico é feito pela
+ * RPC SECURITY DEFINER check_ai_rate_limit, chamada com a service_role key
+ * (injetada automaticamente nas Edge Functions). Fail-open: se a RPC falhar ou a
+ * chave não estiver presente, NÃO bloqueia (não derruba a IA por erro de infra). */
+const RATE_LIMIT_PER_WINDOW = 30;
+const RATE_WINDOW_SECONDS = 60;
+
+// Rotas de IA protegidas pelo rate limit (sufixos do pathname). O Raio-X também
+// responde na raiz (/fonteia) — incluímos para cobrir o supabase.functions.invoke.
+const AI_ROUTE_SUFFIXES = [
+  "/ai/chat",
+  "/ai/intent",
+  "/ai/search",
+  "/ia/raio-x",
+  "/ia/edital",
+];
+
+function isAiRoute(pathname: string): boolean {
+  if (AI_ROUTE_SUFFIXES.some((s) => pathname.endsWith(s))) return true;
+  // O Raio-X aceita POST na raiz (/fonteia) — mesmo limite das demais rotas de IA.
+  return pathname.endsWith("/fonteia") || pathname === "/";
+}
+
+// Extrai o IP do cliente: Cloudflare (cf-connecting-ip) tem prioridade; senão o
+// primeiro hop de x-forwarded-for (o cliente real, antes dos proxies).
+function clientIp(request: Request): string {
+  const cf = request.headers.get("cf-connecting-ip");
+  if (cf && cf.trim()) return cf.trim();
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff && xff.trim()) {
+    const first = xff.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+interface RateLimitResult {
+  allowed: boolean;
+  retry_after: number;
+}
+
+// Chama a RPC check_ai_rate_limit (service-role). Fail-open: qualquer erro ⇒ allowed.
+async function checkRateLimit(ip: string): Promise<RateLimitResult> {
+  const base = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!base || !serviceKey) return { allowed: true, retry_after: 0 };
+  try {
+    const res = await fetch(`${base}/rest/v1/rpc/check_ai_rate_limit`, {
+      method: "POST",
+      headers: {
+        apikey: serviceKey,
+        authorization: `Bearer ${serviceKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        p_ip: ip,
+        p_limit: RATE_LIMIT_PER_WINDOW,
+        p_window_seconds: RATE_WINDOW_SECONDS,
+      }),
+    });
+    if (!res.ok) return { allowed: true, retry_after: 0 };
+    const data = (await res.json()) as { allowed?: boolean; retry_after?: number };
+    return {
+      allowed: data.allowed !== false,
+      retry_after: typeof data.retry_after === "number" ? data.retry_after : RATE_WINDOW_SECONDS,
+    };
+  } catch (e) {
+    console.error("[fonteia] rate limit RPC falhou (fail-open):", String(e));
+    return { allowed: true, retry_after: 0 };
+  }
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -495,6 +569,26 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const { pathname } = new URL(request.url);
+
+  // Rate limit por IP: aplica-se ANTES da lógica das rotas de IA (POST). Preserva
+  // 100% as rotas — só intercepta com 429 quem estourar o limite. GET/health passam.
+  if (request.method === "POST" && isAiRoute(pathname)) {
+    const ip = clientIp(request);
+    const rl = await checkRateLimit(ip);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "rate_limited", retry_after: rl.retry_after }),
+        {
+          status: 429,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "retry-after": String(rl.retry_after),
+            ...CORS_HEADERS,
+          },
+        },
+      );
+    }
+  }
 
   // Busca semântica: embeda a query (Gemini) → RPC match_entities (pgvector).
   // Usada pelo omnibox e pela feature "itens parecidos / último valor".

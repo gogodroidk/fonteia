@@ -111,7 +111,7 @@ function LinkRapido({
 export function ContatoPage() {
   const TITLE = "Contato — Fale com a Fonte.ia | Fonte.ia";
   const DESCRIPTION =
-    "Entre em contato com a Fonte.ia por e-mail. Olli Inteligência Digital Sistemas LTDA · CNPJ 65.361.266/0001-05 · contato@fontebrasil.online.";
+    "Entre em contato com a Fonte.ia por e-mail. Olli Inteligência Digital Sistemas LTDA · CNPJ 65.361.266/0001-05 · contato@olli.com.br.";
 
   useSeo({
     title: TITLE,
@@ -275,8 +275,8 @@ export function ContatoPage() {
               icon={<Mail size={20} />}
               titulo="E-mail"
               descricao="Para dúvidas comerciais, suporte técnico, imprensa e parcerias. Respondemos em até 1 dia útil."
-              link="mailto:contato@fontebrasil.online"
-              linkLabel="contato@fontebrasil.online"
+              link="mailto:contato@olli.com.br"
+              linkLabel="contato@olli.com.br"
             />
           </div>
         </section>
@@ -312,7 +312,7 @@ export function ContatoPage() {
                   ["Razão Social", "Olli Inteligência Digital Sistemas LTDA"],
                   ["CNPJ", "65.361.266/0001-05"],
                   ["Natureza", "Sociedade Limitada"],
-                  ["E-mail", "contato@fontebrasil.online"],
+                  ["E-mail", "contato@olli.com.br"],
                 ].map(([label, value]) => (
                   <tr key={label}>
                     <td
@@ -334,7 +334,7 @@ export function ContatoPage() {
                       }}
                     >
                       {label === "E-mail" ? (
-                        <a href="mailto:contato@fontebrasil.online" className="link">
+                        <a href="mailto:contato@olli.com.br" className="link">
                           {value}
                         </a>
                       ) : (
