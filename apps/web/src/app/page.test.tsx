@@ -34,7 +34,7 @@ describe("Fonte.ia web shell", () => {
   it("labels source statuses in product language", () => {
     const html = renderToStaticMarkup(<SourceStatusBadge status="fragile_operational" />);
 
-    expect(html).toContain("operacional fragil");
+    expect(html).toContain("operacional frágil");
   });
 
   it("renders billing plans with checkout CTAs", () => {

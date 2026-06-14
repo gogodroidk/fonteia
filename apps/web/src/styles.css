@@ -1074,7 +1074,7 @@ p { margin: 0; }
   line-height: 1.45;
 }
 .score-factor-positive { background: var(--g-50); border: 1px solid var(--g-200); color: var(--g-700); }
-.score-factor-negative { background: var(--color-error-bg); border: 1px solid #fca5a5; color: var(--color-error); }
+.score-factor-negative { background: var(--color-error-bg); border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--surface)); color: var(--color-error); }
 .score-factor-neutral  { background: var(--n-50); border: 1px solid var(--n-100); color: var(--n-600); }
 .score-factor-icon { font-weight: 900; flex-shrink: 0; width: 16px; text-align: center; }
 .score-factor-positive .score-factor-icon { color: var(--g-600); }

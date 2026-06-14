@@ -340,7 +340,7 @@ export function PostValeAPenaPage() {
               Além do lance, você paga comissão do leiloeiro (geralmente 5%), custos de transporte
               (o bem fica em armazém da Receita, às vezes em outra cidade), eventual armazenagem
               por atraso na retirada e possível manutenção do bem. Uma TV comprada a R$ 400 pode
-              custár R$ 650 quando você a colocar em casa.
+              custar R$ 650 quando você a colocar em casa.
             </P>
 
             <P>

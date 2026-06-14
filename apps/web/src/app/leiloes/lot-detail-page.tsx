@@ -478,7 +478,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                 ) : (
                   <img
                     src={url}
-                    alt=""
+                    alt={`Foto ${i + 1} do lote`}
                     loading="lazy"
                     onError={() => {
                       setBroken((prev) => ({ ...prev, [i]: true }));
@@ -1558,9 +1558,8 @@ export function LotDetailPage({
                     fontSize: "0.88rem",
                     border: "1.5px solid var(--border)",
                     borderRadius: "var(--r-md)",
-                    background: "var(--surface, #fff)",
+                    background: "var(--surface)",
                     color: "var(--t-hi)",
-                    outline: "none",
                   }}
                 />
                 <button

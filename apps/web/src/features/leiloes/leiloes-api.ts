@@ -101,7 +101,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "api",
         lots,
-        message: "Dados carregados pela API Fonte.ia com trilha de fonte e normalizacao do produto.",
+        message: "Dados carregados pela API Fonte.ia com trilha de fonte e normalização do produto.",
       };
     }
   } catch (error) {
@@ -115,7 +115,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
       return {
         source: "supabase",
         lots,
-        message: "Dados carregados do Supabase publico com RLS e evidencias da Receita Federal.",
+        message: "Dados carregados do Supabase público com RLS e evidências da Receita Federal.",
         lastSyncedAt,
         errors,
       };
@@ -127,7 +127,7 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
   return {
     source: "empty",
     lots: [],
-    message: "Nenhum lote disponivel no momento. A coleta dos leiloes da Receita roda periodicamente.",
+    message: "Nenhum lote disponível no momento. A coleta dos leilões da Receita roda periodicamente.",
     errors,
   };
 }
@@ -157,7 +157,7 @@ export async function getLeilaoLotById(lotId: string, fetcher: typeof fetch = fe
     errors: [...errors, ...(result.errors ?? [])],
     message: lot
       ? result.message
-      : `Nao encontramos o lote ${lotId} nas fontes carregadas agora.`,
+      : `Não encontramos o lote ${lotId} nas fontes carregadas agora.`,
   };
 }
 

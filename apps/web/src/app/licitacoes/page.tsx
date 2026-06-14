@@ -397,7 +397,6 @@ function FilterSelect<T extends string>({
           fontSize: 13,
           fontWeight: 600,
           cursor: "pointer",
-          outline: "none",
           maxWidth: 180,
         }}
       >
