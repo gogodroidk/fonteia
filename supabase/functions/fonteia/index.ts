@@ -509,7 +509,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       const obj = parseLooseJson(result.answer);
       // Fallback que nunca quebra: se o JSON vier inválido, devolve a resposta crua.
       const understanding = asStringOrNull(obj?.["understanding"]) ?? `Você pediu: ${query}`;
-      const answer = asStringOrNull(obj?.["answer"]) ?? result.answer.trim() || "Não consegui interpretar agora.";
+      const answer = asStringOrNull(obj?.["answer"]) ?? (result.answer.trim() || "Não consegui interpretar agora.");
       return json({
         understanding,
         suggestedRoute: asStringOrNull(obj?.["suggestedRoute"]),
