@@ -22,11 +22,24 @@
  *   ANTHROPIC_MODEL     claude-opus-4-8 (opcional; default abaixo)
  */
 
+import {
+  AiNotConfiguredError,
+  createAiRouter,
+  FONTEIA_ASSISTANT_SYSTEM_PROMPT,
+  resolveIntent,
+  type AiEnv,
+  type AiMessage,
+} from "@fonteia/ai";
+
 // ---------------------------------------------------------------------------
 // Tipos do ambiente e do handler (sem @cloudflare/workers-types — so Web APIs)
 // ---------------------------------------------------------------------------
 
 export interface Env {
+  // IA — Gemini (Google) é o padrão gratuito; Anthropic é o fallback/reforço.
+  GEMINI_API_KEY?: string;
+  GEMINI_MODEL?: string;
+  GEMINI_MODEL_PRO?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
 }
@@ -226,10 +239,74 @@ function json(body: unknown, status = 200, corsHeaders: Record<string, string> =
 }
 
 // ---------------------------------------------------------------------------
-// IA — analise de um lote com Claude (Anthropic Messages API, fetch direto)
+// IA — roteador multimodelo (Gemini gratuito + Claude fallback) via @fonteia/ai
 // ---------------------------------------------------------------------------
 
-const DEFAULT_MODEL = "claude-opus-4-8";
+// O Env do Worker já é compatível com o AiEnv do pacote (mesmos nomes de var),
+// então passamos `env` direto ao roteador.
+function aiEnv(env: Env): AiEnv {
+  return {
+    GEMINI_API_KEY: env.GEMINI_API_KEY,
+    GEMINI_MODEL: env.GEMINI_MODEL,
+    GEMINI_MODEL_PRO: env.GEMINI_MODEL_PRO,
+    ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL: env.ANTHROPIC_MODEL,
+  };
+}
+
+/** true se PELO MENOS um provedor de IA está configurado (Gemini ou Claude). */
+function iaEnabled(env: Env): boolean {
+  return Boolean(
+    (env.GEMINI_API_KEY && env.GEMINI_API_KEY.trim()) ||
+      (env.ANTHROPIC_API_KEY && env.ANTHROPIC_API_KEY.trim()),
+  );
+}
+
+// Cap de tamanho de input — protege contra injeção de prompt longa / abuso de tokens.
+const MAX_INPUT_CHARS = 2000;
+// Quantidade máxima de turnos aceitos no /ai/chat (evita payloads gigantes).
+const MAX_CHAT_MESSAGES = 24;
+
+/** Apara e limita um texto livre a MAX_INPUT_CHARS. Retorna undefined se vazio. */
+function capText(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed.slice(0, MAX_INPUT_CHARS);
+}
+
+/**
+ * Valida e normaliza o array `messages` do /ai/chat: mantém só itens com role
+ * 'user'/'assistant' e conteúdo string, aplica cap por mensagem e limita a
+ * quantidade total (pegando os mais recentes).
+ */
+function sanitizeMessages(raw: unknown): AiMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AiMessage[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const role = (item as { role?: unknown }).role;
+    const content = (item as { content?: unknown }).content;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") continue;
+    const capped = capText(content);
+    if (!capped) continue;
+    out.push({ role, content: capped });
+  }
+  return out.slice(-MAX_CHAT_MESSAGES);
+}
+
+/** Resposta 503 honesta quando nenhum provedor de IA está configurado. */
+function iaNotConfigured(cors: Record<string, string>): Response {
+  return json(
+    {
+      error: "ia_nao_configurada",
+      message:
+        "O assistente de IA ainda nao foi ativado. Configure o secret GEMINI_API_KEY (ou ANTHROPIC_API_KEY) no Worker.",
+    },
+    503,
+    cors,
+  );
+}
 
 const FONTEIA_SYSTEM_PROMPT = [
   "Voce e o assistente da Fonte.ia, especialista em leiloes da Receita Federal do Brasil.",
@@ -249,26 +326,6 @@ const FONTEIA_SYSTEM_PROMPT = [
   "**Valor de partida** — o lance minimo informado, em reais.",
   "**Pontos de atencao** — riscos reais e o que SEMPRE conferir no edital oficial antes de dar lance.",
 ].join("\n");
-
-interface AnthropicContentBlock {
-  type: string;
-  text?: string;
-}
-
-interface AnthropicMessageResponse {
-  content?: AnthropicContentBlock[];
-  stop_reason?: string;
-  error?: { message?: string };
-}
-
-function modelSupportsAdaptiveThinking(model: string): boolean {
-  return (
-    model.startsWith("claude-opus-4-7") ||
-    model.startsWith("claude-opus-4-8") ||
-    model.startsWith("claude-sonnet-4-6") ||
-    model.startsWith("claude-fable-5")
-  );
-}
 
 function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
   const reais = (lot.minimumBidCents / 100).toLocaleString("pt-BR", {
@@ -292,67 +349,29 @@ function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
   ].join("\n");
 }
 
-async function analyzeLotWithClaude(
+/**
+ * Raio-X de um lote. Roteado: tarefa 'raio-x' prefere Claude (forte) e cai para
+ * Gemini se a chave da Anthropic faltar. Mantém o comportamento original do
+ * endpoint (mesmo system prompt e formato de resposta).
+ */
+async function analyzeLot(
   lot: ReceitaLeilaoLot,
   question: string | undefined,
   env: Env,
 ): Promise<{ answer: string; model: string }> {
-  const apiKey = env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new IaNotConfiguredError();
-  }
-
-  const model = (env.ANTHROPIC_MODEL && env.ANTHROPIC_MODEL.trim()) || DEFAULT_MODEL;
+  const router = createAiRouter(aiEnv(env));
 
   const userContent = question
     ? `Dados do lote:\n${lotFactsForPrompt(lot)}\n\nPergunta do usuario: ${question}`
     : `Faca o Raio-X deste lote:\n${lotFactsForPrompt(lot)}`;
 
-  const body: Record<string, unknown> = {
-    model,
-    max_tokens: 1500,
+  const result = await router.generate({
+    task: "raio-x",
     system: FONTEIA_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userContent }],
-  };
-
-  if (modelSupportsAdaptiveThinking(model)) {
-    body.thinking = { type: "adaptive" };
-  }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
   });
 
-  const data = (await response.json()) as AnthropicMessageResponse;
-
-  if (!response.ok) {
-    throw new Error(`Anthropic respondeu ${response.status}: ${data.error?.message ?? "erro desconhecido"}`);
-  }
-
-  const answer = (data.content ?? [])
-    .filter((block) => block.type === "text" && typeof block.text === "string")
-    .map((block) => block.text as string)
-    .join("\n")
-    .trim();
-
-  if (!answer) {
-    throw new Error("A IA nao retornou texto utilizavel.");
-  }
-
-  return { answer, model };
-}
-
-class IaNotConfiguredError extends Error {
-  constructor() {
-    super("IA nao configurada");
-    this.name = "IaNotConfiguredError";
-  }
+  return { answer: result.text, model: result.model };
 }
 
 // ---------------------------------------------------------------------------
@@ -366,8 +385,8 @@ const handler: ExportedHandler<Env> = {
     const requestOrigin = request.headers.get("origin");
 
     if (request.method === "OPTIONS") {
-      // Para preflight da rota de IA, retorna CORS restrito; para demais, público.
-      const isIaRoute = pathname === "/ia/raio-x";
+      // Para preflight das rotas de IA, retorna CORS restrito; para demais, público.
+      const isIaRoute = pathname === "/ia/raio-x" || pathname.startsWith("/ai/");
       const headers = isIaRoute ? getCorsHeaders(requestOrigin) : CORS_HEADERS_PUBLIC;
       return new Response(null, { status: 204, headers });
     }
@@ -377,7 +396,7 @@ const handler: ExportedHandler<Env> = {
       return json({
         service: "fonteia-api",
         status: "ok",
-        iaEnabled: Boolean(env.ANTHROPIC_API_KEY),
+        iaEnabled: iaEnabled(env),
         time: new Date().toISOString(),
       });
     }
@@ -441,7 +460,7 @@ const handler: ExportedHandler<Env> = {
         : undefined;
 
       try {
-        const { answer, model } = await analyzeLotWithClaude(parsed.lot, question, env);
+        const { answer, model } = await analyzeLot(parsed.lot, question, env);
         return json({
           answer,
           model,
@@ -449,19 +468,78 @@ const handler: ExportedHandler<Env> = {
             "Analise gerada por IA a partir dos dados publicos da Receita. Confirme tudo no edital oficial antes de dar lance.",
         }, 200, iaCors);
       } catch (error) {
-        if (error instanceof IaNotConfiguredError) {
-          return json(
-            {
-              error: "ia_nao_configurada",
-              message:
-                "O assistente de IA ainda nao foi ativado. Configure o secret ANTHROPIC_API_KEY no Worker.",
-            },
-            503,
-            iaCors,
-          );
+        if (error instanceof AiNotConfiguredError) {
+          return iaNotConfigured(iaCors);
         }
         console.error("[api] /ia/raio-x failed:", error);
         return json({ error: "Falha ao gerar a analise." }, 502, iaCors);
+      }
+    }
+
+    // POST /ai/chat  { messages: AiMessage[], context?: string }
+    // Chat contextual: roteia 'chat-rapido' (Gemini flash -> Claude).
+    if (pathname === "/ai/chat" && request.method === "POST") {
+      const iaCors = getCorsHeaders(requestOrigin);
+
+      let parsed: { messages?: unknown; context?: unknown };
+      try {
+        parsed = (await request.json()) as { messages?: unknown; context?: unknown };
+      } catch {
+        return json({ error: "Corpo invalido: envie JSON com { messages }." }, 400, iaCors);
+      }
+
+      const messages = sanitizeMessages(parsed.messages);
+      if (messages.length === 0) {
+        return json({ error: "Campo 'messages' ausente ou vazio." }, 400, iaCors);
+      }
+      const context = capText(typeof parsed.context === "string" ? parsed.context : undefined);
+
+      try {
+        const router = createAiRouter(aiEnv(env));
+        const result = await router.generate({
+          task: "chat-rapido",
+          system: FONTEIA_ASSISTANT_SYSTEM_PROMPT,
+          context,
+          messages,
+        });
+        return json({ answer: result.text, model: result.model }, 200, iaCors);
+      } catch (error) {
+        if (error instanceof AiNotConfiguredError) {
+          return iaNotConfigured(iaCors);
+        }
+        console.error("[api] /ai/chat failed:", error);
+        return json({ error: "Falha ao responder." }, 502, iaCors);
+      }
+    }
+
+    // POST /ai/intent  { query: string, context?: string }
+    // Omnibox: devolve intencao estruturada {understanding, suggestedRoute, suggestedAction, answer}.
+    if (pathname === "/ai/intent" && request.method === "POST") {
+      const iaCors = getCorsHeaders(requestOrigin);
+
+      let parsed: { query?: unknown; context?: unknown };
+      try {
+        parsed = (await request.json()) as { query?: unknown; context?: unknown };
+      } catch {
+        return json({ error: "Corpo invalido: envie JSON com { query }." }, 400, iaCors);
+      }
+
+      const query = capText(typeof parsed.query === "string" ? parsed.query : undefined);
+      if (!query) {
+        return json({ error: "Campo 'query' ausente ou vazio." }, 400, iaCors);
+      }
+      const context = capText(typeof parsed.context === "string" ? parsed.context : undefined);
+
+      try {
+        const router = createAiRouter(aiEnv(env));
+        const intent = await resolveIntent(router, { query, context });
+        return json(intent, 200, iaCors);
+      } catch (error) {
+        if (error instanceof AiNotConfiguredError) {
+          return iaNotConfigured(iaCors);
+        }
+        console.error("[api] /ai/intent failed:", error);
+        return json({ error: "Falha ao interpretar." }, 502, iaCors);
       }
     }
 

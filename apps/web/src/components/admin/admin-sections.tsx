@@ -1,0 +1,549 @@
+// Seções do Painel Admin. Componentes de apresentação (dark-safe, design-system).
+import { useState, type CSSProperties, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  Check,
+  Database,
+  Layers,
+  RefreshCw,
+  ShieldCheck,
+  User as UserIcon,
+  X,
+} from "lucide-react";
+import {
+  setModuleAccess,
+  setUserRole,
+  type AdminModule,
+  type AdminOverview,
+  type AdminSource,
+  type AdminSourceRow,
+  type AdminUser,
+  type AdminUsersResponse,
+} from "./admin-api";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("pt-BR");
+}
+
+function fmtDateTime(value: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+const KIND_LABELS: Record<string, string> = {
+  auction_lot: "Lotes de leilão",
+  bidding_opportunity: "Licitações",
+};
+function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind;
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  ok: "badge--ok",
+  success: "badge--ok",
+  connected: "badge--ok",
+  active: "badge--ok",
+  running: "badge--info",
+  integrating: "badge--info",
+  fragile_operational: "badge--warn",
+  partial: "badge--warn",
+  open_no_api: "badge--neutral",
+  locked: "badge--neutral",
+  error: "badge--danger",
+  failed: "badge--danger",
+  deprecated: "badge--danger",
+};
+function statusBadgeClass(status: string): string {
+  return STATUS_BADGE[status] ?? "badge--neutral";
+}
+
+// ─── StatCard ──────────────────────────────────────────────────────────────────
+
+export function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  icon: typeof Database;
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="panel" style={{ padding: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div className="row" style={{ gap: 9 }}>
+        <span
+          className="inset"
+          aria-hidden="true"
+          style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <Icon size={16} style={{ color: accent ? "var(--accent-ink)" : "var(--brand-ink)" }} />
+        </span>
+        <span className="tiny" style={{ color: "var(--t-mid)", fontWeight: 600 }}>{label}</span>
+      </div>
+      <div className="display num" style={{ fontSize: 28, color: "var(--t-hi)" }}>{value}</div>
+      {hint ? <div className="tiny muted">{hint}</div> : null}
+    </div>
+  );
+}
+
+// ─── Seção: Visão geral ─────────────────────────────────────────────────────────
+
+export function OverviewSection({ data }: { data: AdminOverview }) {
+  const connectedSources = data.sources.filter(
+    (s) => s.status === "connected" || s.status === "fragile_operational",
+  ).length;
+  const activeModules = data.modules.filter((m) => m.status === "active").length;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+          gap: 14,
+        }}
+      >
+        <StatCard icon={UserIcon} label="Usuários" value={fmtNum(data.users.total)} hint={`${data.users.admins} admin(s)`} />
+        <StatCard icon={Database} label="Registros (entities)" value={fmtNum(data.entities.total)} accent />
+        <StatCard icon={Layers} label="Módulos ativos" value={`${activeModules}/${data.modules.length}`} />
+        <StatCard icon={RefreshCw} label="Fontes conectadas" value={`${connectedSources}/${data.sources.length}`} />
+        <StatCard icon={Database} label="Raw records" value={fmtNum(data.counts["raw_records"] ?? 0)} />
+        <StatCard icon={RefreshCw} label="Coletas (runs)" value={fmtNum(data.counts["source_runs"] ?? 0)} />
+        <StatCard icon={UserIcon} label="Assinaturas" value={fmtNum(data.counts["subscriptions"] ?? 0)} />
+        <StatCard icon={AlertTriangle} label="Alertas de usuário" value={fmtNum(data.counts["user_alerts"] ?? 0)} />
+      </div>
+
+      <div className="tiny muted" style={{ textAlign: "right" }}>
+        Atualizado em {fmtDateTime(data.generatedAt)}
+      </div>
+    </div>
+  );
+}
+
+// ─── Seção: Dados (entities por kind + últimas coletas) ──────────────────────────
+
+export function DataSection({ data }: { data: AdminOverview }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* Entities por kind */}
+      <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div className="h3">Dados por tipo</div>
+          <span className="badge badge--neutral">{fmtNum(data.entities.total)} no total</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {data.entities.byKind.length === 0 ? (
+            <div className="muted small" style={{ padding: 20 }}>Nenhum dado coletado ainda.</div>
+          ) : (
+            data.entities.byKind.map((k, i) => {
+              const pct = data.entities.total > 0 ? Math.round((k.count / data.entities.total) * 100) : 0;
+              return (
+                <div
+                  key={k.kind}
+                  style={{
+                    padding: "13px 20px",
+                    borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
+                  }}
+                >
+                  <div className="row between">
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--t-hi)" }}>{kindLabel(k.kind)}</span>
+                    <span className="tiny" style={{ color: "var(--t-mid)", fontWeight: 600 }}>
+                      {fmtNum(k.count)} · {pct}%
+                    </span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, background: "var(--surface-2)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${pct}%`,
+                        height: "100%",
+                        borderRadius: 999,
+                        background: "linear-gradient(90deg,var(--brand),var(--accent))",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* Últimas coletas */}
+      <RunsTable runs={data.recentRuns} />
+    </div>
+  );
+}
+
+function RunsTable({ runs }: { runs: AdminSourceRow[] }) {
+  return (
+    <div className="panel" style={{ overflow: "hidden" }}>
+      <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+        <div className="h3">Últimas coletas</div>
+        <span className="tiny muted">source_runs</span>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "inherit" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border)" }}>
+              {(["Fonte", "Status", "Início", "Vistos", "Inseridos"] as const).map((h) => (
+                <th key={h} style={thStyle}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {runs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="muted small" style={{ padding: 20 }}>Nenhuma coleta registrada.</td>
+              </tr>
+            ) : (
+              runs.map((run, i) => (
+                <tr key={run.id} style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
+                  <td style={tdStyle}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-hi)" }}>{run.source_id}</span>
+                    {run.error_message ? (
+                      <div className="tiny" style={{ color: "var(--danger)", marginTop: 2 }}>{run.error_message}</div>
+                    ) : null}
+                  </td>
+                  <td style={tdStyle}>
+                    <span className={`badge ${statusBadgeClass(run.status)}`}>{run.status}</span>
+                  </td>
+                  <td style={tdStyle}><span className="tiny muted">{fmtDateTime(run.started_at)}</span></td>
+                  <td style={tdStyle}><span className="tiny" style={{ color: "var(--t-mid)" }}>{fmtNum(run.records_seen)}</span></td>
+                  <td style={tdStyle}><span className="tiny" style={{ color: "var(--t-mid)" }}>{fmtNum(run.records_inserted)}</span></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Seção: Fontes & Módulos ─────────────────────────────────────────────────────
+
+export function SourcesModulesSection({
+  sources,
+  modules,
+}: {
+  sources: AdminSource[];
+  modules: AdminModule[];
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div className="h3">Fontes de dados</div>
+          <span className="tiny muted">{sources.length} cadastradas</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "inherit" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                {(["Fonte", "Status", "Confiabilidade", "Módulos"] as const).map((h) => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sources.map((s, i) => (
+                <tr key={s.id} style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
+                  <td style={tdStyle}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-hi)" }}>{s.name}</span>
+                    <div className="tiny muted" style={{ marginTop: 2 }}>{s.id}</div>
+                  </td>
+                  <td style={tdStyle}><span className={`badge ${statusBadgeClass(s.status)}`}>{s.status}</span></td>
+                  <td style={tdStyle}><span className="tiny" style={{ color: "var(--t-mid)" }}>{s.reliability}</span></td>
+                  <td style={tdStyle}>
+                    <span className="tiny" style={{ color: "var(--t-mid)" }}>{(s.modules ?? []).join(", ") || "—"}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div className="h3">Módulos da plataforma</div>
+          <span className="tiny muted">{modules.length} módulos</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px,1fr))", gap: 12, padding: 16 }}>
+          {modules.map((m) => (
+            <div key={m.id} className="inset" style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="row between">
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t-hi)" }}>{m.label}</span>
+                <span className={`badge ${statusBadgeClass(m.status)}`}>{m.status}</span>
+              </div>
+              {m.target_persona ? (
+                <div className="tiny muted" style={{ lineHeight: 1.5 }}>{m.target_persona}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Seção: Usuários ─────────────────────────────────────────────────────────────
+
+export function UsersSection({
+  data,
+  currentUserId,
+  onChanged,
+}: {
+  data: AdminUsersResponse;
+  currentUserId: string | null;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Estado otimista local sobreposto aos dados do servidor.
+  const [roleOverride, setRoleOverride] = useState<Record<string, "user" | "admin">>({});
+  const [accessOverride, setAccessOverride] = useState<Record<string, boolean>>({});
+
+  const moduleList = data.modules;
+
+  async function handleRole(user: AdminUser, role: "user" | "admin") {
+    setError(null);
+    setBusy(`role:${user.id}`);
+    const prev = roleOverride[user.id] ?? user.role;
+    setRoleOverride((o) => ({ ...o, [user.id]: role }));
+    try {
+      await setUserRole(user.id, role);
+      onChanged();
+    } catch (e) {
+      setRoleOverride((o) => ({ ...o, [user.id]: prev }));
+      setError(e instanceof Error ? e.message : "Falha ao trocar o papel.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleAccess(user: AdminUser, moduleId: string, allowed: boolean) {
+    setError(null);
+    const key = `${user.id}:${moduleId}`;
+    setBusy(`access:${key}`);
+    setAccessOverride((o) => ({ ...o, [key]: allowed }));
+    try {
+      await setModuleAccess(user.id, moduleId, allowed);
+      onChanged();
+    } catch (e) {
+      setAccessOverride((o) => {
+        const next = { ...o };
+        delete next[key];
+        return next;
+      });
+      setError(e instanceof Error ? e.message : "Falha ao salvar acesso.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function effectiveRole(user: AdminUser): "user" | "admin" {
+    return roleOverride[user.id] ?? user.role;
+  }
+
+  function moduleAllowed(user: AdminUser, moduleId: string): boolean {
+    const key = `${user.id}:${moduleId}`;
+    if (key in accessOverride) return accessOverride[key] as boolean;
+    const found = user.module_access.find((a) => a.module_id === moduleId);
+    return found?.allowed ?? false;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {error ? (
+        <div
+          className="panel"
+          role="alert"
+          style={{
+            padding: "12px 16px",
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            borderColor: "color-mix(in srgb,var(--danger) 35%,var(--border))",
+          }}
+        >
+          <AlertTriangle size={16} style={{ color: "var(--danger)", flexShrink: 0 }} aria-hidden="true" />
+          <span className="small" style={{ color: "var(--t-hi)" }}>{error}</span>
+          <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setError(null)} aria-label="Fechar" style={{ marginLeft: "auto" }}>
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
+      <div className="panel" style={{ overflow: "hidden" }}>
+        <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+          <div className="h3">Usuários</div>
+          <span className="tiny muted">{data.total} no total</span>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {data.users.map((user, i) => {
+            const role = effectiveRole(user);
+            const isSelf = user.id === currentUserId;
+            return (
+              <div
+                key={user.id}
+                style={{
+                  padding: "16px 20px",
+                  borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                {/* linha de topo: identidade + papel */}
+                <div className="row between" style={{ gap: 12, flexWrap: "wrap" }}>
+                  <div className="row" style={{ gap: 11, minWidth: 0 }}>
+                    <span className="avatar" style={{ width: 38, height: 38, fontSize: 14 }} aria-hidden="true">
+                      {(user.full_name ?? user.email ?? "?").trim().charAt(0).toUpperCase()}
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="row" style={{ gap: 7 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t-hi)" }}>
+                          {user.full_name ?? "Sem nome"}
+                        </span>
+                        {role === "admin" ? (
+                          <span className="badge badge--accent" style={{ gap: 4 }}>
+                            <ShieldCheck size={11} aria-hidden="true" /> admin
+                          </span>
+                        ) : null}
+                        {isSelf ? <span className="badge badge--neutral">você</span> : null}
+                      </div>
+                      <div className="tiny muted" style={{ marginTop: 2, wordBreak: "break-all" }}>
+                        {user.email ?? "—"}
+                        {user.provider ? ` · ${user.provider}` : ""}
+                      </div>
+                    </div>
+                  </div>
+
+                  <RoleToggle
+                    role={role}
+                    disabled={busy === `role:${user.id}` || (isSelf && role === "admin")}
+                    onChange={(r) => void handleRole(user, r)}
+                  />
+                </div>
+
+                {/* acessos por módulo */}
+                <div>
+                  <div className="tiny" style={{ color: "var(--t-low)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+                    Acesso a módulos
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {moduleList.map((m) => {
+                      const allowed = moduleAllowed(user, m.id);
+                      const key = `${user.id}:${m.id}`;
+                      const isBusy = busy === `access:${key}`;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleAccess(user, m.id, !allowed)}
+                          className="badge"
+                          style={{
+                            cursor: isBusy ? "wait" : "pointer",
+                            border: "1px solid var(--border)",
+                            padding: "6px 10px",
+                            fontSize: 12,
+                            background: allowed ? "color-mix(in srgb,var(--accent) 16%,transparent)" : "var(--surface-2)",
+                            color: allowed ? "var(--accent-ink)" : "var(--t-mid)",
+                            opacity: isBusy ? 0.6 : 1,
+                          }}
+                          aria-pressed={allowed}
+                        >
+                          {allowed ? <Check size={11} aria-hidden="true" /> : <X size={11} aria-hidden="true" />}
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoleToggle({
+  role,
+  disabled,
+  onChange,
+}: {
+  role: "user" | "admin";
+  disabled: boolean;
+  onChange: (role: "user" | "admin") => void;
+}) {
+  const options: Array<{ value: "user" | "admin"; label: string }> = [
+    { value: "user", label: "Usuário" },
+    { value: "admin", label: "Admin" },
+  ];
+  return (
+    <div
+      className="inset"
+      role="group"
+      aria-label="Papel do usuário"
+      style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: 10, flexShrink: 0 }}
+    >
+      {options.map((opt) => {
+        const active = role === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={disabled || active}
+            onClick={() => onChange(opt.value)}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 8,
+              border: 0,
+              cursor: disabled || active ? "default" : "pointer",
+              font: "inherit",
+              fontSize: 12.5,
+              fontWeight: active ? 700 : 500,
+              background: active ? "var(--surface)" : "transparent",
+              color: active ? "var(--brand-ink)" : "var(--t-mid)",
+              boxShadow: active ? "var(--shadow-sm, 0 1px 2px rgba(0,0,0,.12))" : "none",
+              transition: "background .15s,color .15s",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── estilos de tabela compartilhados ────────────────────────────────────────────
+
+const thStyle: CSSProperties = {
+  padding: "11px 20px",
+  textAlign: "left",
+  fontSize: 11,
+  fontWeight: 700,
+  color: "var(--t-low)",
+  letterSpacing: "0.07em",
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: CSSProperties = { padding: "13px 20px", verticalAlign: "top" };
