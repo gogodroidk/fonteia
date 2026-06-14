@@ -32,6 +32,8 @@ import { OnboardingPage } from "./app/onboarding/page";
 import type { LegalKind } from "./app/legal/page";
 import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
+import { IntelligenceOmnibox } from "./components/ai/IntelligenceOmnibox";
+import { ContextChat } from "./components/ai/ContextChat";
 
 // --- ErrorBoundary: captura erros de chunks lazy e renderiza fallback amigável ---
 interface ErrorBoundaryState {
@@ -259,7 +261,7 @@ interface AppShellProps {
 }
 
 function AppShell({ path, navigate }: AppShellProps) {
-  const { user, signOut } = useAuth();
+  const { user, session, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
   const [isLoadingLot, setIsLoadingLot] = useState(false);
@@ -304,17 +306,8 @@ function AppShell({ path, navigate }: AppShellProps) {
     };
   }, [lotIdFromPath, route, selectedLot?.id]);
 
-  // Global ⌘K / Ctrl+K shortcut → focus topbar search input
-  useEffect(() => {
-    function handleGlobalKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        topbarInputRef.current?.focus();
-      }
-    }
-    window.addEventListener("keydown", handleGlobalKey);
-    return () => window.removeEventListener("keydown", handleGlobalKey);
-  }, []);
+  // ⌘K / Ctrl+K agora abre o IntelligenceOmnibox (atalho próprio do componente).
+  // O antigo handler que focava a busca textual foi removido para não competir.
 
   function go(to: string) {
     navigate(to);
@@ -336,6 +329,18 @@ function AppShell({ path, navigate }: AppShellProps) {
   const avatarUrl = user?.user_metadata?.["avatar_url"] as string | undefined;
 
   const { helpOn, toggleHelp } = useHelpMode();
+
+  // Contexto repassado à IA (omnibox + chat): tela atual + lote aberto, se houver.
+  const aiAccessToken = session?.access_token;
+  const aiContext = (() => {
+    const parts = [`Tela atual: ${ROUTE_TITLES[route]} (${path})`];
+    if (route === "lot-detail" && selectedLot) {
+      parts.push(
+        `Lote aberto: ${selectedLot.lotNumber} em ${selectedLot.city}, órgão ${selectedLot.agency}, edital ${selectedLot.edital}.`,
+      );
+    }
+    return parts.join(" ");
+  })();
 
   const navItem = (item: (typeof NAV)[number], inDrawer: boolean): ReactNode => {
     const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
@@ -481,11 +486,21 @@ function AppShell({ path, navigate }: AppShellProps) {
                     aria-label="Buscar lote, órgão ou edital"
                     style={{ fontSize: 13.5 }}
                   />
-                  <span className="kbd" aria-hidden="true">⌘K</span>
                 </div>
               </HelpHint>
             </div>
             <div className="shell-actions">
+              {/* Botão de inteligência (omnibox + paleta ⌘K) — IA da Fonte.ia */}
+              <HelpHint id="topbar.ai">
+                <div className="shell-omnibox">
+                  <IntelligenceOmnibox
+                    context={aiContext}
+                    {...(aiAccessToken ? { accessToken: aiAccessToken } : {})}
+                    placeholder="Inteligência…"
+                    onNavigate={go}
+                  />
+                </div>
+              </HelpHint>
               <HelpHint id="topbar.theme">
                 <ThemeToggle />
               </HelpHint>
@@ -582,6 +597,12 @@ function AppShell({ path, navigate }: AppShellProps) {
         </main>
       </div>
 
+      {/* Assistente flutuante (chat contextual). No mobile a IA fica no FAB "Perguntar"
+          abaixo (evita dois botões flutuantes empilhados), então escondemos este wrapper. */}
+      <div className="shell-chat">
+        <ContextChat context={aiContext} {...(aiAccessToken ? { accessToken: aiAccessToken } : {})} />
+      </div>
+
       {/* floating "Perguntar" button — mobile only, sits above the bottom nav */}
       {route !== "search" && (
         <button
@@ -646,6 +667,9 @@ function AppShell({ path, navigate }: AppShellProps) {
         }
         .shell-search{flex:1 1 auto;max-width:420px;margin-left:auto;min-width:0}
         .shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+        /* Omnibox de IA na topbar: largura compacta de botão, cresce um pouco no desktop */
+        .shell-omnibox{flex:0 0 auto;width:200px;max-width:34vw}
+        .shell-omnibox>*{width:100%}
         .shell-upgrade-label{display:inline}
         .shell-avatar{width:36px;height:36px;font-size:13px;flex:0 0 auto}
 
@@ -673,6 +697,9 @@ function AppShell({ path, navigate }: AppShellProps) {
           .shell-sidebar-desktop{display:none!important}
           .shell-burger{display:inline-flex!important}
           .shell-search{display:none}
+          /* mobile: IA fica no FAB "Perguntar" (abaixo). Esconde omnibox e chat flutuante. */
+          .shell-omnibox{display:none}
+          .shell-chat{display:none}
           /* clear the fixed bottom nav so content is never hidden behind it */
           .shell-content{padding-bottom:calc(64px + env(safe-area-inset-bottom) + 16px)}
           .shell-bottomnav{

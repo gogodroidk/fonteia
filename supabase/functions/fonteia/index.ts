@@ -81,6 +81,39 @@ const EDITAL_SYSTEM_PROMPT = [
   "Formato (markdown curto): **Resumo** (2-3 linhas) · **Quem pode participar** · **Datas e prazos** (visitação, propostas, pagamento, retirada) · **Como pagar** · **Riscos e pontos de atenção** · **O que conferir antes de dar lance**.",
 ].join("\n");
 
+const CHAT_SYSTEM_PROMPT = [
+  "Você é o assistente geral da Fonte.ia, plataforma brasileira de inteligência de dados públicos (foco atual: leilões da Receita Federal e licitações).",
+  "Responda em português do Brasil, claro e direto, sem jargão e SEM inventar fatos.",
+  "",
+  "Regras invioláveis:",
+  "- Nunca invente número, valor, prazo, lei ou característica de lote/edital. Se não souber, diga que precisa ser verificado na fonte oficial ou no edital.",
+  "- Não dê parecer jurídico, contábil, fiscal ou financeiro definitivo. Aponte riscos e o que conferir.",
+  "- Não prometa lucro nem garanta resultado. Não automatize lances nem login gov.br/e-CAC.",
+  "- Use o contexto da tela atual, quando fornecido, para responder melhor — mas não suponha dados que ele não traga.",
+  "- Seja conciso (em geral até ~180 palavras). Use markdown leve só quando ajudar.",
+].join("\n");
+
+const INTENT_SYSTEM_PROMPT = [
+  "Você é o roteador de intenções da Fonte.ia. O usuário digita uma frase no campo de busca inteligente e você decide para onde levá-lo e o que responder.",
+  "Responda APENAS com um objeto JSON válido (sem markdown, sem cercas de código, sem texto fora do JSON), com exatamente estas chaves:",
+  '{ "understanding": string, "suggestedRoute": string|null, "suggestedAction": string|null, "answer": string }',
+  "",
+  "Rotas válidas do app (escolha no máximo uma, ou null se nenhuma servir):",
+  "- /app/lotes — lista de lotes de leilão da Receita Federal",
+  "- /app/licitacoes — licitações públicas",
+  "- /app/alertas — alertas e avisos salvos pelo usuário",
+  "- /app/buscar — busca/pergunta livre sobre os dados",
+  "- /app/relatorios — relatórios e exportações",
+  "- /app/conta — conta, perfil e plano do usuário",
+  "",
+  "Diretrizes:",
+  "- 'understanding': uma frase curta (pt-BR) do que o usuário quer.",
+  "- 'suggestedRoute': a rota mais adequada da lista acima, ou null.",
+  "- 'suggestedAction': rótulo curto do botão (ex.: 'Ver lotes', 'Abrir licitações'), ou null se não houver rota.",
+  "- 'answer': resposta curta e útil em pt-BR (1-3 frases), sem inventar dados.",
+  "- Nunca invente fatos. Se o usuário pedir um dado específico, oriente onde encontrá-lo no app.",
+].join("\n");
+
 const FONTEIA_SYSTEM_PROMPT = [
   "Você é o assistente da Fonte.ia, especialista em leilões da Receita Federal do Brasil.",
   "Explique para um comprador leigo, em português claro e direto, SEM jargão.",
@@ -128,15 +161,68 @@ function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
 }
 
 async function callGemini(model: string, apiKey: string, userText: string): Promise<Response> {
+  return await callGeminiRaw(model, apiKey, FONTEIA_SYSTEM_PROMPT, [
+    { role: "user", parts: [{ text: userText }] },
+  ], { temperature: 0.3, maxOutputTokens: 4096 });
+}
+
+interface GeminiContent {
+  role: "user" | "model";
+  parts: GeminiPart[];
+}
+
+// Chamada genérica ao Gemini: aceita system prompt, histórico (contents) e config.
+// É a primitiva reaproveitada pelo Raio-X (callGemini), pelo /ai/chat e pelo /ai/intent.
+async function callGeminiRaw(
+  model: string,
+  apiKey: string,
+  systemPrompt: string,
+  contents: GeminiContent[],
+  generationConfig: Record<string, unknown>,
+): Promise<Response> {
   return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
-      systemInstruction: { parts: [{ text: FONTEIA_SYSTEM_PROMPT }] },
-      contents: [{ role: "user", parts: [{ text: userText }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig,
     }),
   });
+}
+
+// Percorre a lista de modelos (DEFAULT_MODELS ou GEMINI_MODEL) e devolve o primeiro
+// texto não vazio. Mesma lógica de fallback do Raio-X, isolada para o chat/intent.
+async function generateWithGemini(
+  apiKey: string,
+  systemPrompt: string,
+  contents: GeminiContent[],
+  generationConfig: Record<string, unknown>,
+): Promise<{ answer: string; model: string }> {
+  const configured = (Deno.env.get("GEMINI_MODEL") ?? "").trim();
+  const models = configured ? [configured] : DEFAULT_MODELS;
+  let lastError = "nenhum modelo respondeu";
+  for (const model of models) {
+    try {
+      const response = await callGeminiRaw(model, apiKey, systemPrompt, contents, generationConfig);
+      const data = (await response.json()) as GeminiResponse;
+      if (response.ok && !data.promptFeedback?.blockReason) {
+        const answer = (data.candidates?.[0]?.content?.parts ?? [])
+          .map((p) => p.text)
+          .filter((t): t is string => typeof t === "string")
+          .join("\n")
+          .trim();
+        if (answer) return { answer, model };
+        lastError = `${model}: resposta vazia`;
+      } else {
+        lastError = `${model}: ${response.status} ${data.error?.message ?? data.promptFeedback?.blockReason ?? ""}`;
+      }
+    } catch (e) {
+      lastError = `${model}: ${String(e)}`;
+    }
+    console.error("[fonteia] gemini falhou:", lastError);
+  }
+  throw new Error(lastError);
 }
 
 async function analyzeLotWithGemini(
@@ -246,6 +332,83 @@ async function analyzeEditalWithGemini(
   throw new Error(lastError);
 }
 
+/* ─── Assistente geral (/ai/chat) e roteador de intenção (/ai/intent) ───────── */
+
+interface ChatMessage {
+  role?: string;
+  content?: string;
+}
+
+const CHAT_INPUT_CAP = 4000; // limite total de caracteres do input (proteção de custo/abuso)
+
+// Converte o histórico do front (role: user|assistant) para o formato Gemini
+// (role: user|model), descartando mensagens vazias/inválidas.
+function toGeminiContents(messages: ChatMessage[]): GeminiContent[] {
+  const out: GeminiContent[] = [];
+  for (const m of messages) {
+    const content = typeof m?.content === "string" ? m.content.trim() : "";
+    if (!content) continue;
+    out.push({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: content }] });
+  }
+  // Gemini exige que o histórico comece com role "user"; descarta turnos "model"
+  // iniciais (caso raro de histórico malformado vindo do cliente).
+  while (out.length > 0 && out[0]!.role === "model") out.shift();
+  return out;
+}
+
+// Soma o tamanho do input e, se passar do cap, descarta as mensagens mais antigas
+// (mantém o fim da conversa, que é o mais relevante). Garante pelo menos 1 turno.
+function capContents(contents: GeminiContent[], cap: number): GeminiContent[] {
+  const sized = contents.map((c) => ({
+    c,
+    len: c.parts.reduce((n, p) => n + (p.text?.length ?? 0), 0),
+  }));
+  let total = sized.reduce((n, s) => n + s.len, 0);
+  let start = 0;
+  while (total > cap && start < sized.length - 1) {
+    total -= sized[start]!.len;
+    start += 1;
+  }
+  const kept = contents.slice(start);
+  // Trava final: se ainda passar (uma única mensagem gigante), trunca o texto.
+  const last = kept[kept.length - 1];
+  if (last && last.parts[0]?.text && last.parts[0].text.length > cap) {
+    last.parts[0].text = last.parts[0].text.slice(0, cap);
+  }
+  return kept;
+}
+
+// Parser de JSON tolerante: aceita JSON puro, cercado por ```json ... ``` ou com
+// texto ao redor (pega do primeiro { ao último }). Nunca lança — devolve null.
+function parseLooseJson(raw: string): Record<string, unknown> | null {
+  const tryParse = (s: string): Record<string, unknown> | null => {
+    try {
+      const v = JSON.parse(s);
+      return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+  const direct = tryParse(raw.trim());
+  if (direct) return direct;
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence?.[1]) {
+    const fenced = tryParse(fence[1].trim());
+    if (fenced) return fenced;
+  }
+  const first = raw.indexOf("{");
+  const last = raw.lastIndexOf("}");
+  if (first !== -1 && last > first) {
+    const sliced = tryParse(raw.slice(first, last + 1));
+    if (sliced) return sliced;
+  }
+  return null;
+}
+
+function asStringOrNull(v: unknown): string | null {
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -258,6 +421,106 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const { pathname } = new URL(request.url);
+
+  // Assistente geral: chat contextual (ContextChat / useAIChat → /ai/chat).
+  if (request.method === "POST" && pathname.endsWith("/ai/chat")) {
+    let parsed: { messages?: ChatMessage[]; context?: string };
+    try {
+      parsed = (await request.json()) as { messages?: ChatMessage[]; context?: string };
+    } catch {
+      return json({ error: "Corpo invalido: envie JSON com { messages }." }, 400);
+    }
+    if (!Array.isArray(parsed.messages) || parsed.messages.length === 0) {
+      return json({ error: "Campo 'messages' ausente ou vazio." }, 400);
+    }
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) {
+      return json(
+        {
+          error: "ia_nao_configurada",
+          message: "O assistente de IA ainda nao foi ativado. Configure o secret GEMINI_API_KEY.",
+        },
+        503,
+      );
+    }
+
+    let contents = toGeminiContents(parsed.messages);
+    if (contents.length === 0) {
+      return json({ error: "Nenhuma mensagem valida em 'messages'." }, 400);
+    }
+    // Contexto da tela vira a primeira mensagem (role user), antes do histórico.
+    const ctx = asStringOrNull(parsed.context);
+    if (ctx) {
+      contents.unshift({
+        role: "user",
+        parts: [{ text: `Contexto da tela atual: ${ctx}` }],
+      });
+    }
+    contents = capContents(contents, CHAT_INPUT_CAP);
+
+    try {
+      const result = await generateWithGemini(apiKey, CHAT_SYSTEM_PROMPT, contents, {
+        temperature: 0.4,
+        maxOutputTokens: 1024,
+      });
+      return json({ answer: result.answer, model: result.model });
+    } catch (error) {
+      return json({ error: "Falha ao responder.", detail: String(error) }, 502);
+    }
+  }
+
+  // Roteador de intenção do omnibox (IntelligenceOmnibox / useAIIntent → /ai/intent).
+  if (request.method === "POST" && pathname.endsWith("/ai/intent")) {
+    let parsed: { query?: string; context?: string };
+    try {
+      parsed = (await request.json()) as { query?: string; context?: string };
+    } catch {
+      return json({ error: "Corpo invalido: envie JSON com { query }." }, 400);
+    }
+    const query = asStringOrNull(parsed.query);
+    if (!query) return json({ error: "Campo 'query' ausente." }, 400);
+
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) {
+      return json(
+        {
+          error: "ia_nao_configurada",
+          message: "O assistente de IA ainda nao foi ativado. Configure o secret GEMINI_API_KEY.",
+        },
+        503,
+      );
+    }
+
+    const ctx = asStringOrNull(parsed.context);
+    const userText = [
+      ctx ? `Contexto da tela atual: ${ctx}` : null,
+      `Frase do usuário: ${query}`.slice(0, CHAT_INPUT_CAP),
+    ]
+      .filter((t): t is string => t !== null)
+      .join("\n\n");
+
+    try {
+      const result = await generateWithGemini(
+        apiKey,
+        INTENT_SYSTEM_PROMPT,
+        [{ role: "user", parts: [{ text: userText }] }],
+        { temperature: 0.2, maxOutputTokens: 512, responseMimeType: "application/json" },
+      );
+      const obj = parseLooseJson(result.answer);
+      // Fallback que nunca quebra: se o JSON vier inválido, devolve a resposta crua.
+      const understanding = asStringOrNull(obj?.["understanding"]) ?? `Você pediu: ${query}`;
+      const answer = asStringOrNull(obj?.["answer"]) ?? (result.answer.trim() || "Não consegui interpretar agora.");
+      return json({
+        understanding,
+        suggestedRoute: asStringOrNull(obj?.["suggestedRoute"]),
+        suggestedAction: asStringOrNull(obj?.["suggestedAction"]),
+        answer,
+        model: result.model,
+      });
+    } catch (error) {
+      return json({ error: "Falha ao interpretar.", detail: String(error) }, 502);
+    }
+  }
 
   // Análise do EDITAL por IA: Gemini lê o PDF inteiro do SLE.
   if (request.method === "POST" && pathname.endsWith("/ia/edital")) {
