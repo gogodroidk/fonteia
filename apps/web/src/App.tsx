@@ -11,11 +11,13 @@ import {
   LayoutGrid,
   Landmark,
   LogOut,
+  MapPin,
   Menu,
   Search,
   ShieldCheck,
   Sparkles,
   User,
+  Users,
   X,
   Zap,
 } from "lucide-react";
@@ -118,6 +120,12 @@ const ModulesPage = lazy(() =>
 const AdminPage = lazy(() =>
   import("./app/admin/page").then((m) => ({ default: m.AdminPage })),
 );
+const MunicipiosPage = lazy(() =>
+  import("./app/municipios/page").then((m) => ({ default: m.MunicipiosPage })),
+);
+const PoliticaPage = lazy(() =>
+  import("./app/politica/page").then((m) => ({ default: m.PoliticaPage })),
+);
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -196,12 +204,16 @@ type RouteKey =
   | "search"
   | "lot-detail"
   | "modules"
-  | "admin";
+  | "admin"
+  | "municipios"
+  | "politica";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
   { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
   { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
+  { path: "/app/politica", route: "politica", label: "Política", icon: Users },
+  { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
   { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
@@ -228,12 +240,16 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   "lot-detail": "Análise do lote",
   modules: "Módulos",
   admin: "Administração",
+  municipios: "Municípios",
+  politica: "Política",
 };
 
 function pathToRoute(path: string): RouteKey {
   if (/^\/app\/(?:lotes|leiloes)\/[^/]+/.test(path)) return "lot-detail";
   if (path.startsWith("/app/lotes")) return "lotes";
   if (path.startsWith("/app/licitacoes")) return "licitacoes";
+  if (path.startsWith("/app/politica")) return "politica";
+  if (path.startsWith("/app/municipios")) return "municipios";
   if (path.startsWith("/app/alertas")) return "alertas";
   if (path.startsWith("/app/relatorios")) return "relatorios";
   if (path.startsWith("/app/fontes")) return "fontes";
@@ -564,6 +580,8 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
                 {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
                 {route === "licitacoes" && <LicitacoesPage />}
+                {route === "politica" && <PoliticaPage />}
+                {route === "municipios" && <MunicipiosPage />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
                 {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}
                 {route === "fontes" && <SourcesPage />}
