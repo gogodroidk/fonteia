@@ -52,9 +52,16 @@ function citationsForClaims(claims: Claim[], evidence: Evidence[]): AnswerCitati
   return evidence.filter((item) => evidenceIds.has(item.id)).map(evidenceToCitation);
 }
 
+// Comprimento máximo da pergunta para evitar abusos e injeção de prompt longa.
+const MAX_QUESTION_LENGTH = 500;
+
 export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
-  const claims = selectRelevantClaims(context);
-  const citations = citationsForClaims(claims, context.evidence);
+  // Trunca a pergunta se exceder o limite antes de qualquer processamento.
+  const safeContext: AnswerContext = context.question.length > MAX_QUESTION_LENGTH
+    ? { ...context, question: context.question.slice(0, MAX_QUESTION_LENGTH) }
+    : context;
+  const claims = selectRelevantClaims(safeContext);
+  const citations = citationsForClaims(claims, safeContext.evidence);
 
   if (claims.length === 0 || citations.length === 0) {
     return {

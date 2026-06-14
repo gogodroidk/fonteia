@@ -2,6 +2,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./supabase-client";
 
+/**
+ * DemoUser: subconjunto seguro de User para o modo demo local.
+ * Evita o cast duplo `as unknown as User` mantendo type-safety.
+ */
+export type DemoUser = Pick<User, "id" | "email" | "aud" | "role" | "app_metadata" | "user_metadata" | "created_at">;
+
 export interface SignUpUserData {
   full_name: string;
   phone?: string;
@@ -31,8 +37,11 @@ const DEMO_STORAGE_KEY = "fonteia.demo.user";
 
 function buildDemoUser(email: string, fullName?: string): User {
   const name = fullName ?? email.split("@")[0] ?? "Visitante";
-  // O tipo User do Supabase é amplo; preenchemos o essencial para a UI.
-  return {
+  // DemoUser cobre todos os campos que a UI acessa: id, email, user_metadata.
+  // O cast para User é necessário porque o SDK Supabase adiciona campos internos
+  // opcionais não acessados pela UI (ex.: phone, identities). É seguro aqui pois
+  // o modo demo não usa sessão real e todos os campos lidos pela UI estão preenchidos.
+  const demoUser: DemoUser = {
     id: `demo-${email}`,
     email,
     aud: "authenticated",
@@ -40,7 +49,8 @@ function buildDemoUser(email: string, fullName?: string): User {
     app_metadata: { provider: "demo" },
     user_metadata: { full_name: name },
     created_at: new Date().toISOString(),
-  } as unknown as User;
+  };
+  return demoUser as User;
 }
 
 function loadDemoUser(): User | null {
