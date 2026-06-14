@@ -35,6 +35,24 @@ export interface AiIntentResponse {
   model: string;
 }
 
+/** Um resultado da busca semântica (RPC match_entities via /ai/search). */
+export interface AiSearchResult {
+  id: string;
+  kind: string;
+  name: string;
+  attributes: Record<string, unknown>;
+  /** Similaridade de cosseno: 1.0 = idêntico, 0.0 = sem relação. */
+  score: number;
+}
+
+export interface AiSearchResponse {
+  query: string;
+  kind: string | null;
+  count: number;
+  results: AiSearchResult[];
+  model: string;
+}
+
 /** A IA respondeu 503 (nenhum provedor configurado). UI deve degradar com elegância. */
 export class AiUnavailableError extends Error {
   constructor(message = "O assistente de IA ainda nao foi ativado.") {
@@ -137,4 +155,60 @@ export function aiIntent(
     body.context = options.context;
   }
   return postAi<AiIntentResponse>("/ai/intent", body, options?.accessToken);
+}
+
+/**
+ * Busca semântica (pgvector) — embeda a query no Gemini e roda match_entities.
+ * Sempre fala com a Edge Function "fonteia" diretamente (a rota /ai/search só
+ * existe lá; o Worker não a tem), independente de VITE_API_URL. Use no omnibox
+ * e na feature "itens parecidos / último valor".
+ *
+ * @param kind  filtra por tipo (ex.: "auction_lot", "bidding_opportunity"); null = todos.
+ */
+export async function aiSearch(
+  query: string,
+  options?: { kind?: string; limit?: number; accessToken?: string },
+): Promise<AiSearchResponse> {
+  const { url, key } = getSupabasePublicConfig();
+  const endpoint = `${trimTrailingSlash(url)}/functions/v1/fonteia/ai/search`;
+  const token = options?.accessToken && options.accessToken.length > 0 ? options.accessToken : key;
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        apikey: key,
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ query, kind: options?.kind, limit: options?.limit }),
+    });
+  } catch (error) {
+    throw new AiRequestError(`Falha de rede: ${(error as Error).message}`);
+  }
+
+  if (response.status === 503) {
+    let parsed: ErrorBody = {};
+    try {
+      parsed = (await response.json()) as ErrorBody;
+    } catch {
+      // corpo vazio/inválido — usa mensagem padrão
+    }
+    throw new AiUnavailableError(parsed.message);
+  }
+
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    throw new AiRequestError(`Resposta invalida (status ${response.status}).`, response.status);
+  }
+
+  if (!response.ok) {
+    const err = data as ErrorBody;
+    throw new AiRequestError(err.message ?? err.error ?? `Erro ${response.status}.`, response.status);
+  }
+
+  return data as AiSearchResponse;
 }
