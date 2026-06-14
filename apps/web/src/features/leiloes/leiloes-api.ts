@@ -15,12 +15,6 @@ export interface LeilaoLotResult extends LeiloesLoadResult {
   lot: ReceitaLeilaoLot | null;
 }
 
-// isDemo is kept for backwards compatibility but always false — no sample data is shown
-/** @deprecated Use `source === "empty"` instead */
-export function isLeiloesDemo(_result: LeiloesLoadResult): boolean {
-  return false;
-}
-
 interface SupabaseEntityRow {
   attributes: ReceitaLeilaoLot;
   updated_at?: string;
