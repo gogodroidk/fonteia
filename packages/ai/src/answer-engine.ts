@@ -1,6 +1,7 @@
 import type { Claim, Evidence } from "@fonteia/domain";
 import { evidenceToCitation, requireCitations, type AnswerCitation } from "./citations";
 import { FONTEIA_ANSWER_GUARDRAILS } from "./prompts";
+import type { AiRouter } from "./router";
 
 export interface AnswerContext {
   question: string;
@@ -98,5 +99,59 @@ export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
     citations,
     guardrails: [...FONTEIA_ANSWER_GUARDRAILS],
   };
+}
+
+/**
+ * Resposta do Raio-X com narração por IA, agora roteada (Gemini/Claude).
+ *
+ * Mantém o CONTRATO de evidência do answerWithEvidence (sem evidência → recusa),
+ * mas, quando há base factual, usa o roteador para produzir um texto em
+ * linguagem simples ('analise-profunda' → Claude por padrão). Se a IA falhar ou
+ * não estiver configurada, a chamada propaga o erro para o caller decidir
+ * (ex.: 503 honesto) — não inventamos resposta.
+ */
+export interface NarratedAnswer extends FonteiaAnswer {
+  /** Texto livre gerado pela IA a partir das evidências (markdown curto). */
+  narrative: string;
+  /** Modelo que produziu a narrativa (debug/telemetria). */
+  model: string;
+}
+
+function factsToPromptBlock(facts: AnswerFact[]): string {
+  return facts.map((fact) => `- ${fact.label}: ${fact.value}`).join("\n");
+}
+
+export async function answerWithEvidenceNarrated(
+  router: AiRouter,
+  context: AnswerContext,
+): Promise<NarratedAnswer> {
+  const base = answerWithEvidence(context);
+
+  // Sem evidência suficiente: devolve a recusa determinística, sem chamar a IA.
+  if (base.status === "insufficient_evidence") {
+    return { ...base, narrative: base.summary, model: "none" };
+  }
+
+  const system = [
+    "Voce e o assistente da Fonte.ia. Explique para um comprador leigo, em portugues claro, SEM jargao.",
+    "Use APENAS os fatos verificados abaixo. NUNCA invente fato, valor ou prazo.",
+    "Nao de aconselhamento juridico/contabil/fiscal definitivo. Nao prometa lucro. Aponte o que conferir no edital oficial.",
+    "Responda em markdown curto (ate ~250 palavras).",
+  ].join("\n");
+
+  const userContent = [
+    `Pergunta: ${context.question}`,
+    "",
+    "Fatos verificados (com evidencia):",
+    factsToPromptBlock(base.keyFacts),
+  ].join("\n");
+
+  const result = await router.generate({
+    task: "analise-profunda",
+    system,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  return { ...base, narrative: result.text, model: result.model };
 }
 

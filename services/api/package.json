@@ -10,6 +10,9 @@
     "dev": "wrangler dev --config wrangler.toml",
     "deploy": "wrangler deploy --config wrangler.toml"
   },
+  "dependencies": {
+    "@fonteia/ai": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.7.3"
   }

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { useAuth } from "./auth/auth-context";
+import { useIsAdmin } from "./components/admin/use-is-admin";
 import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { ThemeToggle } from "./components/ui";
@@ -112,6 +113,9 @@ const LegalPage = lazy(() =>
 const ModulesPage = lazy(() =>
   import("./app/modules/page").then((m) => ({ default: m.ModulesPage })),
 );
+const AdminPage = lazy(() =>
+  import("./app/admin/page").then((m) => ({ default: m.AdminPage })),
+);
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -189,7 +193,8 @@ type RouteKey =
   | "billing"
   | "search"
   | "lot-detail"
-  | "modules";
+  | "modules"
+  | "admin";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
@@ -199,6 +204,14 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
 ];
+
+// Item de navegação exclusivo do admin (renderizado só quando isAdmin === true).
+const ADMIN_NAV: { path: string; route: RouteKey; label: string; icon: typeof LayoutGrid } = {
+  path: "/app/admin",
+  route: "admin",
+  label: "Administração",
+  icon: ShieldCheck,
+};
 
 const ROUTE_TITLES: Record<RouteKey, string> = {
   painel: "Painel",
@@ -212,6 +225,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   search: "Perguntar",
   "lot-detail": "Análise do lote",
   modules: "Módulos",
+  admin: "Administração",
 };
 
 function pathToRoute(path: string): RouteKey {
@@ -225,6 +239,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/planos")) return "billing";
   if (path.startsWith("/app/buscar")) return "search";
   if (path.startsWith("/app/modules")) return "modules";
+  if (path.startsWith("/app/admin")) return "admin";
   return "painel";
 }
 
@@ -245,6 +260,7 @@ interface AppShellProps {
 
 function AppShell({ path, navigate }: AppShellProps) {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useIsAdmin();
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
   const [isLoadingLot, setIsLoadingLot] = useState(false);
   const [lotLoadMessage, setLotLoadMessage] = useState<string | null>(null);
@@ -374,6 +390,7 @@ function AppShell({ path, navigate }: AppShellProps) {
 
       <nav aria-label="Navegação principal" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px", display: "flex", flexDirection: "column", gap: 3 }}>
         {NAV.map((item) => navItem(item, inDrawer))}
+        {isAdmin && navItem(ADMIN_NAV, inDrawer)}
       </nav>
 
       <div style={{ flex: 1 }} />
@@ -538,6 +555,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "billing" && <BillingPage />}
                 {route === "search" && <SearchPage initialQuestion={searchSeed} onSelectLot={handleSelectLot} />}
                 {route === "modules" && <ModulesPage />}
+                {route === "admin" && <AdminPage />}
                 {route === "conta" && (
                   <AccountPage name={displayName} email={user?.email ?? ""} avatarUrl={avatarUrl} onSignOut={() => void signOut()} />
                 )}

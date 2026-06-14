@@ -212,6 +212,10 @@ importers:
         version: 2.1.9(@types/node@22.19.20)(jsdom@29.1.1)(lightningcss@1.32.0)(terser@5.48.0)
 
   services/api:
+    dependencies:
+      '@fonteia/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
     devDependencies:
       typescript:
         specifier: ^5.7.3

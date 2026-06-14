@@ -13,11 +13,18 @@ compatibility_date = "2026-06-10"
 #    e obrigatorio; sem ele o wrangler pega o wrangler.jsonc da raiz, que e o app web)
 # URL de producao esperada: https://fonteia-api.<sua-conta>.workers.dev
 #
-# Para ligar a IA (opcional):
-#   wrangler secret put ANTHROPIC_API_KEY      # cole a chave sk-ant-...
+# IA (rotas /ai/chat, /ai/intent, /ia/raio-x) — roteador multimodelo:
+#   Gemini (Google) e o PADRAO GRATUITO; Claude (Anthropic) e o fallback/reforco.
+#   Basta UMA das chaves para ligar a IA; com as duas, o roteador escolhe por tarefa.
+#
+#   wrangler secret put GEMINI_API_KEY         # padrao gratuito (Google AI Studio)
+#   wrangler secret put ANTHROPIC_API_KEY      # opcional: fallback/analise profunda (sk-ant-...)
 #
 # Vars opcionais (dashboard ou [vars] abaixo):
-#   ANTHROPIC_MODEL = "claude-opus-4-8"   # padrao; troque por claude-haiku-4-5 p/ custo menor
+#   GEMINI_MODEL      = "gemini-2.0-flash"     # rapido/barato (intent, chat)
+#   GEMINI_MODEL_PRO  = "gemini-2.0-pro-exp"   # pesado (fallback de analise profunda)
+#   ANTHROPIC_MODEL   = "claude-opus-4-8"      # padrao; troque por claude-haiku-4-5 p/ custo menor
 
 # [vars]
+# GEMINI_MODEL = "gemini-2.0-flash"
 # ANTHROPIC_MODEL = "claude-opus-4-8"
