@@ -409,6 +409,80 @@ function asStringOrNull(v: unknown): string | null {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 }
 
+/* ─── Busca semântica (/ai/search): embeda a query no Gemini e chama a RPC ──── */
+
+// Modelo de embedding (mesmo do backfill embed-entities). 768 dims p/ casar com
+// a coluna vector(768) e o índice HNSW. Sobrescreva via secret GEMINI_EMBED_MODEL.
+const EMBED_MODEL = (Deno.env.get("GEMINI_EMBED_MODEL") ?? "").trim() || "gemini-embedding-001";
+const EMBED_DIM = 768;
+
+interface EmbedResponse {
+  embedding?: { values?: number[] };
+  error?: { message?: string };
+}
+
+// Embeda UMA query (taskType RETRIEVAL_QUERY — par do RETRIEVAL_DOCUMENT usado
+// no backfill). Devolve o vetor de 768 dims ou lança.
+async function embedQuery(apiKey: string, text: string): Promise<number[]> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        model: `models/${EMBED_MODEL}`,
+        content: { parts: [{ text }] },
+        taskType: "RETRIEVAL_QUERY",
+        outputDimensionality: EMBED_DIM,
+      }),
+    },
+  );
+  const data = (await res.json()) as EmbedResponse;
+  if (!res.ok || data.error) {
+    throw new Error(`embed ${res.status}: ${data.error?.message ?? "erro"}`);
+  }
+  const values = data.embedding?.values ?? [];
+  if (values.length !== EMBED_DIM) {
+    throw new Error(`dimensão inesperada ${values.length} (esperado ${EMBED_DIM})`);
+  }
+  return values;
+}
+
+interface MatchRow {
+  id: string;
+  kind: string;
+  name: string;
+  attributes: Record<string, unknown>;
+  score: number;
+}
+
+// Chama a RPC public.match_entities (granted a anon) com a chave pública do projeto.
+async function matchEntities(
+  embedding: number[],
+  kind: string | null,
+  count: number,
+): Promise<MatchRow[]> {
+  const base = Deno.env.get("SUPABASE_URL");
+  if (!base) throw new Error("SUPABASE_URL ausente");
+  const res = await fetch(`${base}/rest/v1/rpc/match_entities`, {
+    method: "POST",
+    headers: {
+      apikey: PUBLISHABLE_KEY,
+      authorization: `Bearer ${PUBLISHABLE_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      query_embedding: `[${embedding.join(",")}]`,
+      match_kind: kind,
+      match_count: count,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`match_entities ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as MatchRow[];
+}
+
 Deno.serve(async (request: Request): Promise<Response> => {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -421,6 +495,40 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   const { pathname } = new URL(request.url);
+
+  // Busca semântica: embeda a query (Gemini) → RPC match_entities (pgvector).
+  // Usada pelo omnibox e pela feature "itens parecidos / último valor".
+  if (request.method === "POST" && pathname.endsWith("/ai/search")) {
+    let parsed: { query?: string; kind?: string; limit?: number };
+    try {
+      parsed = (await request.json()) as { query?: string; kind?: string; limit?: number };
+    } catch {
+      return json({ error: "Corpo invalido: envie JSON com { query }." }, 400);
+    }
+    const query = asStringOrNull(parsed.query);
+    if (!query) return json({ error: "Campo 'query' ausente." }, 400);
+    const kind = asStringOrNull(parsed.kind);
+    const limit = Math.min(Math.max(Number(parsed.limit) || 10, 1), 50);
+
+    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!apiKey) {
+      return json(
+        {
+          error: "ia_nao_configurada",
+          message: "O assistente de IA ainda nao foi ativado. Configure o secret GEMINI_API_KEY.",
+        },
+        503,
+      );
+    }
+
+    try {
+      const embedding = await embedQuery(apiKey, query.slice(0, 2000));
+      const results = await matchEntities(embedding, kind, limit);
+      return json({ query, kind, count: results.length, results, model: EMBED_MODEL });
+    } catch (error) {
+      return json({ error: "Falha na busca semantica.", detail: String(error) }, 502);
+    }
+  }
 
   // Assistente geral: chat contextual (ContextChat / useAIChat → /ai/chat).
   if (request.method === "POST" && pathname.endsWith("/ai/chat")) {
