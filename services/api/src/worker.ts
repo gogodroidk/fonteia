@@ -364,10 +364,8 @@ const handler: ExportedHandler<Env> = {
           lots,
         });
       } catch (error) {
-        return json(
-          { error: "Nao foi possivel consultar a Receita agora.", detail: String(error) },
-          502,
-        );
+        console.error("[api] /leiloes/lotes failed:", error);
+        return json({ error: "Nao foi possivel consultar a Receita agora." }, 502);
       }
     }
 
@@ -384,10 +382,8 @@ const handler: ExportedHandler<Env> = {
         }
         return json(lot);
       } catch (error) {
-        return json(
-          { error: "Nao foi possivel consultar a Receita agora.", detail: String(error) },
-          502,
-        );
+        console.error("[api] /leiloes/lotes/:id failed:", error);
+        return json({ error: "Nao foi possivel consultar a Receita agora." }, 502);
       }
     }
 
@@ -423,7 +419,8 @@ const handler: ExportedHandler<Env> = {
             503,
           );
         }
-        return json({ error: "Falha ao gerar a analise.", detail: String(error) }, 502);
+        console.error("[api] /ia/raio-x failed:", error);
+        return json({ error: "Falha ao gerar a analise." }, 502);
       }
     }
 

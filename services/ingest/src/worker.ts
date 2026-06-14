@@ -1,7 +1,8 @@
+/// <reference types="@cloudflare/workers-types" />
 import {
   fetchReceitaLeiloesDestaquesWithCache,
   type ReceitaLeilaoLot,
-} from "../../../packages/sources/src/connectors/receita-leiloes";
+} from "@fonteia/sources";
 
 export interface Env {
   SUPABASE_URL: string;
@@ -95,12 +96,6 @@ async function updateSourceRun(
       ...(errorMessage ? { error_message: errorMessage } : {}),
     }),
   });
-}
-
-function stableHash(value: unknown): string {
-  // Workers runtime does not have node:crypto — use a simple deterministic hash via SubtleCrypto
-  // We return a stringified marker; actual SHA-256 is computed async in persistLot.
-  return JSON.stringify(value);
 }
 
 async function sha256Hex(value: unknown): Promise<string> {

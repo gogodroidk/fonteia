@@ -82,11 +82,11 @@ function evaluateLimit(key: keyof UsageSnapshot, used: number, limit: number | "
     return { key, used, limit, status: "blocked" };
   }
 
-  if (used > limit) {
+  if (limit > 0 && used >= limit) {
     return { key, used, limit, status: "blocked" };
   }
 
-  if (limit > 0 && used / limit >= 0.8) {
+  if (limit > 0 && used / limit >= 0.7) {
     return { key, used, limit, status: "near_limit" };
   }
 
