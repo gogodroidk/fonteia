@@ -189,9 +189,9 @@ const ALLOWED_ORIGINS = new Set([
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
-  // Subdomínios: *.fontebrasil.online e *.workers.dev (preview/staging)
+  // Subdomínios: *.fontebrasil.online e *.igoreluisa.workers.dev (preview/staging)
   if (/^https:\/\/[a-z0-9-]+\.fontebrasil\.online$/.test(origin)) return true;
-  if (/^https:\/\/[a-z0-9-]+\.workers\.dev$/.test(origin)) return true;
+  if (/^https:\/\/[a-z0-9-]+\.igoreluisa\.workers\.dev$/.test(origin)) return true;
   return false;
 }
 
