@@ -37,7 +37,7 @@ export const STRIPE_PAYMENT_LINKS: Record<string, string> = {
  * (Stripe → Settings → Billing → Customer portal → ativar → "Share link").
  * O valor anterior era cópia do slug do Payment Link (link quebrado) — removido
  * pra não mostrar um botão "Gerenciar assinatura" que não funciona. Enquanto vazio,
- * o botão fica oculto e o cancelamento é por contato@fontebrasil.online.
+ * o botão fica oculto e o cancelamento é por contato@olli.com.br.
  */
 export const STRIPE_CUSTOMER_PORTAL_URL: string = "";
 

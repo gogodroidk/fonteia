@@ -10,7 +10,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const RESEND_URL = "https://api.resend.com/emails";
-const FROM = "Fonte.ia <alertas@fontebrasil.online>";
+const FROM = "Fonte.ia <alertas@olli.com.br>";
 const DIAS_ANTES = 3;
 
 interface AlertRow {

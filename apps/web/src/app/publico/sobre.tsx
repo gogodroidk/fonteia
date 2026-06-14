@@ -85,7 +85,7 @@ function EmpresaBox() {
             ["CNPJ", "65.361.266/0001-05"],
             ["Natureza Jurídica", "Sociedade Limitada"],
             ["Produto", "Fonte.ia"],
-            ["E-mail", "contato@fontebrasil.online"],
+            ["E-mail", "contato@olli.com.br"],
             ["Fundação", "2024"],
           ].map(([label, value]) => (
             <tr key={label}>

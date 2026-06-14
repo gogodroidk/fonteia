@@ -47,7 +47,7 @@ export function BillingPage() {
             <strong>Pagamento recebido!</strong>{" "}
             <span className="muted small">
               Obrigado. Seu acesso ao plano será liberado em instantes. Qualquer coisa, fale com{" "}
-              <a className="link" href="mailto:contato@fontebrasil.online">contato@fontebrasil.online</a>.
+              <a className="link" href="mailto:contato@olli.com.br">contato@olli.com.br</a>.
             </span>
           </div>
           <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setPaid(false)} aria-label="Fechar">
@@ -65,7 +65,7 @@ export function BillingPage() {
           <div style={{ flex: 1 }}>
             <strong>Plano {chosen} selecionado.</strong>{" "}
             <span className="muted small">
-              Para concluir, fale com <a className="link" href="mailto:contato@fontebrasil.online">contato@fontebrasil.online</a> — o
+              Para concluir, fale com <a className="link" href="mailto:contato@olli.com.br">contato@olli.com.br</a> — o
               checkout automático entra no ar assim que o link do Stripe for conectado.
             </span>
           </div>
