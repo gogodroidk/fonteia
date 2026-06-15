@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  AlertTriangle,
   Building2,
   CalendarDays,
   ExternalLink,
@@ -8,19 +9,23 @@ import {
   Loader2,
   MapPin,
   Search,
+  ShieldAlert,
   Users,
   X,
 } from "lucide-react";
 import type { OrgaoPublico } from "@fonteia/sources";
 import {
   type EmpresaCnpj,
+  type SancaoItem,
+  formatCnpjSancao,
   listOrgaos,
+  listSancoes,
   lookupCnpj,
   sanitizeCnpj,
 } from "../../features/empresas/empresas-api";
 import { FonteDots } from "../../components/ui";
 
-// Quantos órgãos renderizar por vez (o scroll carrega mais sozinho).
+// Quantos órgãos/sanções renderizar por vez (o scroll carrega mais sozinho).
 const PAGE_SIZE = 36;
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -33,6 +38,11 @@ const FONTE_DOTS_RECEITA = [
 // Fonte dos órgãos: derivada das licitações do PNCP. Roxo institucional.
 const FONTE_DOTS_PNCP = [
   { sigla: "PNCP", cor: "#7C5CFF", nome: "PNCP — órgãos públicos (derivado das licitações)" },
+];
+
+// Fonte das sanções: Portal da Transparência — CEIS/CNEP.
+const FONTE_DOTS_CGU = [
+  { sigla: "CGU", cor: "#D32F2F", nome: "Portal da Transparência — CEIS/CNEP (CGU)" },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -54,6 +64,22 @@ function matchesSearch(o: OrgaoPublico, q: string): boolean {
   const query = normalizeForSearch(q);
   if (query === "") return true;
   const haystack = normalizeForSearch([o.nome, o.cnpj, o.uf, o.ufNome].join(" "));
+  return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
+/** Busca tolerante em sanção. */
+function matchesSearchSancao(s: SancaoItem, q: string): boolean {
+  const query = normalizeForSearch(q);
+  if (query === "") return true;
+  const haystack = normalizeForSearch(
+    [
+      s.nome,
+      s.cnpj,
+      s.attributes.origem ?? "",
+      s.attributes.tipoSancao ?? "",
+      s.attributes.orgaoSancionador ?? "",
+    ].join(" "),
+  );
   return query.split(/\s+/).every((term) => haystack.includes(term));
 }
 
@@ -79,7 +105,7 @@ function isSituacaoAtiva(situacao: string): boolean {
 
 // ─── Caixa de busca de CNPJ + perfil ───────────────────────────────────────────
 
-function CnpjLookup() {
+function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem[]> }) {
   const [input, setInput] = useState("");
   const [empresa, setEmpresa] = useState<EmpresaCnpj | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,6 +144,11 @@ function CnpjLookup() {
   }
 
   const ativa = empresa ? isSituacaoAtiva(empresa.situacao) : false;
+
+  // Sanções associadas ao CNPJ consultado
+  const sancoesDaEmpresa = empresa
+    ? (sancoesPorCnpj.get(sanitizeCnpj(empresa.cnpj)) ?? [])
+    : [];
 
   return (
     <section
@@ -208,6 +239,32 @@ function CnpjLookup() {
           className="card"
           style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}
         >
+          {/* Aviso de sanção */}
+          {sancoesDaEmpresa.length > 0 && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
+                border: "1px solid color-mix(in srgb, var(--danger) 30%, transparent)",
+                borderRadius: 8,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+              role="alert"
+            >
+              <AlertTriangle
+                size={18}
+                style={{ color: "var(--danger)", flexShrink: 0 }}
+                aria-hidden="true"
+              />
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--danger)" }}>
+                ⚠️ Empresa com {sancoesDaEmpresa.length}{" "}
+                {sancoesDaEmpresa.length === 1 ? "sanção" : "sanções"} no CEIS/CNEP
+              </span>
+            </div>
+          )}
+
           {/* Cabeçalho: razão social + situação */}
           <div className="row between wrap" style={{ gap: 10, alignItems: "flex-start" }}>
             <div style={{ minWidth: 0 }}>
@@ -352,7 +409,7 @@ function FactItem({
   );
 }
 
-// ─── Skeleton card (órgãos) ────────────────────────────────────────────────────
+// ─── Skeleton card (órgãos/sanções) ────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
@@ -438,6 +495,124 @@ function OrgaoCard({ orgao }: { orgao: OrgaoPublico }) {
   );
 }
 
+// ─── Sanção card ────────────────────────────────────────────────────────────────
+
+function SancaoCard({ sancao }: { sancao: SancaoItem }) {
+  const { attributes } = sancao;
+  const origem = attributes.origem ?? "—";
+  const isAtiva =
+    !attributes.dataFimSancao || new Date(attributes.dataFimSancao) >= new Date();
+
+  return (
+    <article
+      className="card card--hover"
+      style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
+      aria-label={`Sanção — ${sancao.nome}`}
+    >
+      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+        {/* Top: origem + badge ativa/expirada */}
+        <div className="row between" style={{ gap: 8, alignItems: "center" }}>
+          <span
+            className="badge"
+            style={{
+              flexShrink: 0,
+              background: "color-mix(in srgb, var(--danger) 14%, var(--surface))",
+              color: "var(--danger)",
+              border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
+              fontWeight: 700,
+            }}
+          >
+            {origem}
+          </span>
+          <span
+            className="tiny"
+            style={{
+              fontWeight: 700,
+              color: isAtiva ? "var(--danger)" : "var(--t-low)",
+            }}
+          >
+            {isAtiva ? "Ativa" : "Expirada"}
+          </span>
+        </div>
+
+        {/* Nome do sancionado */}
+        <div
+          style={{
+            fontSize: 15,
+            fontWeight: 800,
+            color: "var(--t-hi)",
+            lineHeight: 1.3,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+          title={sancao.nome}
+        >
+          {sancao.nome || "Sancionado sem nome"}
+        </div>
+
+        {/* CNPJ */}
+        {sancao.cnpj !== "" && (
+          <div className="tiny muted num" style={{ fontVariantNumeric: "tabular-nums" }}>
+            {formatCnpjSancao(sancao.cnpj)}
+          </div>
+        )}
+
+        {/* Tipo de sanção */}
+        {attributes.tipoSancao && (
+          <p
+            className="tiny muted"
+            style={{
+              margin: 0,
+              lineHeight: 1.5,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {attributes.tipoSancao}
+          </p>
+        )}
+
+        {/* Período: início–fim */}
+        <div className="tiny muted" style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <CalendarDays size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
+          <span>
+            {attributes.dataInicioSancao ? formatDate(attributes.dataInicioSancao) : "—"}
+            {attributes.dataFimSancao ? ` → ${formatDate(attributes.dataFimSancao)}` : " → em vigor"}
+          </span>
+        </div>
+
+        {/* Órgão sancionador + fonte */}
+        <div
+          className="row between"
+          style={{ gap: 6, marginTop: "auto", paddingTop: 4, alignItems: "center" }}
+        >
+          {attributes.orgaoSancionador ? (
+            <span
+              className="tiny muted"
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                minWidth: 0,
+              }}
+              title={attributes.orgaoSancionador}
+            >
+              {attributes.orgaoSancionador}
+            </span>
+          ) : (
+            <span />
+          )}
+          <FonteDots fontes={FONTE_DOTS_CGU} size={20} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 // ─── Select control ─────────────────────────────────────────────────────────────
 
 function FilterSelect<T extends string>({
@@ -480,7 +655,7 @@ function FilterSelect<T extends string>({
 
 // ─── Empty (filters) state ──────────────────────────────────────────────────────
 
-function EmptyState({ onClear }: { onClear: () => void }) {
+function EmptyState({ onClear, label }: { onClear: () => void; label: string }) {
   return (
     <div
       className="panel"
@@ -501,9 +676,9 @@ function EmptyState({ onClear }: { onClear: () => void }) {
       >
         <Search size={28} />
       </div>
-      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum órgão com esses filtros</div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum(a) {label} com esses filtros</div>
       <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
-        Tente ampliar a busca ou trocar a UF.
+        Tente ampliar a busca ou trocar o filtro.
       </p>
       <button className="btn btn--ghost btn--sm" onClick={onClear} type="button">
         Limpar filtros
@@ -517,39 +692,85 @@ function EmptyState({ onClear }: { onClear: () => void }) {
 export function EmpresasPage() {
   // ── Órgãos data state ──
   const [orgaos, setOrgaos] = useState<OrgaoPublico[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoadingOrgaos, setIsLoadingOrgaos] = useState(true);
+  const [errorOrgaos, setErrorOrgaos] = useState<string | null>(null);
 
-  // ── Filter state ──
+  // ── Sanções data state ──
+  const [sancoes, setSancoes] = useState<SancaoItem[]>([]);
+  const [isLoadingSancoes, setIsLoadingSancoes] = useState(true);
+  const [errorSancoes, setErrorSancoes] = useState<string | null>(null);
+
+  // ── Filter state (órgãos) ──
   const [query, setQuery] = useState("");
   const [uf, setUf] = useState("todas");
 
+  // ── Filter state (sanções) ──
+  const [querySancao, setQuerySancao] = useState("");
+  const [origemFiltro, setOrigemFiltro] = useState("todas");
+
   // ── Paginação por scroll ──
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const [visibleCountOrgaos, setVisibleCountOrgaos] = useState(PAGE_SIZE);
+  const [visibleCountSancoes, setVisibleCountSancoes] = useState(PAGE_SIZE);
+  const sentinelOrgaosRef = useRef<HTMLDivElement | null>(null);
+  const sentinelSancoesRef = useRef<HTMLDivElement | null>(null);
 
   // ── Load órgãos ──
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setErrorMessage(null);
+    setIsLoadingOrgaos(true);
+    setErrorOrgaos(null);
 
     listOrgaos()
       .then((result) => {
         if (cancelled) return;
         setOrgaos(result.orgaos);
-        setIsLoading(false);
+        setIsLoadingOrgaos(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar órgãos.");
-        setIsLoading(false);
+        setErrorOrgaos(err instanceof Error ? err.message : "Erro ao carregar órgãos.");
+        setIsLoadingOrgaos(false);
       });
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // ── Load sanções ──
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingSancoes(true);
+    setErrorSancoes(null);
+
+    listSancoes()
+      .then((result) => {
+        if (cancelled) return;
+        setSancoes(result.sancoes);
+        setIsLoadingSancoes(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setErrorSancoes(err instanceof Error ? err.message : "Erro ao carregar sanções.");
+        setIsLoadingSancoes(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ── Map CNPJ → sanções (para o aviso no lookup) ──
+  const sancoesPorCnpj = useMemo<Map<string, SancaoItem[]>>(() => {
+    const m = new Map<string, SancaoItem[]>();
+    for (const s of sancoes) {
+      if (s.cnpj === "") continue;
+      const arr = m.get(s.cnpj) ?? [];
+      arr.push(s);
+      m.set(s.cnpj, arr);
+    }
+    return m;
+  }, [sancoes]);
 
   // ── Derived UF options ──
   const ufOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
@@ -563,8 +784,20 @@ export function EmpresasPage() {
     return [["todas", "Todas"], ...distinct.map((u) => [u, u] as const)];
   }, [orgaos]);
 
+  // ── Derived origem options (CEIS / CNEP) ──
+  const origemOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const distinct = Array.from(
+      new Set(
+        sancoes
+          .map((s) => s.attributes.origem?.trim())
+          .filter((o): o is string => typeof o === "string" && o.length > 0),
+      ),
+    ).sort();
+    return [["todas", "Todas"], ...distinct.map((o) => [o, o] as const)];
+  }, [sancoes]);
+
   // ── Filtered + sorted (por nome A→Z, depois mais licitações) ──
-  const filtered = useMemo<OrgaoPublico[]>(() => {
+  const filteredOrgaos = useMemo<OrgaoPublico[]>(() => {
     const list = orgaos.filter((o) => {
       if (!matchesSearch(o, query)) return false;
       if (uf !== "todas" && o.uf !== uf) return false;
@@ -576,36 +809,74 @@ export function EmpresasPage() {
     });
   }, [orgaos, query, uf]);
 
-  // Reinicia a janela ao mudar busca/filtros.
+  // ── Filtered sanções ──
+  const filteredSancoes = useMemo<SancaoItem[]>(() => {
+    return sancoes.filter((s) => {
+      if (!matchesSearchSancao(s, querySancao)) return false;
+      if (origemFiltro !== "todas" && (s.attributes.origem ?? "") !== origemFiltro) return false;
+      return true;
+    });
+  }, [sancoes, querySancao, origemFiltro]);
+
+  // Reinicia as janelas ao mudar busca/filtros.
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setVisibleCountOrgaos(PAGE_SIZE);
   }, [query, uf]);
 
-  // Carrega mais quando o sentinela entra na viewport.
   useEffect(() => {
-    const node = sentinelRef.current;
+    setVisibleCountSancoes(PAGE_SIZE);
+  }, [querySancao, origemFiltro]);
+
+  // Carrega mais órgãos quando o sentinela entra na viewport.
+  useEffect(() => {
+    const node = sentinelOrgaosRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          setVisibleCount((current) => Math.min(current + PAGE_SIZE, filtered.length));
+          setVisibleCountOrgaos((current) => Math.min(current + PAGE_SIZE, filteredOrgaos.length));
         }
       },
       { rootMargin: "600px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [filtered.length]);
+  }, [filteredOrgaos.length]);
 
-  const visible = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
+  // Carrega mais sanções quando o sentinela entra na viewport.
+  useEffect(() => {
+    const node = sentinelSancoesRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCountSancoes((current) => Math.min(current + PAGE_SIZE, filteredSancoes.length));
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filteredSancoes.length]);
 
-  function clearFilters() {
+  const visibleOrgaos = filteredOrgaos.slice(0, visibleCountOrgaos);
+  const hasMoreOrgaos = visibleCountOrgaos < filteredOrgaos.length;
+
+  const visibleSancoes = filteredSancoes.slice(0, visibleCountSancoes);
+  const hasMoreSancoes = visibleCountSancoes < filteredSancoes.length;
+
+  function clearFiltersOrgaos() {
     setQuery("");
     setUf("todas");
   }
 
-  const hasActiveFilters = query !== "" || uf !== "todas";
+  function clearFiltersSancoes() {
+    setQuerySancao("");
+    setOrigemFiltro("todas");
+  }
+
+  const hasActiveFiltersOrgaos = query !== "" || uf !== "todas";
+  const hasActiveFiltersSancoes = querySancao !== "" || origemFiltro !== "todas";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -617,27 +888,28 @@ export function EmpresasPage() {
         </h2>
         <p className="muted small" style={{ marginTop: 4, maxWidth: 580 }}>
           Consulte qualquer CNPJ no cadastro oficial da Receita Federal e navegue pelos órgãos
-          públicos contratantes que já mapeamos a partir das licitações do PNCP.
+          públicos contratantes e empresas sancionadas (CEIS/CNEP) já mapeadas.
         </p>
       </div>
 
       {/* Consulta de CNPJ */}
-      <CnpjLookup />
+      <CnpjLookup sancoesPorCnpj={sancoesPorCnpj} />
 
-      {/* Lista de órgãos públicos */}
+      {/* ── Seção: Sanções (CEIS/CNEP) ── */}
       <div>
-        <span className="eyebrow">Órgãos públicos conhecidos</span>
-        <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 800, color: "var(--t-hi)" }}>
-          Órgãos contratantes (derivados do PNCP)
+        <span className="eyebrow">Sanções públicas</span>
+        <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 800, color: "var(--t-hi)", display: "flex", alignItems: "center", gap: 8 }}>
+          <ShieldAlert size={18} style={{ color: "var(--danger)" }} aria-hidden="true" />
+          Empresas sancionadas — CEIS / CNEP
         </h3>
         <p className="muted small" style={{ margin: "4px 0 0", maxWidth: 560 }}>
-          Órgãos públicos distintos extraídos das licitações já coletadas, com CNPJ, UF e quantas
-          licitações vimos de cada um.
+          Empresas e pessoas físicas com sanções no Cadastro de Empresas Inidôneas e Suspensas (CEIS)
+          e no Cadastro Nacional de Empresas Punidas (CNEP), do Portal da Transparência (CGU).
         </p>
       </div>
 
-      {/* Error banner */}
-      {errorMessage !== null && (
+      {/* Error banner (sanções) */}
+      {errorSancoes !== null && (
         <div
           className="panel"
           style={{
@@ -650,7 +922,145 @@ export function EmpresasPage() {
           }}
           role="alert"
         >
-          Erro ao carregar dados: {errorMessage}
+          Erro ao carregar sanções: {errorSancoes}
+        </div>
+      )}
+
+      {/* Filter bar (sanções) */}
+      <div className="panel" style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="searchbar">
+          <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+          <input
+            value={querySancao}
+            onChange={(e) => setQuerySancao(e.target.value)}
+            placeholder="Buscar por nome, CNPJ, tipo de sanção ou órgão sancionador…"
+            aria-label="Buscar sanções"
+          />
+          {querySancao !== "" && (
+            <button
+              className="btn btn--icon btn--ghost btn--sm"
+              style={{ width: 28, height: 28, flexShrink: 0 }}
+              onClick={() => setQuerySancao("")}
+              type="button"
+              aria-label="Limpar busca"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+        {origemOptions.length > 1 && (
+          <div className="row wrap" style={{ gap: 10 }}>
+            <FilterSelect
+              label="Origem"
+              value={origemFiltro}
+              options={origemOptions}
+              onChange={setOrigemFiltro}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Count row (sanções) */}
+      {!isLoadingSancoes && errorSancoes === null && sancoes.length > 0 && (
+        <div className="row between wrap" style={{ gap: 8 }}>
+          <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
+            <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+              {filteredSancoes.length}
+            </b>{" "}
+            {filteredSancoes.length === 1 ? "sanção encontrada" : "sanções encontradas"}
+            {filteredSancoes.length > visibleSancoes.length ? ` · mostrando ${visibleSancoes.length}` : ""}
+          </span>
+          {hasActiveFiltersSancoes && (
+            <button className="btn btn--ghost btn--sm" onClick={clearFiltersSancoes} type="button">
+              Limpar filtros
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Grid sanções / states */}
+      {isLoadingSancoes ? (
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
+          aria-busy="true"
+          aria-label="Carregando sanções…"
+        >
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : errorSancoes !== null ? null : sancoes.length === 0 ? (
+        <div
+          className="panel"
+          style={{ padding: 48, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
+        >
+          <ShieldAlert size={28} style={{ color: "var(--t-low)" }} aria-hidden="true" />
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhuma sanção disponível ainda</div>
+          <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
+            As sanções vêm do Portal da Transparência (CGU). Aguarde a próxima sincronização.
+          </p>
+        </div>
+      ) : filteredSancoes.length === 0 ? (
+        <EmptyState onClear={clearFiltersSancoes} label="sanção" />
+      ) : (
+        <>
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 16 }}
+          >
+            {visibleSancoes.map((sancao) => (
+              <SancaoCard key={sancao.id} sancao={sancao} />
+            ))}
+          </div>
+          {hasMoreSancoes && (
+            <div
+              ref={sentinelSancoesRef}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+                padding: 20,
+                color: "var(--t-mid)",
+                fontSize: 13,
+              }}
+              aria-hidden="true"
+            >
+              <Loader2 size={16} className="spin" />
+              Carregando mais sanções…
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Seção: Órgãos públicos conhecidos ── */}
+      <div style={{ marginTop: 8 }}>
+        <span className="eyebrow">Órgãos públicos conhecidos</span>
+        <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 800, color: "var(--t-hi)" }}>
+          Órgãos contratantes (derivados do PNCP)
+        </h3>
+        <p className="muted small" style={{ margin: "4px 0 0", maxWidth: 560 }}>
+          Órgãos públicos distintos extraídos das licitações já coletadas, com CNPJ, UF e quantas
+          licitações vimos de cada um.
+        </p>
+      </div>
+
+      {/* Error banner */}
+      {errorOrgaos !== null && (
+        <div
+          className="panel"
+          style={{
+            padding: "14px 18px",
+            background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
+            border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
+            color: "var(--danger)",
+            fontSize: 13.5,
+            fontWeight: 600,
+          }}
+          role="alert"
+        >
+          Erro ao carregar dados: {errorOrgaos}
         </div>
       )}
 
@@ -684,17 +1094,17 @@ export function EmpresasPage() {
       </div>
 
       {/* Count row */}
-      {!isLoading && errorMessage === null && orgaos.length > 0 && (
+      {!isLoadingOrgaos && errorOrgaos === null && orgaos.length > 0 && (
         <div className="row between wrap" style={{ gap: 8 }}>
           <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
             <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
-              {filtered.length}
+              {filteredOrgaos.length}
             </b>{" "}
-            {filtered.length === 1 ? "órgão encontrado" : "órgãos encontrados"}
-            {filtered.length > visible.length ? ` · mostrando ${visible.length}` : ""}
+            {filteredOrgaos.length === 1 ? "órgão encontrado" : "órgãos encontrados"}
+            {filteredOrgaos.length > visibleOrgaos.length ? ` · mostrando ${visibleOrgaos.length}` : ""}
           </span>
-          {hasActiveFilters && (
-            <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
+          {hasActiveFiltersOrgaos && (
+            <button className="btn btn--ghost btn--sm" onClick={clearFiltersOrgaos} type="button">
               Limpar filtros
             </button>
           )}
@@ -702,7 +1112,7 @@ export function EmpresasPage() {
       )}
 
       {/* Grid / states */}
-      {isLoading ? (
+      {isLoadingOrgaos ? (
         <div
           className="grid"
           style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}
@@ -713,7 +1123,7 @@ export function EmpresasPage() {
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : errorMessage !== null ? null : orgaos.length === 0 ? (
+      ) : errorOrgaos !== null ? null : orgaos.length === 0 ? (
         <div
           className="panel"
           style={{ padding: 48, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
@@ -724,21 +1134,21 @@ export function EmpresasPage() {
             Os órgãos são derivados das licitações do PNCP. Assim que a coleta rodar, eles aparecem aqui.
           </p>
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState onClear={clearFilters} />
+      ) : filteredOrgaos.length === 0 ? (
+        <EmptyState onClear={clearFiltersOrgaos} label="órgão" />
       ) : (
         <>
           <div
             className="grid"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}
           >
-            {visible.map((orgao) => (
+            {visibleOrgaos.map((orgao) => (
               <OrgaoCard key={orgao.id} orgao={orgao} />
             ))}
           </div>
-          {hasMore && (
+          {hasMoreOrgaos && (
             <div
-              ref={sentinelRef}
+              ref={sentinelOrgaosRef}
               style={{
                 display: "flex",
                 alignItems: "center",

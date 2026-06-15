@@ -185,3 +185,119 @@ export async function listOrgaos(fetcher: typeof fetch = fetch): Promise<OrgaosL
 }
 
 export const loadOrgaos = listOrgaos;
+
+// ─── Sanções (kind=sanction) — CEIS/CNEP ─────────────────────────────────────
+
+/** Atributos de uma sanção armazenados em entities.attributes. */
+export interface SancaoAttributes {
+  /** Origem da sanção: "CEIS" ou "CNEP". */
+  origem?: string;
+  tipoSancao?: string;
+  dataInicioSancao?: string;
+  dataFimSancao?: string;
+  orgaoSancionador?: string;
+  fundamentacaoLegal?: string;
+}
+
+/** Sanção normalizada — lida de entities (kind=sanction). */
+export interface SancaoItem {
+  /** UUID do registro em entities. */
+  id: string;
+  /** Razão social / nome do sancionado (coluna name da entities). */
+  nome: string;
+  /** CNPJ (14 dígitos, sem máscara) — coluna cnpj da entities. "" quando PF. */
+  cnpj: string;
+  /** Atributos estruturados. */
+  attributes: SancaoAttributes;
+}
+
+export interface SancoesLoadResult {
+  source: OrgaosDataSource;
+  sancoes: SancaoItem[];
+  message: string;
+  lastSyncedAt?: string | undefined;
+  errors?: string[] | undefined;
+}
+
+/** Linha crua devolvida pelo PostgREST para kind=sanction. */
+interface SupabaseSancaoRow {
+  id: string;
+  name: string;
+  cnpj: string | null;
+  attributes: SancaoAttributes;
+  updated_at?: string;
+}
+
+/** Máscara 00.000.000/0000-00 a partir de 14 dígitos. Reutilizada pelo componente. */
+export function formatCnpjSancao(cnpj: string): string {
+  const d = cnpj.replace(/\D/g, "");
+  if (d.length !== 14) return cnpj;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+async function fetchSupabaseSancoes(
+  fetcher: typeof fetch,
+): Promise<{ sancoes: SancaoItem[]; lastSyncedAt?: string | undefined }> {
+  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
+
+  const rows: SupabaseSancaoRow[] = [];
+  const paginaSancoes = 10; // até 10.000 sanções — folga para crescer
+  for (let page = 0; page < paginaSancoes; page++) {
+    const offset = page * PAGE_SIZE;
+    const query =
+      "entities?kind=eq.sanction&select=id,name,cnpj,attributes,updated_at&order=updated_at.desc";
+    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
+      headers: {
+        accept: "application/json",
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
+        "Range-Unit": "items",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase REST returned ${response.status}`);
+    }
+
+    const batch = (await response.json()) as SupabaseSancaoRow[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+
+  const sancoes: SancaoItem[] = rows.map((row) => ({
+    id: row.id,
+    nome: row.name ?? "",
+    cnpj: row.cnpj ?? "",
+    attributes: row.attributes ?? {},
+  }));
+
+  return { sancoes, lastSyncedAt: rows.find((r) => r.updated_at)?.updated_at };
+}
+
+export async function listSancoes(fetcher: typeof fetch = fetch): Promise<SancoesLoadResult> {
+  const errors: string[] = [];
+
+  try {
+    const { sancoes, lastSyncedAt } = await fetchSupabaseSancoes(fetcher);
+
+    if (sancoes.length > 0) {
+      return {
+        source: "supabase",
+        sancoes,
+        message: "Sanções (CEIS/CNEP) carregadas do Supabase.",
+        lastSyncedAt,
+        errors,
+      };
+    }
+  } catch (error) {
+    errors.push(`Supabase: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return {
+    source: "empty",
+    sancoes: [],
+    message: "Nenhuma sanção disponível no momento.",
+    errors,
+  };
+}

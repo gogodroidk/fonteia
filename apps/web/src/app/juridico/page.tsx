@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Calendar, Loader2, Scale, Search, X } from "lucide-react";
+import { Calendar, FileText, Loader2, Scale, Search, X } from "lucide-react";
 import { listProposicoes, type ProposicaoItem } from "../../features/juridico/juridico-api";
+import {
+  assuntoPrincipal,
+  listProcessos,
+  type ProcessoJudicialItem,
+} from "../../features/juridico/juridico-api";
 import { FonteDots } from "../../components/ui";
 
-// Quantas proposições renderizar por vez (o scroll carrega mais sozinho).
+// Quantos itens renderizar por vez (o scroll carrega mais sozinho).
 const PAGE_SIZE = 36;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -13,6 +18,7 @@ export interface JuridicoPageProps {
 }
 
 type SortKey = "recentes" | "tipo";
+type TabKey = "proposicoes" | "processos";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -21,9 +27,19 @@ const FONTE_DOTS_CAMARA = [
   { sigla: "Câmara", cor: "#2D6CDF", nome: "Câmara dos Deputados — Proposições (Dados Abertos)" },
 ];
 
+// Fonte oficial: CNJ DataJud.
+const FONTE_DOTS_CNJ = [
+  { sigla: "CNJ", cor: "#1A4B8C", nome: "CNJ DataJud — processos judiciais" },
+];
+
 const SORT_OPTIONS: ReadonlyArray<readonly [SortKey, string]> = [
   ["recentes", "Mais recentes"],
   ["tipo", "Tipo (A→Z)"],
+];
+
+const TABS: ReadonlyArray<readonly [TabKey, string]> = [
+  ["proposicoes", "Proposições"],
+  ["processos", "Processos"],
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -50,11 +66,36 @@ function matchesSearch(p: ProposicaoItem, q: string): boolean {
   return query.split(/\s+/).every((term) => haystack.includes(term));
 }
 
+/** Busca tolerante em processo judicial. */
+function matchesSearchProcesso(p: ProcessoJudicialItem, q: string): boolean {
+  const query = normalizeForSearch(q);
+  if (query === "") return true;
+  const haystack = normalizeForSearch(
+    [
+      p.numeroProcesso,
+      p.attributes.tribunal ?? "",
+      p.attributes.classe ?? "",
+      p.attributes.grau ?? "",
+      p.attributes.orgaoJulgador ?? "",
+      assuntoPrincipal(p.attributes),
+    ].join(" "),
+  );
+  return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
 /** Chave de ordenação numérica estável (ano desc, depois número desc). */
 function recencyScore(p: ProposicaoItem): number {
   const ano = Number.isFinite(p.ano) ? p.ano : 0;
   const numero = Number.isFinite(p.numero) ? p.numero : 0;
   return ano * 1_000_000 + numero;
+}
+
+/** Formata uma data ISO/yyyy-mm-dd em dd/mm/aaaa; devolve cru se não der. */
+function formatDate(value: string): string {
+  if (!value) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return value;
 }
 
 // ─── Skeleton card ───────────────────────────────────────────────────────────
@@ -161,6 +202,105 @@ function ProposicaoCard({ proposicao, onSelect }: ProposicaoCardProps) {
   );
 }
 
+// ─── Processo judicial card ───────────────────────────────────────────────────
+
+function ProcessoCard({ processo }: { processo: ProcessoJudicialItem }) {
+  const { attributes, numeroProcesso } = processo;
+  const assunto = assuntoPrincipal(attributes);
+
+  return (
+    <article
+      className="card card--hover"
+      style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
+      aria-label={`Processo — ${numeroProcesso || attributes.classe || "Sem número"}`}
+    >
+      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+        {/* Top: classe + grau */}
+        <div className="row between" style={{ gap: 8, alignItems: "center" }}>
+          <span className="badge badge--neutral" style={{ flexShrink: 0 }}>
+            {attributes.classe || "—"}
+          </span>
+          {attributes.grau && (
+            <span className="tiny muted" style={{ flexShrink: 0 }}>
+              {attributes.grau}
+            </span>
+          )}
+        </div>
+
+        {/* Número do processo */}
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: "var(--t-hi)",
+            lineHeight: 1.3,
+            fontVariantNumeric: "tabular-nums",
+            wordBreak: "break-all",
+          }}
+          title={numeroProcesso}
+        >
+          {numeroProcesso || "Número não disponível"}
+        </div>
+
+        {/* Tribunal */}
+        {attributes.tribunal && (
+          <div
+            className="tiny muted"
+            style={{ display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <Scale size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
+            <span
+              style={{
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {attributes.tribunal}
+            </span>
+          </div>
+        )}
+
+        {/* Assunto principal */}
+        {assunto !== "" && (
+          <p
+            className="tiny muted"
+            style={{
+              margin: 0,
+              lineHeight: 1.5,
+              display: "-webkit-box",
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+            }}
+          >
+            {assunto}
+          </p>
+        )}
+
+        {/* Rodapé: data de ajuizamento + fonte */}
+        <div
+          className="row between"
+          style={{ gap: 6, marginTop: "auto", paddingTop: 4, alignItems: "center" }}
+        >
+          {attributes.dataAjuizamento ? (
+            <span
+              className="tiny muted"
+              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
+              <Calendar size={12} aria-hidden="true" />
+              {formatDate(attributes.dataAjuizamento)}
+            </span>
+          ) : (
+            <span />
+          )}
+          <FonteDots fontes={FONTE_DOTS_CNJ} size={20} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
 // ─── Select control (mobile-friendly native select styled como chip) ──────────
 
 function FilterSelect<T extends string>({
@@ -203,7 +343,7 @@ function FilterSelect<T extends string>({
 
 // ─── Empty (filters) state ────────────────────────────────────────────────────
 
-function EmptyState({ onClear }: { onClear: () => void }) {
+function EmptyState({ onClear, label }: { onClear: () => void; label: string }) {
   return (
     <div
       className="panel"
@@ -231,9 +371,9 @@ function EmptyState({ onClear }: { onClear: () => void }) {
       >
         <Search size={28} />
       </div>
-      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhuma proposição com esses filtros</div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum(a) {label} com esses filtros</div>
       <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
-        Tente ampliar a busca ou trocar o tipo/ano.
+        Tente ampliar a busca ou trocar o filtro.
       </p>
       <button className="btn btn--ghost btn--sm" onClick={onClear} type="button">
         Limpar filtros
@@ -245,37 +385,73 @@ function EmptyState({ onClear }: { onClear: () => void }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
-  // ── Data state ──
-  const [proposicoes, setProposicoes] = useState<ProposicaoItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // ── Tab ──
+  const [activeTab, setActiveTab] = useState<TabKey>("proposicoes");
 
-  // ── Filter/sort state ──
+  // ── Proposições data state ──
+  const [proposicoes, setProposicoes] = useState<ProposicaoItem[]>([]);
+  const [isLoadingProp, setIsLoadingProp] = useState(true);
+  const [errorProp, setErrorProp] = useState<string | null>(null);
+
+  // ── Processos data state ──
+  const [processos, setProcessos] = useState<ProcessoJudicialItem[]>([]);
+  const [isLoadingProc, setIsLoadingProc] = useState(true);
+  const [errorProc, setErrorProc] = useState<string | null>(null);
+
+  // ── Filter/sort state (proposições) ──
   const [query, setQuery] = useState("");
   const [tipo, setTipo] = useState("todos");
   const [ano, setAno] = useState("todos");
   const [sortKey, setSortKey] = useState<SortKey>("recentes");
 
+  // ── Filter state (processos) ──
+  const [queryProc, setQueryProc] = useState("");
+  const [tribunal, setTribunal] = useState("todos");
+
   // ── Paginação por scroll ──
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [visibleCountProp, setVisibleCountProp] = useState(PAGE_SIZE);
+  const [visibleCountProc, setVisibleCountProc] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
-  // ── Load data ──
+  // ── Load proposições ──
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
-    setErrorMessage(null);
+    setIsLoadingProp(true);
+    setErrorProp(null);
 
     listProposicoes()
       .then((result) => {
         if (cancelled) return;
         setProposicoes(result.proposicoes);
-        setIsLoading(false);
+        setIsLoadingProp(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar proposições.");
-        setIsLoading(false);
+        setErrorProp(err instanceof Error ? err.message : "Erro ao carregar proposições.");
+        setIsLoadingProp(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ── Load processos ──
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoadingProc(true);
+    setErrorProc(null);
+
+    listProcessos()
+      .then((result) => {
+        if (cancelled) return;
+        setProcessos(result.processos);
+        setIsLoadingProc(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setErrorProc(err instanceof Error ? err.message : "Erro ao carregar processos.");
+        setIsLoadingProc(false);
       });
 
     return () => {
@@ -307,8 +483,20 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
     return [["todos", "Todos"], ...distinct.map((a) => [a, a] as const)];
   }, [proposicoes]);
 
-  // ── Filtered + sorted list ──
-  const filtered = useMemo<ProposicaoItem[]>(() => {
+  // ── Derived filter option list (tribunais) ──
+  const tribunalOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const distinct = Array.from(
+      new Set(
+        processos
+          .map((p) => p.attributes.tribunal?.trim())
+          .filter((t): t is string => typeof t === "string" && t.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return [["todos", "Todos"], ...distinct.map((t) => [t, t] as const)];
+  }, [processos]);
+
+  // ── Filtered + sorted list (proposições) ──
+  const filteredProp = useMemo<ProposicaoItem[]>(() => {
     const list = proposicoes.filter((p) => {
       if (!matchesSearch(p, query)) return false;
       if (tipo !== "todos" && p.tipo !== tipo) return false;
@@ -326,39 +514,66 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
     });
   }, [proposicoes, query, tipo, ano, sortKey]);
 
-  // Reinicia a janela ao mudar busca/filtros/ordenação.
+  // ── Filtered list (processos) ──
+  const filteredProc = useMemo<ProcessoJudicialItem[]>(() => {
+    return processos.filter((p) => {
+      if (!matchesSearchProcesso(p, queryProc)) return false;
+      if (tribunal !== "todos" && (p.attributes.tribunal ?? "") !== tribunal) return false;
+      return true;
+    });
+  }, [processos, queryProc, tribunal]);
+
+  // Reinicia as janelas ao mudar busca/filtros/ordenação.
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setVisibleCountProp(PAGE_SIZE);
   }, [query, tipo, ano, sortKey]);
 
+  useEffect(() => {
+    setVisibleCountProc(PAGE_SIZE);
+  }, [queryProc, tribunal]);
+
   // Carrega mais quando o sentinela entra na viewport.
+  const currentFilteredLength = activeTab === "proposicoes" ? filteredProp.length : filteredProc.length;
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          setVisibleCount((current) => Math.min(current + PAGE_SIZE, filtered.length));
+          if (activeTab === "proposicoes") {
+            setVisibleCountProp((current) => Math.min(current + PAGE_SIZE, filteredProp.length));
+          } else {
+            setVisibleCountProc((current) => Math.min(current + PAGE_SIZE, filteredProc.length));
+          }
         }
       },
       { rootMargin: "600px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [filtered.length]);
+  }, [activeTab, currentFilteredLength, filteredProp.length, filteredProc.length]);
 
-  const visible = filtered.slice(0, visibleCount);
-  const hasMore = visibleCount < filtered.length;
+  const visibleProp = filteredProp.slice(0, visibleCountProp);
+  const hasMoreProp = visibleCountProp < filteredProp.length;
 
-  function clearFilters() {
+  const visibleProc = filteredProc.slice(0, visibleCountProc);
+  const hasMoreProc = visibleCountProc < filteredProc.length;
+
+  function clearFiltersProp() {
     setQuery("");
     setTipo("todos");
     setAno("todos");
     setSortKey("recentes");
   }
 
-  const hasActiveFilters =
+  function clearFiltersProc() {
+    setQueryProc("");
+    setTribunal("todos");
+  }
+
+  const hasActiveFiltersProp =
     query !== "" || tipo !== "todos" || ano !== "todos" || sortKey !== "recentes";
+  const hasActiveFiltersProc = queryProc !== "" || tribunal !== "todos";
 
   // ── Render ──
   return (
@@ -367,171 +582,340 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       <div>
         <span className="eyebrow">Jurídico</span>
         <h2 className="h2" style={{ marginTop: 4 }}>
-          Proposições legislativas
+          Legislação e processos
         </h2>
         <p className="muted small" style={{ marginTop: 4, maxWidth: 560 }}>
-          Projetos de lei e demais proposições em tramitação na Câmara dos Deputados (Dados
-          Abertos), com tipo, ano e ementa oficial — buscáveis por palavra-chave.
+          Proposições legislativas da Câmara dos Deputados e processos judiciais do CNJ DataJud —
+          buscáveis por palavra-chave.
         </p>
       </div>
 
-      {/* Error banner */}
-      {errorMessage !== null && (
-        <div
-          className="panel"
-          style={{
-            padding: "14px 18px",
-            background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
-            border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
-            color: "var(--danger)",
-            fontSize: 13.5,
-            fontWeight: 600,
-          }}
-          role="alert"
-        >
-          Erro ao carregar dados: {errorMessage}
-        </div>
-      )}
-
-      {/* Filter bar */}
-      <div
-        className="panel"
-        style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}
-      >
-        {/* Search */}
-        <div className="searchbar">
-          <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar na ementa, tipo ou número (ex.: PL 3091, saúde mental)…"
-            aria-label="Buscar proposições"
-          />
-          {query !== "" && (
-            <button
-              className="btn btn--icon btn--ghost btn--sm"
-              style={{ width: 28, height: 28, flexShrink: 0 }}
-              onClick={() => setQuery("")}
-              type="button"
-              aria-label="Limpar busca"
-            >
-              <X size={16} aria-hidden="true" />
-            </button>
-          )}
-        </div>
-
-        {/* Filter selects */}
-        <div className="row wrap" style={{ gap: 10 }}>
-          {tipoOptions.length > 1 && (
-            <FilterSelect label="Tipo" value={tipo} options={tipoOptions} onChange={setTipo} />
-          )}
-          {anoOptions.length > 1 && (
-            <FilterSelect label="Ano" value={ano} options={anoOptions} onChange={setAno} />
-          )}
-        </div>
-
-        {/* Sort chips */}
-        <div className="row wrap" style={{ gap: 7 }}>
-          <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, alignSelf: "center" }}>
-            Ordenar por:
-          </span>
-          {SORT_OPTIONS.map(([value, label]) => (
-            <button
-              key={value}
-              className={`chip${sortKey === value ? " chip--on" : ""}`}
-              style={{ fontSize: 12.5, padding: "7px 12px" }}
-              onClick={() => setSortKey(value)}
-              type="button"
-              aria-pressed={sortKey === value}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Tabs */}
+      <div className="row" style={{ gap: 4, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={`chip${activeTab === key ? " chip--on" : ""}`}
+            style={{
+              fontSize: 13.5,
+              padding: "8px 16px",
+              borderBottom: activeTab === key ? "2px solid var(--brand-ink)" : "2px solid transparent",
+              borderRadius: "6px 6px 0 0",
+            }}
+            aria-selected={activeTab === key}
+            role="tab"
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Count row */}
-      {!isLoading && errorMessage === null && proposicoes.length > 0 && (
-        <div className="row between wrap" style={{ gap: 8 }}>
-          <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
-            <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
-              {filtered.length}
-            </b>{" "}
-            {filtered.length === 1 ? "proposição encontrada" : "proposições encontradas"}
-            {filtered.length > visible.length ? ` · mostrando ${visible.length}` : ""}
-          </span>
-          {hasActiveFilters && (
-            <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
-              Limpar filtros
-            </button>
+      {/* ── TAB: Proposições ── */}
+      {activeTab === "proposicoes" && (
+        <>
+          {/* Error banner */}
+          {errorProp !== null && (
+            <div
+              className="panel"
+              style={{
+                padding: "14px 18px",
+                background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
+                border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
+                color: "var(--danger)",
+                fontSize: 13.5,
+                fontWeight: 600,
+              }}
+              role="alert"
+            >
+              Erro ao carregar dados: {errorProp}
+            </div>
           )}
-        </div>
+
+          {/* Filter bar */}
+          <div
+            className="panel"
+            style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}
+          >
+            {/* Search */}
+            <div className="searchbar">
+              <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar na ementa, tipo ou número (ex.: PL 3091, saúde mental)…"
+                aria-label="Buscar proposições"
+              />
+              {query !== "" && (
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  style={{ width: 28, height: 28, flexShrink: 0 }}
+                  onClick={() => setQuery("")}
+                  type="button"
+                  aria-label="Limpar busca"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter selects */}
+            <div className="row wrap" style={{ gap: 10 }}>
+              {tipoOptions.length > 1 && (
+                <FilterSelect label="Tipo" value={tipo} options={tipoOptions} onChange={setTipo} />
+              )}
+              {anoOptions.length > 1 && (
+                <FilterSelect label="Ano" value={ano} options={anoOptions} onChange={setAno} />
+              )}
+            </div>
+
+            {/* Sort chips */}
+            <div className="row wrap" style={{ gap: 7 }}>
+              <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, alignSelf: "center" }}>
+                Ordenar por:
+              </span>
+              {SORT_OPTIONS.map(([value, label]) => (
+                <button
+                  key={value}
+                  className={`chip${sortKey === value ? " chip--on" : ""}`}
+                  style={{ fontSize: 12.5, padding: "7px 12px" }}
+                  onClick={() => setSortKey(value)}
+                  type="button"
+                  aria-pressed={sortKey === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Count row */}
+          {!isLoadingProp && errorProp === null && proposicoes.length > 0 && (
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
+                <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+                  {filteredProp.length}
+                </b>{" "}
+                {filteredProp.length === 1 ? "proposição encontrada" : "proposições encontradas"}
+                {filteredProp.length > visibleProp.length ? ` · mostrando ${visibleProp.length}` : ""}
+              </span>
+              {hasActiveFiltersProp && (
+                <button className="btn btn--ghost btn--sm" onClick={clearFiltersProp} type="button">
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Grid / states */}
+          {isLoadingProp ? (
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
+              aria-busy="true"
+              aria-label="Carregando proposições…"
+            >
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : errorProp !== null ? null : proposicoes.length === 0 ? (
+            <div
+              className="panel"
+              style={{
+                padding: 48,
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhuma proposição disponível no momento</div>
+              <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
+                A coleta da Câmara roda periodicamente. Volte em breve ou aguarde a próxima sincronização.
+              </p>
+            </div>
+          ) : filteredProp.length === 0 ? (
+            <EmptyState onClear={clearFiltersProp} label="proposição" />
+          ) : (
+            <>
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
+              >
+                {visibleProp.map((proposicao) => (
+                  <ProposicaoCard
+                    key={proposicao.id}
+                    proposicao={proposicao}
+                    onSelect={
+                      onSelectProposicao !== undefined ? () => onSelectProposicao(proposicao) : undefined
+                    }
+                  />
+                ))}
+              </div>
+              {hasMoreProp && (
+                <div
+                  ref={sentinelRef}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: 20,
+                    color: "var(--t-mid)",
+                    fontSize: 13,
+                  }}
+                  aria-hidden="true"
+                >
+                  <Loader2 size={16} className="spin" />
+                  Carregando mais proposições…
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
 
-      {/* Grid / states */}
-      {isLoading ? (
-        <div
-          className="grid"
-          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
-          aria-busy="true"
-          aria-label="Carregando proposições…"
-        >
-          {Array.from({ length: 8 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      ) : errorMessage !== null ? null : proposicoes.length === 0 ? (
-        <div
-          className="panel"
-          style={{
-            padding: 48,
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhuma proposição disponível no momento</div>
-          <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
-            A coleta da Câmara roda periodicamente. Volte em breve ou aguarde a próxima sincronização.
-          </p>
-        </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState onClear={clearFilters} />
-      ) : (
+      {/* ── TAB: Processos Judiciais ── */}
+      {activeTab === "processos" && (
         <>
-          <div
-            className="grid"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
-          >
-            {visible.map((proposicao) => (
-              <ProposicaoCard
-                key={proposicao.id}
-                proposicao={proposicao}
-                onSelect={
-                  onSelectProposicao !== undefined ? () => onSelectProposicao(proposicao) : undefined
-                }
-              />
-            ))}
-          </div>
-          {hasMore && (
+          {/* Error banner */}
+          {errorProc !== null && (
             <div
-              ref={sentinelRef}
+              className="panel"
               style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-                padding: 20,
-                color: "var(--t-mid)",
-                fontSize: 13,
+                padding: "14px 18px",
+                background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
+                border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
+                color: "var(--danger)",
+                fontSize: 13.5,
+                fontWeight: 600,
               }}
-              aria-hidden="true"
+              role="alert"
             >
-              <Loader2 size={16} className="spin" />
-              Carregando mais proposições…
+              Erro ao carregar dados: {errorProc}
             </div>
+          )}
+
+          {/* Filter bar */}
+          <div
+            className="panel"
+            style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}
+          >
+            <div className="searchbar">
+              <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+              <input
+                value={queryProc}
+                onChange={(e) => setQueryProc(e.target.value)}
+                placeholder="Buscar por número, tribunal, classe ou assunto…"
+                aria-label="Buscar processos judiciais"
+              />
+              {queryProc !== "" && (
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  style={{ width: 28, height: 28, flexShrink: 0 }}
+                  onClick={() => setQueryProc("")}
+                  type="button"
+                  aria-label="Limpar busca"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            {tribunalOptions.length > 1 && (
+              <div className="row wrap" style={{ gap: 10 }}>
+                <FilterSelect
+                  label="Tribunal"
+                  value={tribunal}
+                  options={tribunalOptions}
+                  onChange={setTribunal}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Count row */}
+          {!isLoadingProc && errorProc === null && processos.length > 0 && (
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
+                <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+                  {filteredProc.length}
+                </b>{" "}
+                {filteredProc.length === 1 ? "processo encontrado" : "processos encontrados"}
+                {filteredProc.length > visibleProc.length ? ` · mostrando ${visibleProc.length}` : ""}
+              </span>
+              {hasActiveFiltersProc && (
+                <button className="btn btn--ghost btn--sm" onClick={clearFiltersProc} type="button">
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Grid / states */}
+          {isLoadingProc ? (
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
+              aria-busy="true"
+              aria-label="Carregando processos…"
+            >
+              {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : errorProc !== null ? null : processos.length === 0 ? (
+            <div
+              className="panel"
+              style={{
+                padding: 48,
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <FileText size={28} style={{ color: "var(--t-low)" }} aria-hidden="true" />
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum processo judicial disponível</div>
+              <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
+                Os processos vêm do CNJ DataJud. Aguarde a próxima coleta.
+              </p>
+            </div>
+          ) : filteredProc.length === 0 ? (
+            <EmptyState onClear={clearFiltersProc} label="processo" />
+          ) : (
+            <>
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
+              >
+                {visibleProc.map((processo) => (
+                  <ProcessoCard key={processo.id} processo={processo} />
+                ))}
+              </div>
+              {hasMoreProc && (
+                <div
+                  ref={sentinelRef}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    padding: 20,
+                    color: "var(--t-mid)",
+                    fontSize: 13,
+                  }}
+                  aria-hidden="true"
+                >
+                  <Loader2 size={16} className="spin" />
+                  Carregando mais processos…
+                </div>
+              )}
+            </>
           )}
         </>
       )}
