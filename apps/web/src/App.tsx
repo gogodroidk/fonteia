@@ -16,6 +16,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  MoreHorizontal,
   Search,
   Scale,
   ShieldCheck,
@@ -315,6 +316,7 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [isLoadingLot, setIsLoadingLot] = useState(false);
   const [lotLoadMessage, setLotLoadMessage] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [searchSeed, setSearchSeed] = useState("");
   const [topbarQuery, setTopbarQuery] = useState("");
@@ -518,11 +520,11 @@ function AppShell({ path, navigate }: AppShellProps) {
             <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
               <HelpHint id="topbar.search">
-                <div className="searchbar" role="search" aria-label="Buscar lote, órgão ou edital">
+                <div className="searchbar" role="search" aria-label="Buscar">
                   <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
                   <input
                     ref={topbarInputRef}
-                    placeholder="Buscar lote, órgão ou edital…"
+                    placeholder="Buscar…"
                     value={topbarQuery}
                     onChange={(e) => setTopbarQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -531,7 +533,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                         setTopbarQuery("");
                       }
                     }}
-                    aria-label="Buscar lote, órgão ou edital"
+                    aria-label="Buscar"
                     style={{ fontSize: 13.5 }}
                   />
                 </div>
@@ -670,26 +672,122 @@ function AppShell({ path, navigate }: AppShellProps) {
         </button>
       )}
 
-      {/* bottom nav mobile */}
-      <nav className="shell-bottomnav no-print" aria-label="Navegação rápida">
-        {NAV.map((item) => {
-          const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.route}
-              type="button"
-              onClick={() => go(item.path)}
-              className="shell-bottomnav-item"
-              aria-current={active ? "page" : undefined}
-              style={{ color: active ? "var(--brand-ink)" : "var(--t-mid)", fontWeight: active ? 700 : 500 }}
-            >
-              <Icon size={21} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {/* bottom nav mobile — 5 itens primários + "Mais" para o restante */}
+      {(() => {
+        const PRIMARY_NAV = [
+          NAV[0]!, // Painel
+          NAV[1]!, // Lotes
+          NAV[2]!, // Licitações
+          NAV[9]!, // Alertas
+          NAV[10]!, // Relatórios
+        ];
+        const MORE_NAV = [
+          NAV[3]!, // Política
+          NAV[4]!, // Municípios
+          NAV[5]!, // Empresas
+          NAV[6]!, // Ambiental
+          NAV[7]!, // Jurídico
+          NAV[8]!, // INPI
+          NAV[11]!, // Fontes
+          { path: "/app/modules", route: "modules" as RouteKey, label: "Módulos", icon: LayoutGrid },
+        ];
+        const moreActive = MORE_NAV.some((item) => route === item.route);
+        return (
+          <>
+            <nav className="shell-bottomnav no-print" aria-label="Navegação rápida">
+              {PRIMARY_NAV.map((item) => {
+                const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.route}
+                    type="button"
+                    onClick={() => go(item.path)}
+                    className="shell-bottomnav-item"
+                    aria-current={active ? "page" : undefined}
+                    style={{ color: active ? "var(--brand-ink)" : "var(--t-mid)", fontWeight: active ? 700 : 500 }}
+                  >
+                    <Icon size={21} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+              {/* Botão "Mais" */}
+              <button
+                type="button"
+                onClick={() => setMoreDrawerOpen(true)}
+                className="shell-bottomnav-item"
+                aria-label="Mais seções"
+                style={{ color: moreActive ? "var(--brand-ink)" : "var(--t-mid)", fontWeight: moreActive ? 700 : 500 }}
+              >
+                <MoreHorizontal size={21} strokeWidth={moreActive ? 2.2 : 1.8} aria-hidden="true" />
+                <span>Mais</span>
+              </button>
+            </nav>
+
+            {/* Drawer "Mais" — slide-up sheet no mobile */}
+            {moreDrawerOpen && (
+              <>
+                <div
+                  className="shell-scrim"
+                  onClick={() => setMoreDrawerOpen(false)}
+                  aria-hidden="true"
+                  style={{ position: "fixed", inset: 0, background: "rgba(4,8,18,.5)", zIndex: 40 }}
+                />
+                <div
+                  className="shell-more-drawer"
+                  role="dialog"
+                  aria-label="Mais seções"
+                  style={{
+                    position: "fixed",
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 50,
+                    background: "var(--surface)",
+                    borderTop: "1px solid var(--border)",
+                    borderRadius: "var(--r-xl) var(--r-xl) 0 0",
+                    boxShadow: "0 -8px 32px rgba(0,0,0,.18)",
+                    paddingBottom: "env(safe-area-inset-bottom)",
+                    animation: "shellSlideUp .22s cubic-bezier(.2,.7,.3,1)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px 8px" }}>
+                    <span style={{ fontWeight: 700, fontSize: 15, color: "var(--t-hi)" }}>Mais seções</span>
+                    <button
+                      className="btn btn--icon btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => setMoreDrawerOpen(false)}
+                      aria-label="Fechar"
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4, padding: "4px 12px 20px" }}>
+                    {MORE_NAV.map((item) => {
+                      const active = route === item.route;
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.route}
+                          type="button"
+                          onClick={() => { setMoreDrawerOpen(false); go(item.path); }}
+                          className="shell-more-item"
+                          aria-current={active ? "page" : undefined}
+                          style={{ color: active ? "var(--brand-ink)" : "var(--t-mid)", fontWeight: active ? 700 : 500 }}
+                        >
+                          <Icon size={22} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
+                          <span>{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        );
+      })()}
 
       <style>{`
         /* =========================================================
@@ -740,8 +838,9 @@ function AppShell({ path, navigate }: AppShellProps) {
         .shell-sidebar-drawer{animation:shellSlideIn .24s cubic-bezier(.2,.7,.3,1)}
         @keyframes shellFade{from{opacity:0}to{opacity:1}}
         @keyframes shellSlideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+        @keyframes shellSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
         @media (prefers-reduced-motion:reduce){
-          .shell-scrim,.shell-sidebar-drawer{animation:none}
+          .shell-scrim,.shell-sidebar-drawer,.shell-more-drawer{animation:none}
         }
 
         /* =========================================================
@@ -778,6 +877,19 @@ function AppShell({ path, navigate }: AppShellProps) {
             max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
           }
           .shell-bottomnav-item:active{transform:scale(.94)}
+
+          /* ---- "Mais" drawer grid items ---- */
+          .shell-more-item{
+            min-height:72px;min-width:44px;
+            display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+            background:none;border:0;cursor:pointer;border-radius:12px;
+            font-size:11px;font-family:inherit;line-height:1.2;
+            padding:10px 4px;
+            -webkit-tap-highlight-color:transparent;
+            transition:background .12s,color .12s;
+          }
+          .shell-more-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .shell-more-item:active{background:color-mix(in srgb,var(--brand) 10%,transparent);transform:scale(.94)}
 
           /* ---- Floating "Perguntar" (AI) button ---- */
           .shell-fab{

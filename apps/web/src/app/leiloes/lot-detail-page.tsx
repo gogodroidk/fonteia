@@ -78,20 +78,10 @@ interface LotDetailPageProps {
 
 // ─── Alert modal state ───────────────────────────────────────────────────────
 
-type AlertChannel = "in_app" | "email" | "whatsapp";
+type AlertChannel = "in_app";
 
 const channelLabels: Record<AlertChannel, string> = {
   in_app: "Notificação no app",
-  email: "E-mail em breve",
-  whatsapp: "WhatsApp em breve",
-};
-
-// Canais ainda não implementados no backend — exibidos como "em breve" e
-// desabilitados na seleção (não há fluxo real além do in-app/e-mail de prazo).
-const channelDisabled: Record<AlertChannel, boolean> = {
-  in_app: false,
-  email: true,
-  whatsapp: true,
 };
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -2375,7 +2365,7 @@ export function LotDetailPage({
                 }}
               >
                 {(Object.keys(channelLabels) as AlertChannel[]).map((key) => (
-                  <option key={key} value={key} disabled={channelDisabled[key]}>
+                  <option key={key} value={key}>
                     {channelLabels[key]}
                   </option>
                 ))}
