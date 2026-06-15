@@ -271,6 +271,49 @@ function InpiCnpjLookup() {
         </button>
       </form>
 
+      {/* Empty state — orienta quando nenhuma busca foi feita ainda */}
+      {result === null && error === null && !isLoading && searchedCnpj === null && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 12,
+            padding: "28px 20px",
+            borderRadius: "var(--r-md, 10px)",
+            background: "color-mix(in srgb, var(--brand) 6%, var(--surface))",
+            border: "1px dashed color-mix(in srgb, var(--brand-ink) 22%, var(--border))",
+            textAlign: "center",
+          }}
+          aria-label="Aguardando consulta"
+        >
+          <div
+            aria-hidden="true"
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 14,
+              background: "color-mix(in srgb, var(--brand-ink) 10%, var(--surface))",
+              color: "var(--brand-ink)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <BadgeCheck size={26} />
+          </div>
+          <div>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 14.5, color: "var(--t-hi)" }}>
+              Digite um CNPJ para pesquisar marcas e patentes no INPI
+            </p>
+            <p className="muted small" style={{ margin: "5px 0 0", maxWidth: 400 }}>
+              Identifique o portfólio de propriedade industrial de qualquer empresa — marcas, situação
+              cadastral e link direto para a busca oficial do INPI.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Erro */}
       {error !== null && (
         <div
