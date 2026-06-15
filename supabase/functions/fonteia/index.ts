@@ -483,12 +483,15 @@ async function matchEntities(
   return (await res.json()) as MatchRow[];
 }
 
-/* ─── Rate limit por IP nas rotas de IA ─────────────────────────────────────
- * Janela fixa de RATE_WINDOW_SECONDS, RATE_LIMIT_PER_WINDOW hits por IP.
+/* ─── Rate limit por usuário autenticado (ou IP como fallback) ───────────────
+ * Janela fixa de RATE_WINDOW_SECONDS, RATE_LIMIT_PER_WINDOW hits por chave.
+ * Chave = "user:{sub}" quando há JWT de sessão válido, "ip:{ip}" caso contrário.
+ * Isso evita o problema de IP mascarado na infra do Supabase Edge (todos os
+ * requests chegam com o IP do worker, não o IP real do cliente).
  * Estado fica na tabela public.ai_rate_limits; o incremento atômico é feito pela
- * RPC SECURITY DEFINER check_ai_rate_limit, chamada com a service_role key
- * (injetada automaticamente nas Edge Functions). Fail-open: se a RPC falhar ou a
- * chave não estiver presente, NÃO bloqueia (não derruba a IA por erro de infra). */
+ * RPC SECURITY DEFINER check_ai_rate_limit (1º arg = p_ip text, serve como chave
+ * genérica — não precisa mudar a RPC).
+ * Fail-open: se a RPC falhar ou a chave não estiver presente, NÃO bloqueia. */
 const RATE_LIMIT_PER_WINDOW = 30;
 const RATE_WINDOW_SECONDS = 60;
 
@@ -521,13 +524,42 @@ function clientIp(request: Request): string {
   return request.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
+// Determina a chave de rate limit para o request:
+//   - "user:{sub}" se o Authorization Bearer for um JWT de sessão (≠ publishable key).
+//     O payload é decodificado localmente (sem verificar assinatura) só para extrair
+//     o sub — serve apenas como chave de contagem, fail-open em qualquer erro.
+//   - "ip:{ip}" como fallback (sem sessão, ou erro no decode).
+function rateLimitKey(request: Request): string {
+  try {
+    const auth = request.headers.get("authorization") ?? "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+    // Publishable key (sb_publishable_...) não é um JWT de sessão — vai pro fallback.
+    if (!token || token === PUBLISHABLE_KEY || token.startsWith("sb_publishable_")) {
+      return `ip:${clientIp(request)}`;
+    }
+    // JWT tem exatamente 3 partes separadas por "."
+    const parts = token.split(".");
+    if (parts.length !== 3) return `ip:${clientIp(request)}`;
+    // Decodifica o payload (parte do meio) em base64url → JSON, sem verificar assinatura.
+    const payloadB64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
+    const payloadJson = atob(padded);
+    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+    const sub = typeof payload["sub"] === "string" ? payload["sub"].trim() : "";
+    if (sub) return `user:${sub}`;
+  } catch {
+    // Fail-open: qualquer erro de decode → cai pro IP
+  }
+  return `ip:${clientIp(request)}`;
+}
+
 interface RateLimitResult {
   allowed: boolean;
   retry_after: number;
 }
 
 // Chama a RPC check_ai_rate_limit (service-role). Fail-open: qualquer erro ⇒ allowed.
-async function checkRateLimit(ip: string): Promise<RateLimitResult> {
+async function checkRateLimit(key: string): Promise<RateLimitResult> {
   const base = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!base || !serviceKey) return { allowed: true, retry_after: 0 };
@@ -540,7 +572,7 @@ async function checkRateLimit(ip: string): Promise<RateLimitResult> {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        p_ip: ip,
+        p_ip: key,
         p_limit: RATE_LIMIT_PER_WINDOW,
         p_window_seconds: RATE_WINDOW_SECONDS,
       }),
@@ -570,11 +602,10 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   const { pathname } = new URL(request.url);
 
-  // Rate limit por IP: aplica-se ANTES da lógica das rotas de IA (POST). Preserva
-  // 100% as rotas — só intercepta com 429 quem estourar o limite. GET/health passam.
+  // Rate limit por usuário/IP: aplica-se ANTES da lógica das rotas de IA (POST).
+  // Preserva 100% as rotas — só intercepta com 429 quem estourar o limite. GET/health passam.
   if (request.method === "POST" && isAiRoute(pathname)) {
-    const ip = clientIp(request);
-    const rl = await checkRateLimit(ip);
+    const rl = await checkRateLimit(rateLimitKey(request));
     if (!rl.allowed) {
       return new Response(
         JSON.stringify({ error: "rate_limited", retry_after: rl.retry_after }),
