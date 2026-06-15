@@ -3,21 +3,7 @@ import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client
 
 export type JuridicoDataSource = "supabase" | "empty";
 
-/** Proposição lida do Supabase (entities kind=legal_proposition). */
-export type ProposicaoItem = CamaraProposicao;
-
-export interface JuridicoLoadResult {
-  source: JuridicoDataSource;
-  proposicoes: ProposicaoItem[];
-  message: string;
-  lastSyncedAt?: string | undefined;
-  errors?: string[] | undefined;
-}
-
-interface SupabaseEntityRow {
-  attributes: CamaraProposicao;
-  updated_at?: string;
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -68,13 +54,31 @@ async function fetchAllRows<T>(
   return rows;
 }
 
+// ─── Proposições (kind=legal_proposition) ────────────────────────────────────
+
+/** Proposição lida do Supabase (entities kind=legal_proposition). */
+export type ProposicaoItem = CamaraProposicao;
+
+export interface JuridicoLoadResult {
+  source: JuridicoDataSource;
+  proposicoes: ProposicaoItem[];
+  message: string;
+  lastSyncedAt?: string | undefined;
+  errors?: string[] | undefined;
+}
+
+interface SupabaseProposicaoRow {
+  attributes: CamaraProposicao;
+  updated_at?: string;
+}
+
 async function fetchSupabaseProposicoes(
   fetcher: typeof fetch,
 ): Promise<{ proposicoes: ProposicaoItem[]; lastSyncedAt?: string | undefined }> {
   const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
 
   // kind = legal_proposition é a entidade de proposição (Câmara — Dados Abertos).
-  const rows = await fetchAllRows<SupabaseEntityRow>(
+  const rows = await fetchAllRows<SupabaseProposicaoRow>(
     fetcher,
     supabaseUrl,
     publishableKey,
@@ -118,3 +122,109 @@ export async function listProposicoes(fetcher: typeof fetch = fetch): Promise<Ju
 }
 
 export const loadProposicoes = listProposicoes;
+
+// ─── Processos judiciais (kind=legal_process) ─────────────────────────────────
+
+/** Atributos de um processo judicial armazenados em entities.attributes. */
+export interface ProcessoJudicialAttributes {
+  tribunal?: string;
+  grau?: string;
+  classe?: string;
+  /** Lista de assuntos do processo (CNJ). Pode ser array de strings ou objetos. */
+  assuntos?: unknown[];
+  orgaoJulgador?: string;
+  dataAjuizamento?: string;
+  qtdMovimentos?: number;
+}
+
+/** Processo judicial normalizado — lido de entities (kind=legal_process). */
+export interface ProcessoJudicialItem {
+  /** UUID do registro em entities. */
+  id: string;
+  /** Número CNJ do processo (ex.: "0000001-00.2024.8.26.0000"). */
+  numeroProcesso: string;
+  /** Atributos estruturados (tribunal, grau, classe, assuntos…). */
+  attributes: ProcessoJudicialAttributes;
+}
+
+export interface ProcessosLoadResult {
+  source: JuridicoDataSource;
+  processos: ProcessoJudicialItem[];
+  message: string;
+  lastSyncedAt?: string | undefined;
+  errors?: string[] | undefined;
+}
+
+/** Linha crua devolvida pelo PostgREST para kind=legal_process. */
+interface SupabaseProcessoRow {
+  id: string;
+  external_ids: Record<string, unknown>;
+  attributes: ProcessoJudicialAttributes;
+  updated_at?: string;
+}
+
+/** Extrai o assunto principal (primeiro da lista) como string legível. */
+export function assuntoPrincipal(attributes: ProcessoJudicialAttributes): string {
+  const list = attributes.assuntos ?? [];
+  if (list.length === 0) return "";
+  const first = list[0];
+  if (typeof first === "string") return first;
+  if (first !== null && typeof first === "object") {
+    const obj = first as Record<string, unknown>;
+    const nome = obj["nome"] ?? obj["descricao"] ?? obj["titulo"] ?? obj["assunto"];
+    if (typeof nome === "string" && nome.trim() !== "") return nome.trim();
+  }
+  return "";
+}
+
+async function fetchSupabaseProcessos(
+  fetcher: typeof fetch,
+): Promise<{ processos: ProcessoJudicialItem[]; lastSyncedAt?: string | undefined }> {
+  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
+
+  const rows = await fetchAllRows<SupabaseProcessoRow>(
+    fetcher,
+    supabaseUrl,
+    publishableKey,
+    "entities?kind=eq.legal_process&select=id,external_ids,attributes,updated_at&order=updated_at.desc",
+    5, // 130 registros — uma página basta, folga de 5
+    "processos",
+  );
+
+  const processos: ProcessoJudicialItem[] = rows.map((row) => ({
+    id: row.id,
+    numeroProcesso: typeof row.external_ids?.["numeroProcesso"] === "string"
+      ? row.external_ids["numeroProcesso"]
+      : "",
+    attributes: row.attributes ?? {},
+  }));
+
+  return { processos, lastSyncedAt: rows.find((r) => r.updated_at)?.updated_at };
+}
+
+export async function listProcessos(fetcher: typeof fetch = fetch): Promise<ProcessosLoadResult> {
+  const errors: string[] = [];
+
+  try {
+    const { processos, lastSyncedAt } = await fetchSupabaseProcessos(fetcher);
+
+    if (processos.length > 0) {
+      return {
+        source: "supabase",
+        processos,
+        message: "Processos judiciais carregados do Supabase.",
+        lastSyncedAt,
+        errors,
+      };
+    }
+  } catch (error) {
+    errors.push(`Supabase: ${toErrorMessage(error)}`);
+  }
+
+  return {
+    source: "empty",
+    processos: [],
+    message: "Nenhum processo judicial disponível no momento.",
+    errors,
+  };
+}
