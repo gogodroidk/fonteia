@@ -5,7 +5,7 @@
 Esta instrução está ativa em TODA sessão, TODA conversa, SEM EXCEÇÃO.
 
 ### Regra principal
-Você é o orquestrador (Sonnet). Avalie cada tarefa silenciosamente e delegue via Agent tool quando necessário. **Nunca interrompa o usuário. Nunca anuncie a troca. Execute e entregue.**
+Você é o orquestrador (Sonnet). **SEMPRE use agentes (Agent tool) para executar** — delegue por padrão e rode **vários agentes em paralelo** quando as tarefas forem independentes (escopos de arquivo disjuntos). O orquestrador coordena, faz a fiação das rotas e commita o conjunto. **Nunca interrompa o usuário. Nunca anuncie a troca. Execute e entregue.**
 
 ### Decisão automática (sem pausar, sem perguntar)
 

@@ -4,8 +4,10 @@
  * Rota: /raio-x
  * Auto-contida: sem edições em App.tsx, app/page.tsx ou arquivos compartilhados.
  * O roteamento é adicionado pelo Igor depois.
+ *
+ * Suporta ?cnpj= na URL para pré-preenchimento e busca automática.
  */
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -21,13 +23,16 @@ import {
   ExternalLink,
   CheckCircle2,
   Info,
+  Briefcase,
 } from "lucide-react";
 import {
   type EmpresaCnpj,
   type SancaoItem,
+  type ContratoPublico,
   type RaioXReportData,
   lookupCnpj,
   fetchSancoesByCnpj,
+  fetchContratosByCnpj,
   sanitizeCnpj,
   formatCnpj,
   formatDate,
@@ -45,6 +50,9 @@ const FONTE_RF = [
 ];
 const FONTE_CGU = [
   { sigla: "CGU", cor: "#D32F2F", nome: "Portal da Transparência — CEIS/CNEP (CGU)" },
+];
+const FONTE_PNCP = [
+  { sigla: "PNCP", cor: "#1565C0", nome: "Portal Nacional de Contratações Públicas (PNCP)" },
 ];
 
 // ─── Componentes auxiliares ───────────────────────────────────────────────────
@@ -355,6 +363,135 @@ function SecaoSancoes({ sancoes, fetchedAt, syncedAt }: {
   );
 }
 
+// ─── Seção: Contratos Públicos (PNCP) ─────────────────────────────────────────
+
+function formatValor(valor: number | string | null | undefined): string {
+  if (valor == null || valor === "") return "—";
+  const n = Number(valor);
+  if (!Number.isFinite(n)) return String(valor);
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function SecaoContratos({
+  contratos,
+  fetchedAt,
+  syncedAt,
+}: {
+  contratos: ContratoPublico[];
+  fetchedAt: string;
+  syncedAt?: string | undefined;
+}) {
+  const temContratos = contratos.length > 0;
+
+  const totalValor = contratos.reduce((acc, c) => {
+    const v = Number(c.attributes.valorGlobal ?? 0);
+    return acc + (Number.isFinite(v) ? v : 0);
+  }, 0);
+
+  return (
+    <FonteSeloBlock
+      titulo="Contratos públicos"
+      icone={<Briefcase size={15} />}
+      fontes={FONTE_PNCP}
+      dataColeta={fetchedAt}
+      confianca="alta"
+    >
+      {temContratos ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Totalizador */}
+          <AlertBanner tipo="info">
+            {contratos.length} {contratos.length === 1 ? "contrato público registrado" : "contratos públicos registrados"} no PNCP para este CNPJ
+            {totalValor > 0 ? ` — valor total: ${formatValor(totalValor)}` : ""}.
+          </AlertBanner>
+
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            {contratos.map((contrato) => (
+              <li
+                key={contrato.id}
+                className="card card--pad"
+                style={{ padding: "13px 15px", display: "flex", flexDirection: "column", gap: 6 }}
+              >
+                {/* Cabeçalho */}
+                <div className="row between wrap" style={{ gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    {contrato.attributes.orgao && (
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t-hi)", wordBreak: "break-word" }}>
+                        {contrato.attributes.orgao}
+                      </div>
+                    )}
+                    {contrato.attributes.modalidade && (
+                      <div className="tiny muted" style={{ marginTop: 2 }}>
+                        {contrato.attributes.modalidade}
+                      </div>
+                    )}
+                  </div>
+                  {contrato.attributes.valorGlobal != null && (
+                    <span
+                      className="badge"
+                      style={{
+                        flexShrink: 0,
+                        background: "color-mix(in srgb, var(--brand) 12%, var(--surface))",
+                        color: "var(--brand-ink)",
+                        border: "1px solid color-mix(in srgb, var(--brand) 22%, transparent)",
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatValor(contrato.attributes.valorGlobal)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Objeto */}
+                {contrato.attributes.objeto && (
+                  <div
+                    className="small"
+                    style={{ color: "var(--t-mid)", lineHeight: 1.45, wordBreak: "break-word" }}
+                  >
+                    {contrato.attributes.objeto}
+                  </div>
+                )}
+
+                {/* Rodapé: localização + data + nº controle */}
+                <div className="tiny muted" style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", alignItems: "center" }}>
+                  {(contrato.attributes.municipio ?? contrato.attributes.uf) && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <MapPin size={10} aria-hidden="true" />
+                      {[contrato.attributes.municipio, contrato.attributes.uf].filter(Boolean).join("/")}
+                    </span>
+                  )}
+                  {contrato.attributes.dataVigenciaInicio && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <CalendarDays size={10} aria-hidden="true" />
+                      Início: {formatDate(contrato.attributes.dataVigenciaInicio)}
+                    </span>
+                  )}
+                  {contrato.attributes.numeroControlePNCP && (
+                    <span className="num" style={{ fontSize: 10.5 }}>
+                      PNCP: {contrato.attributes.numeroControlePNCP}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {syncedAt && (
+            <p className="tiny muted" style={{ margin: 0 }}>
+              Base PNCP sincronizada em {formatDate(syncedAt)}.
+            </p>
+          )}
+        </div>
+      ) : (
+        <AlertBanner tipo="info">
+          Nenhum contrato público encontrado para este CNPJ no PNCP.
+        </AlertBanner>
+      )}
+    </FonteSeloBlock>
+  );
+}
+
 // ─── Seção: Resumo Honesto ─────────────────────────────────────────────────────
 
 function SecaoResumo({ data }: { data: RaioXReportData }) {
@@ -409,8 +546,8 @@ function SecaoResumo({ data }: { data: RaioXReportData }) {
 // ─── Seção: Fontes não vinculadas (placeholder honesto) ───────────────────────
 
 function SecaoFontesNaoVinculadas() {
+  // PNCP agora está vinculada — apenas CNJ e INPI continuam sem vínculo por CNPJ
   const fontes = [
-    { nome: "Contratos PNCP", descricao: "Portal Nacional de Contratações Públicas" },
     { nome: "Processos CNJ", descricao: "Conselho Nacional de Justiça" },
     { nome: "Marcas INPI", descricao: "Instituto Nacional da Propriedade Industrial" },
   ];
@@ -558,6 +695,20 @@ function RaioXRelatorio({ data }: { data: RaioXReportData }) {
         </div>
 
         <div className="report-section">
+          <div className="report-section-title">Contratos Públicos — Portal Nacional de Contratações Públicas (PNCP)</div>
+          {data.contratos.length === 0 ? (
+            <div className="report-row"><span>Nenhum contrato encontrado para este CNPJ</span><b>—</b></div>
+          ) : (
+            data.contratos.map((c) => (
+              <div key={c.id} className="report-row">
+                <span>{c.attributes.orgao ?? ""}{c.attributes.objeto ? ` — ${c.attributes.objeto}` : ""}</span>
+                <b>{c.attributes.valorGlobal != null ? Number(c.attributes.valorGlobal).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</b>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="report-section">
           <div className="report-section-title">Resumo</div>
           {buildResumo(data).map((linha, i) => (
             <div key={i} className="report-row">
@@ -601,6 +752,11 @@ function RaioXRelatorio({ data }: { data: RaioXReportData }) {
           fetchedAt={data.sancoesFetchedAt}
           syncedAt={data.sancoesSyncedAt}
         />
+        <SecaoContratos
+          contratos={data.contratos}
+          fetchedAt={data.contratosFetchedAt}
+          syncedAt={data.contratosSyncedAt}
+        />
 
         {/* Resumo honesto ao final quando tudo ok */}
         {data.sancoes.length === 0 && isSituacaoAtiva(data.empresa.situacao) && (
@@ -631,13 +787,33 @@ function RaioXSkeleton() {
 // ─── Página principal ──────────────────────────────────────────────────────────
 
 export default function RaioXPage() {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(() => {
+    // Pré-preenche com ?cnpj= se presente na URL
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("cnpj") ?? "";
+    }
+    return "";
+  });
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [report, setReport] = useState<RaioXReportData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const digits = sanitizeCnpj(input);
   const canSearch = digits !== "" && status !== "loading";
+
+  // Auto-search quando a URL traz ?cnpj= com valor válido
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlCnpj = params.get("cnpj") ?? "";
+      if (sanitizeCnpj(urlCnpj) !== "") {
+        void handleSearch();
+      }
+    }
+    // Só executa na montagem inicial — eslint-disable-next-line é intencional
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSearch() {
     const cnpj = sanitizeCnpj(input);
@@ -651,14 +827,17 @@ export default function RaioXPage() {
     setErrorMsg(null);
     setReport(null);
 
-    const cadastralFetchedAt = new Date().toISOString();
-    const sancoesFetchedAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    const cadastralFetchedAt = now;
+    const sancoesFetchedAt = now;
+    const contratosFetchedAt = now;
 
     try {
-      // Busca cadastral e sanções em paralelo
-      const [empresaResult, sancoesResult] = await Promise.allSettled([
+      // Busca cadastral, sanções e contratos em paralelo
+      const [empresaResult, sancoesResult, contratosResult] = await Promise.allSettled([
         lookupCnpj(cnpj),
         fetchSancoesByCnpj(cnpj),
+        fetchContratosByCnpj(cnpj),
       ]);
 
       if (empresaResult.status === "rejected") {
@@ -672,15 +851,24 @@ export default function RaioXPage() {
         sancoesResult.status === "fulfilled"
           ? sancoesResult.value
           : { sancoes: [] as SancaoItem[], lastSyncedAt: undefined };
+      const contratosData =
+        contratosResult.status === "fulfilled"
+          ? contratosResult.value
+          : { contratos: [], lastSyncedAt: undefined };
 
       const reportData: RaioXReportData = {
         empresa,
         sancoes: sancoesData.sancoes,
         cadastralFetchedAt,
         sancoesFetchedAt,
+        contratos: contratosData.contratos,
+        contratosFetchedAt,
       };
       if (sancoesData.lastSyncedAt !== undefined) {
         reportData.sancoesSyncedAt = sancoesData.lastSyncedAt;
+      }
+      if (contratosData.lastSyncedAt !== undefined) {
+        reportData.contratosSyncedAt = contratosData.lastSyncedAt;
       }
       setReport(reportData);
       setStatus("done");

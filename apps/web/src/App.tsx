@@ -210,6 +210,7 @@ const ContatoPage = lazy(() =>
   import("./app/publico/contato").then((m) => ({ default: m.ContatoPage })),
 );
 const RaioXPage = lazy(() => import("./app/raio-x/page"));
+const LeadsPage = lazy(() => import("./app/leads/page").then((m) => ({ default: m.LeadsPage })));
 const OnboardingProfissaoPage = lazy(() =>
   import("./app/onboarding/profissao-page").then((m) => ({ default: m.OnboardingProfissaoPage })),
 );
@@ -237,6 +238,7 @@ type RouteKey =
   | "juridico"
   | "inpi"
   | "raio-x"
+  | "leads"
   | "onboarding";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
@@ -250,6 +252,7 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
   { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
   { path: "/app/raio-x", route: "raio-x", label: "Raio-X", icon: ScanLine },
+  { path: "/app/leads", route: "leads", label: "Leads", icon: Sparkles },
   { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
   { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
   { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
@@ -283,6 +286,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   juridico: "Jurídico",
   inpi: "INPI",
   "raio-x": "Raio-X de Empresa",
+  leads: "Leads com Motivo",
   onboarding: "Perfil",
 };
 
@@ -297,6 +301,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/juridico")) return "juridico";
   if (path.startsWith("/app/inpi")) return "inpi";
   if (path.startsWith("/app/raio-x")) return "raio-x";
+  if (path.startsWith("/app/leads")) return "leads";
   if (path.startsWith("/app/onboarding")) return "onboarding";
   if (path.startsWith("/app/alertas")) return "alertas";
   if (path.startsWith("/app/relatorios")) return "relatorios";
@@ -636,6 +641,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "juridico" && <JuridicoPage />}
                 {route === "inpi" && <InpiPage />}
                 {route === "raio-x" && <RaioXPage />}
+                {route === "leads" && <LeadsPage />}
                 {route === "onboarding" && <OnboardingProfissaoPage onFinish={() => go("/app")} />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
                 {route === "relatorios" && <RelatoriosPage onExplore={() => go("/app/lotes")} />}

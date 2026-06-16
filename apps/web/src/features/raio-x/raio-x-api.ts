@@ -2,7 +2,7 @@
  * Raio-X de Empresa — API layer
  *
  * Reutiliza lookupCnpj + tipos de empresas-api.
- * Adiciona busca de sanções filtradas por CNPJ diretamente via PostgREST.
+ * Adiciona busca de sanções e contratos públicos filtrados por CNPJ via PostgREST.
  */
 import {
   type EmpresaCnpj,
@@ -68,6 +68,82 @@ export async function fetchSancoesByCnpj(
   return { sancoes, lastSyncedAt };
 }
 
+// ─── Contratos públicos filtrados por CNPJ ────────────────────────────────────
+
+/** Atributos de um contrato público (source: pncp-contratos). */
+export interface ContratoPublicoAttributes {
+  orgao?: string;
+  objeto?: string;
+  valorGlobal?: number | string | null;
+  modalidade?: string;
+  dataVigenciaInicio?: string;
+  uf?: string;
+  municipio?: string;
+  numeroControlePNCP?: string;
+}
+
+/** Item de contrato público normalizado. */
+export interface ContratoPublico {
+  id: string;
+  /** nome = razão social do fornecedor (name na entities) */
+  nome: string;
+  cnpj: string;
+  attributes: ContratoPublicoAttributes;
+  /** updated_at da linha na base */
+  syncedAt?: string | undefined;
+}
+
+/** Linha crua de entities para contrato público (kind=public_contract). */
+interface SupabaseContratoRow {
+  id: string;
+  name: string;
+  cnpj: string | null;
+  attributes: ContratoPublicoAttributes;
+  updated_at?: string;
+}
+
+/**
+ * Busca contratos públicos para um CNPJ via PostgREST.
+ * Mesmo padrão de fetchSancoesByCnpj — filtro direto por coluna cnpj.
+ */
+export async function fetchContratosByCnpj(
+  rawCnpj: string,
+  fetcher: typeof fetch = fetch,
+): Promise<{ contratos: ContratoPublico[]; lastSyncedAt?: string | undefined }> {
+  const cnpj = sanitizeCnpj(rawCnpj);
+  if (cnpj === "") return { contratos: [], lastSyncedAt: undefined };
+
+  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
+  const base = trimTrailingSlash(supabaseUrl);
+
+  const query = `entities?kind=eq.public_contract&cnpj=eq.${cnpj}&select=id,name,cnpj,attributes,updated_at&order=updated_at.desc`;
+
+  const response = await fetcher(`${base}/rest/v1/${query}`, {
+    headers: {
+      accept: "application/json",
+      apikey: publishableKey,
+      authorization: `Bearer ${publishableKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Supabase REST ${response.status} ao buscar contratos.`);
+  }
+
+  const rows = (await response.json()) as SupabaseContratoRow[];
+
+  const contratos: ContratoPublico[] = rows.map((row) => ({
+    id: row.id,
+    nome: row.name ?? "",
+    cnpj: row.cnpj ?? "",
+    attributes: row.attributes ?? {},
+    syncedAt: row.updated_at,
+  }));
+
+  const lastSyncedAt: string | undefined = rows.find((r) => r.updated_at)?.updated_at;
+  return { contratos, lastSyncedAt };
+}
+
 // ─── Tipos do relatório Raio-X ────────────────────────────────────────────────
 
 export type RaioXStatus = "idle" | "loading" | "done" | "error";
@@ -78,6 +154,9 @@ export interface RaioXReportData {
   sancoesFetchedAt: string; // ISO timestamp da busca
   cadastralFetchedAt: string; // ISO timestamp da busca
   sancoesSyncedAt?: string | undefined; // último updated_at da base
+  contratos: ContratoPublico[];
+  contratosFetchedAt: string; // ISO timestamp da busca
+  contratosSyncedAt?: string | undefined; // último updated_at da base
 }
 
 // ─── Helpers de formatação ─────────────────────────────────────────────────────
@@ -155,6 +234,24 @@ export function buildResumo(data: RaioXReportData): string[] {
     }
   }
 
+  // Contratos públicos
+  const { contratos } = data;
+  if (contratos.length > 0) {
+    const totalValor = contratos.reduce((acc, c) => {
+      const v = Number(c.attributes.valorGlobal ?? 0);
+      return acc + (Number.isFinite(v) ? v : 0);
+    }, 0);
+    const valorTexto =
+      totalValor > 0
+        ? ` — total de ${totalValor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+        : "";
+    linhas.push(
+      `Ganhou ${contratos.length} ${contratos.length === 1 ? "contrato público" : "contratos públicos"} registrado${contratos.length === 1 ? "" : "s"} no PNCP${valorTexto} — sinal de oportunidade para relacionamento com o poder público.`,
+    );
+  } else {
+    linhas.push("Nenhum contrato público encontrado no PNCP para este CNPJ.");
+  }
+
   return linhas;
 }
 
@@ -173,7 +270,7 @@ function row(...cols: unknown[]): string {
 }
 
 export function buildCsvBlob(data: RaioXReportData): Blob {
-  const { empresa, sancoes } = data;
+  const { empresa, sancoes, contratos } = data;
   const geradoEm = new Date().toLocaleString("pt-BR");
 
   const lines: string[] = [
@@ -214,6 +311,25 @@ export function buildCsvBlob(data: RaioXReportData): Blob {
             s.attributes.fundamentacaoLegal ?? "",
             "Portal da Transparência (CGU)",
             data.sancoesFetchedAt,
+          ),
+        )),
+    "",
+    "=== CONTRATOS PÚBLICOS (PNCP) ===",
+    row("Órgão", "Objeto", "Valor Global (R$)", "Modalidade", "Início Vigência", "UF", "Município", "Nº Controle PNCP", "Fonte", "Data consulta"),
+    ...(contratos.length === 0
+      ? [row("Nenhum contrato encontrado", "", "", "", "", "", "", "", "Portal Nacional de Contratações Públicas (PNCP)", data.contratosFetchedAt)]
+      : contratos.map((c) =>
+          row(
+            c.attributes.orgao ?? "",
+            c.attributes.objeto ?? "",
+            c.attributes.valorGlobal != null ? String(c.attributes.valorGlobal) : "",
+            c.attributes.modalidade ?? "",
+            formatDate(c.attributes.dataVigenciaInicio ?? ""),
+            c.attributes.uf ?? "",
+            c.attributes.municipio ?? "",
+            c.attributes.numeroControlePNCP ?? "",
+            "Portal Nacional de Contratações Públicas (PNCP)",
+            data.contratosFetchedAt,
           ),
         )),
   ];
