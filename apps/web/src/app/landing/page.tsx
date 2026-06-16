@@ -1645,6 +1645,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 { label: "Perguntas frequentes", href: "/faq" },
                 { label: "Contato", href: "/contato" },
                 { label: "Privacidade", href: "/privacidade" },
+                { label: "Central de Privacidade", href: "/central-privacidade" },
                 { label: "Termos de uso", href: "/termos" },
                 { label: "Cookies", href: "/cookies" },
               ].map((link) => (
