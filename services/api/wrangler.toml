@@ -28,3 +28,11 @@ compatibility_date = "2026-06-10"
 # [vars]
 # GEMINI_MODEL = "gemini-2.0-flash"
 # ANTHROPIC_MODEL = "claude-opus-4-8"
+
+# Banco de dados público em massa migrado do Supabase — contém a tabela `entities`
+# (pessoas jurídicas, órgãos públicos, leiloeiros e demais entidades indexadas).
+# NOTA: a tabela `auction_lot` permanece no Supabase (dados transacionais / RLS).
+[[d1_databases]]
+binding = "DB"
+database_name = "fonteia-data"
+database_id = "417caa83-86dc-463e-8682-656cf938cd24"

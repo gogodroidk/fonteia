@@ -2,13 +2,17 @@
  * fonteia-api
  *
  * Worker publico (somente leitura) que entrega ao app os dados REAIS dos leiloes
- * da Receita Federal e a analise por IA (Claude) de cada lote.
+ * da Receita Federal, a analise por IA (Claude) de cada lote, e consultas ao banco
+ * D1 de entidades publicas migrado do Supabase.
  *
  * Rotas:
- *   GET  /health                 -> status do servico
- *   GET  /leiloes/lotes          -> lista de lotes em destaque (dados ao vivo da Receita)
- *   GET  /leiloes/lotes/:id      -> um lote especifico
- *   POST /ia/raio-x              -> analise em linguagem simples de um lote (Claude)
+ *   GET  /health                        -> status do servico
+ *   GET  /leiloes/lotes                 -> lista de lotes em destaque (dados ao vivo da Receita)
+ *   GET  /leiloes/lotes/:id             -> um lote especifico
+ *   POST /ia/raio-x                     -> analise em linguagem simples de um lote (Claude)
+ *   GET  /d1/entities                   -> lista paginada de entidades (kind, cnpj, q, limit, offset)
+ *   GET  /d1/entities/:id               -> uma entidade pelo id primario
+ *   GET  /d1/stats                      -> contagem de entidades agrupada por kind
  *
  * Dados dos lotes: endpoint publico oficial da Receita (Sistema de Leilao Eletronico).
  * Nao exige segredo. Resultado fica em cache na borda da Cloudflare por 15 min.
@@ -16,6 +20,10 @@
  * IA (rota /ia/raio-x): exige o secret ANTHROPIC_API_KEY. Sem ele, a rota responde
  * 503 de forma honesta (nada de resposta falsa). Modelo padrao: claude-opus-4-8
  * (pode trocar via var ANTHROPIC_MODEL, ex.: claude-haiku-4-5 para custo menor).
+ *
+ * D1 (rotas /d1/*): banco publico de entidades indexadas (CNPJ, orgaos, leiloeiros).
+ * Requer o binding DB configurado no wrangler.toml. Sem ele, retorna 503 honesto.
+ * As colunas JSON (external_ids, attributes, source_ids) sao parseadas antes de retornar.
  *
  * Secrets/vars (configurar com `wrangler secret put` / dashboard — NUNCA versionar):
  *   ANTHROPIC_API_KEY   sk-ant-...   (opcional; habilita a rota /ia/raio-x)
@@ -35,6 +43,22 @@ import {
 // Tipos do ambiente e do handler (sem @cloudflare/workers-types — so Web APIs)
 // ---------------------------------------------------------------------------
 
+// Declaracoes minimas para o binding D1 — evita adicionar @cloudflare/workers-types
+// como dependencia. So as partes usadas aqui sao declaradas.
+interface D1Result<T = Record<string, unknown>> {
+  results: T[];
+  success: boolean;
+  meta: unknown;
+}
+interface D1PreparedStatement {
+  bind(...values: unknown[]): D1PreparedStatement;
+  all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  first<T = unknown>(colName?: string): Promise<T | null>;
+}
+interface D1Database {
+  prepare(query: string): D1PreparedStatement;
+}
+
 export interface Env {
   // IA — Gemini (Google) é o padrão gratuito; Anthropic é o fallback/reforço.
   GEMINI_API_KEY?: string;
@@ -42,6 +66,8 @@ export interface Env {
   GEMINI_MODEL_PRO?: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL?: string;
+  // D1 — banco publico de entidades (tabela `entities`). Binding configurado no wrangler.toml.
+  DB?: D1Database;
 }
 
 interface ExecutionContext {
@@ -509,6 +535,124 @@ const handler: ExportedHandler<Env> = {
         }
         console.error("[api] /ai/chat failed:", error);
         return json({ error: "Falha ao responder." }, 502, iaCors);
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // D1 — consultas somente leitura ao banco publico de entidades
+    // (tabela `entities` migrada do Supabase; auction_lot permanece no Supabase)
+    // Rotas publicas: CORS_HEADERS_PUBLIC (igual a /leiloes/*)
+    // ---------------------------------------------------------------------------
+
+    // Helper local: parseia colunas TEXT que armazenam JSON de volta para objeto.
+    // SQLite nao tem tipo JSON nativo — as colunas external_ids, attributes e
+    // source_ids sao TEXT. LIKE no SQLite e case-insensitive para ASCII por padrao
+    // (suficiente para buscas de nomes em portugues com caracteres ASCII comuns).
+    function parseJsonColumn(value: unknown): unknown {
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        return value; // retorna a string crua se nao for JSON valido
+      }
+    }
+
+    function parseEntityRow(row: Record<string, unknown>): Record<string, unknown> {
+      return {
+        ...row,
+        external_ids: parseJsonColumn(row["external_ids"]),
+        attributes: parseJsonColumn(row["attributes"]),
+        source_ids: parseJsonColumn(row["source_ids"]),
+      };
+    }
+
+    // GET /d1/entities?kind=&cnpj=&q=&limit=&offset=
+    if (pathname === "/d1/entities" && request.method === "GET") {
+      if (!env.DB) {
+        return json(
+          {
+            error: "d1_nao_configurado",
+            message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
+          },
+          503,
+        );
+      }
+
+      const kind   = url.searchParams.get("kind")   ?? undefined;
+      const cnpj   = url.searchParams.get("cnpj")   ?? undefined;
+      const q      = url.searchParams.get("q")      ?? undefined;
+      const limit  = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit")  ?? "50", 10) || 50));
+      const offset = Math.max(0,                     parseInt(url.searchParams.get("offset") ?? "0",  10) || 0);
+
+      const conditions: string[] = [];
+      const params: unknown[]    = [];
+
+      if (kind) { conditions.push("kind = ?");               params.push(kind); }
+      if (cnpj) { conditions.push("cnpj = ?");               params.push(cnpj); }
+      if (q)    { conditions.push("name LIKE '%'||?||'%'");  params.push(q); }
+
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const sql   = `SELECT * FROM entities ${where} ORDER BY id LIMIT ? OFFSET ?`;
+      params.push(limit, offset);
+
+      try {
+        const result = await env.DB.prepare(sql).bind(...params).all<Record<string, unknown>>();
+        const entities = result.results.map(parseEntityRow);
+        return json({ count: entities.length, limit, offset, kind: kind ?? null, cnpj: cnpj ?? null, q: q ?? null, entities });
+      } catch (error) {
+        console.error("[api] /d1/entities failed:", error);
+        return json({ error: "Falha ao consultar entidades no D1." }, 502);
+      }
+    }
+
+    // GET /d1/entities/:id
+    const d1EntityMatch = pathname.match(/^\/d1\/entities\/([^/]+)$/);
+    if (d1EntityMatch && request.method === "GET") {
+      if (!env.DB) {
+        return json(
+          {
+            error: "d1_nao_configurado",
+            message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
+          },
+          503,
+        );
+      }
+
+      const entityId = decodeURIComponent(d1EntityMatch[1] ?? "");
+      try {
+        const row = await env.DB.prepare("SELECT * FROM entities WHERE id = ?").bind(entityId).first<Record<string, unknown>>();
+        if (!row) {
+          return json({ error: "Entidade nao encontrada", path: pathname }, 404);
+        }
+        return json(parseEntityRow(row));
+      } catch (error) {
+        console.error("[api] /d1/entities/:id failed:", error);
+        return json({ error: "Falha ao consultar entidade no D1." }, 502);
+      }
+    }
+
+    // GET /d1/stats
+    if (pathname === "/d1/stats" && request.method === "GET") {
+      if (!env.DB) {
+        return json(
+          {
+            error: "d1_nao_configurado",
+            message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
+          },
+          503,
+        );
+      }
+
+      try {
+        const result = await env.DB
+          .prepare("SELECT kind, count(*) as n FROM entities GROUP BY kind ORDER BY n DESC")
+          .all<{ kind: string; n: number }>();
+        const byKind = result.results;
+        const total  = byKind.reduce((acc, row) => acc + Number(row.n), 0);
+        return json({ total, byKind });
+      } catch (error) {
+        console.error("[api] /d1/stats failed:", error);
+        return json({ error: "Falha ao consultar estatisticas no D1." }, 502);
       }
     }
 
