@@ -217,6 +217,7 @@ const OnboardingProfissaoPage = lazy(() =>
 const PrivacidadeCentralPage = lazy(() =>
   import("./app/privacidade/page").then((m) => ({ default: m.PrivacidadeCentralPage })),
 );
+const EmpresaPage = lazy(() => import("./app/publico/empresa-page").then((m) => ({ default: m.EmpresaPage })));
 
 type RouteKey =
   | "painel"
@@ -1001,6 +1002,7 @@ export function App() {
     path === "/para-quem" ? <ParaQuemPage /> :
     path === "/contato" ? <ContatoPage /> :
     path === "/central-privacidade" || path === "/privacidade-central" ? <PrivacidadeCentralPage /> :
+    path === "/empresa" ? <EmpresaPage /> :
     null;
 
   const inApp = path.startsWith("/app");
