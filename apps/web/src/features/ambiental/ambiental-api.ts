@@ -1,5 +1,5 @@
 import type { IbamaInfracao } from "@fonteia/sources";
-import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type AmbientalDataSource = "supabase" | "empty";
 
@@ -11,57 +11,29 @@ export interface AmbientalLoadResult {
   errors?: string[] | undefined;
 }
 
-interface SupabaseEntityRow {
-  attributes: IbamaInfracao;
-  updated_at?: string;
-}
-
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Paginação por Range: o PostgREST corta em 1000 linhas por padrão (max-rows).
-// A amostra ingerida do IBAMA fica na casa de poucos milhares — algumas páginas.
-const PAGE_SIZE = 1000;
+// Paginação via D1 (primário) com fallback para Supabase; cada página traz até 1000 linhas.
 const MAX_PAGES = 10; // até 10.000 linhas
 
 async function fetchSupabaseInfracoes(
   fetcher: typeof fetch,
 ): Promise<{ infracoes: IbamaInfracao[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
   // kind = environmental_infraction é o auto de infração ambiental (IBAMA).
-  // Ordena pela data do auto (desc) via attributes->>data, mais recentes primeiro.
-  const rows: SupabaseEntityRow[] = [];
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const offset = page * PAGE_SIZE;
-    const query =
-      "entities?kind=eq.environmental_infraction&select=attributes,updated_at&order=updated_at.desc";
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as SupabaseEntityRow[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+  // Lê do D1 (primário) com fallback para o Supabase via o cliente compartilhado.
+  const { rows } = await fetchAllD1Entities<IbamaInfracao>(
+    { kind: "environmental_infraction" },
+    { maxPages: MAX_PAGES, fetcher },
+  );
 
   // Garante que só pegamos autos do IBAMA (entities mistura outras fontes).
   const infracoes = rows
-    .map((row) => row.attributes)
+    .map((r) => r.attributes)
     .filter((item) => item?.sourceId === "ibama-dados-abertos");
 
-  return { infracoes, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
+  return { infracoes, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listInfracoes(fetcher: typeof fetch = fetch): Promise<AmbientalLoadResult> {

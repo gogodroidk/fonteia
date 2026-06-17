@@ -4,6 +4,7 @@ import {
   getSupabasePublicConfig,
   trimTrailingSlash,
 } from "../../lib/api-client";
+import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 // ─── Consulta de CNPJ on-demand (via Edge Function "empresas-cnpj") ────────────
 
@@ -106,56 +107,29 @@ export interface OrgaosLoadResult {
   errors?: string[] | undefined;
 }
 
-interface SupabaseEntityRow {
-  attributes: OrgaoPublico;
-  updated_at?: string;
-}
-
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Paginação por Range: PostgREST corta em 1000 linhas/página. Órgãos são ~461
-// hoje, mas podem crescer com mais licitações — damos folga.
-const PAGE_SIZE = 1000;
+// Até 10.000 órgãos: o D1 (e o fallback Supabase) paginam em 1000/página.
+// Órgãos são ~461 hoje, mas podem crescer com mais licitações — damos folga.
 const MAX_ORGAOS_PAGES = 10; // até 10.000 órgãos
 
 async function fetchSupabaseOrgaos(
   fetcher: typeof fetch,
 ): Promise<{ orgaos: OrgaoPublico[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
-  const rows: SupabaseEntityRow[] = [];
-  for (let page = 0; page < MAX_ORGAOS_PAGES; page++) {
-    const offset = page * PAGE_SIZE;
-    // kind = organization é a entidade de órgão público (derivada do PNCP).
-    const query =
-      "entities?kind=eq.organization&select=attributes,updated_at&order=normalized_name.asc";
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as SupabaseEntityRow[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+  // Lê do D1 (primário) com fallback transparente para o Supabase REST.
+  const { rows } = await fetchAllD1Entities<OrgaoPublico>(
+    { kind: "organization" },
+    { maxPages: MAX_ORGAOS_PAGES, fetcher },
+  );
 
   // Garante que só pegamos órgãos desta fonte (entities mistura outras fontes).
   const orgaos = rows
-    .map((row) => row.attributes)
+    .map((r) => r.attributes)
     .filter((item) => item?.sourceId === "orgaos-publicos");
 
-  return { orgaos, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
+  return { orgaos, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listOrgaos(fetcher: typeof fetch = fetch): Promise<OrgaosLoadResult> {
@@ -219,15 +193,6 @@ export interface SancoesLoadResult {
   errors?: string[] | undefined;
 }
 
-/** Linha crua devolvida pelo PostgREST para kind=sanction. */
-interface SupabaseSancaoRow {
-  id: string;
-  name: string;
-  cnpj: string | null;
-  attributes: SancaoAttributes;
-  updated_at?: string;
-}
-
 /** Máscara 00.000.000/0000-00 a partir de 14 dígitos. Reutilizada pelo componente. */
 export function formatCnpjSancao(cnpj: string): string {
   const d = cnpj.replace(/\D/g, "");
@@ -238,32 +203,12 @@ export function formatCnpjSancao(cnpj: string): string {
 async function fetchSupabaseSancoes(
   fetcher: typeof fetch,
 ): Promise<{ sancoes: SancaoItem[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
-  const rows: SupabaseSancaoRow[] = [];
-  const paginaSancoes = 10; // até 10.000 sanções — folga para crescer
-  for (let page = 0; page < paginaSancoes; page++) {
-    const offset = page * PAGE_SIZE;
-    const query =
-      "entities?kind=eq.sanction&select=id,name,cnpj,attributes,updated_at&order=updated_at.desc";
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as SupabaseSancaoRow[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+  // Lê do D1 (primário) com fallback transparente para o Supabase REST.
+  // até 10.000 sanções — folga para crescer.
+  const { rows } = await fetchAllD1Entities<SancaoAttributes>(
+    { kind: "sanction" },
+    { maxPages: 10, fetcher },
+  );
 
   const sancoes: SancaoItem[] = rows.map((row) => ({
     id: row.id,
@@ -272,7 +217,7 @@ async function fetchSupabaseSancoes(
     attributes: row.attributes ?? {},
   }));
 
-  return { sancoes, lastSyncedAt: rows.find((r) => r.updated_at)?.updated_at };
+  return { sancoes, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listSancoes(fetcher: typeof fetch = fetch): Promise<SancoesLoadResult> {

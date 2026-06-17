@@ -5,7 +5,7 @@
  * via REST público do Supabase para montar a lista de leads com motivo.
  */
 
-import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchAllD1Entities, type D1EntityRow } from "../../lib/d1-client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,16 +23,6 @@ export interface ContratoPublicoAttributes {
   uf?: string | undefined;
   municipio?: string | undefined;
   numeroControlePNCP?: string | undefined;
-}
-
-/** Linha raw devolvida pelo Supabase REST. */
-interface EntityRow {
-  id: string;
-  name: string;
-  cnpj: string | null;
-  attributes: ContratoPublicoAttributes;
-  created_at: string;
-  updated_at: string;
 }
 
 /** Lead enriquecido que a UI consome. */
@@ -74,7 +64,7 @@ export interface LeadsLoadResult {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function rowToLead(row: EntityRow): Lead {
+function rowToLead(row: D1EntityRow<ContratoPublicoAttributes>): Lead {
   const a = row.attributes;
   return {
     id: row.id,
@@ -88,7 +78,7 @@ function rowToLead(row: EntityRow): Lead {
     municipio: a.municipio ?? "",
     dataVigenciaInicio: a.dataVigenciaInicio ?? "",
     numeroControlePNCP: a.numeroControlePNCP ?? "",
-    createdAt: row.created_at,
+    createdAt: row.created_at ?? "",
   };
 }
 
@@ -98,34 +88,11 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 
 async function fetchSupabaseLeads(fetcher: typeof fetch): Promise<Lead[]> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-  const base = trimTrailingSlash(supabaseUrl);
-  const rows: EntityRow[] = [];
-
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const offset = page * PAGE_SIZE;
-    const query =
-      "entities?kind=eq.public_contract&select=id,name,cnpj,attributes,created_at,updated_at&order=created_at.desc";
-
-    const response = await fetcher(`${base}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-        "Prefer": "count=none",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST retornou ${response.status}`);
-    }
-
-    const batch = (await response.json()) as EntityRow[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
+  // Lê do D1 (primário) com fallback transparente para o Supabase REST.
+  const { rows } = await fetchAllD1Entities<ContratoPublicoAttributes>(
+    { kind: "public_contract", limit: PAGE_SIZE },
+    { maxPages: MAX_PAGES, fetcher },
+  );
 
   return rows.map(rowToLead);
 }
