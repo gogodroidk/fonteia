@@ -2,7 +2,12 @@
  * Raio-X de Empresa — API layer
  *
  * Reutiliza lookupCnpj + tipos de empresas-api.
- * Adiciona busca de sanções e contratos públicos filtrados por CNPJ via PostgREST.
+ * Adiciona busca de sanções e contratos públicos filtrados por CNPJ.
+ *
+ * Leitura BULK: as buscas de sanções e contratos por CNPJ vão para o D1
+ * (primário, via `fetchD1Entities`), com fallback transparente para o Supabase
+ * REST embutido no cliente compartilhado. Comportamento idêntico ao anterior —
+ * a página pública /empresa continua igual.
  */
 import {
   type EmpresaCnpj,
@@ -11,24 +16,15 @@ import {
   lookupCnpj,
   sanitizeCnpj,
 } from "../empresas/empresas-api";
-import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type { EmpresaCnpj, SancaoItem, SancaoAttributes };
 export { sanitizeCnpj, lookupCnpj };
 
 // ─── Sanções filtradas por CNPJ ───────────────────────────────────────────────
 
-/** Linha crua de entities para sanção (kind=sanction, filtrada por cnpj). */
-interface SupabaseSancaoRow {
-  id: string;
-  name: string;
-  cnpj: string | null;
-  attributes: SancaoAttributes;
-  updated_at?: string;
-}
-
 /**
- * Busca sanções para um CNPJ específico via PostgREST.
+ * Busca sanções para um CNPJ específico no BULK (D1 primário, fallback Supabase).
  * Filtro direto por coluna cnpj — evita carregar a lista toda.
  */
 export async function fetchSancoesByCnpj(
@@ -38,24 +34,10 @@ export async function fetchSancoesByCnpj(
   const cnpj = sanitizeCnpj(rawCnpj);
   if (cnpj === "") return { sancoes: [], lastSyncedAt: undefined };
 
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-  const base = trimTrailingSlash(supabaseUrl);
-
-  const query = `entities?kind=eq.sanction&cnpj=eq.${cnpj}&select=id,name,cnpj,attributes,updated_at&order=updated_at.desc`;
-
-  const response = await fetcher(`${base}/rest/v1/${query}`, {
-    headers: {
-      accept: "application/json",
-      apikey: publishableKey,
-      authorization: `Bearer ${publishableKey}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Supabase REST ${response.status} ao buscar sanções.`);
-  }
-
-  const rows = (await response.json()) as SupabaseSancaoRow[];
+  const { rows } = await fetchD1Entities<SancaoAttributes>(
+    { kind: "sanction", cnpj, limit: 1000 },
+    fetcher,
+  );
 
   const sancoes: SancaoItem[] = rows.map((row) => ({
     id: row.id,
@@ -64,7 +46,7 @@ export async function fetchSancoesByCnpj(
     attributes: row.attributes ?? {},
   }));
 
-  const lastSyncedAt: string | undefined = rows.find((r) => r.updated_at)?.updated_at;
+  const lastSyncedAt: string | undefined = firstUpdatedAt(rows);
   return { sancoes, lastSyncedAt };
 }
 
@@ -93,17 +75,8 @@ export interface ContratoPublico {
   syncedAt?: string | undefined;
 }
 
-/** Linha crua de entities para contrato público (kind=public_contract). */
-interface SupabaseContratoRow {
-  id: string;
-  name: string;
-  cnpj: string | null;
-  attributes: ContratoPublicoAttributes;
-  updated_at?: string;
-}
-
 /**
- * Busca contratos públicos para um CNPJ via PostgREST.
+ * Busca contratos públicos para um CNPJ no BULK (D1 primário, fallback Supabase).
  * Mesmo padrão de fetchSancoesByCnpj — filtro direto por coluna cnpj.
  */
 export async function fetchContratosByCnpj(
@@ -113,24 +86,10 @@ export async function fetchContratosByCnpj(
   const cnpj = sanitizeCnpj(rawCnpj);
   if (cnpj === "") return { contratos: [], lastSyncedAt: undefined };
 
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-  const base = trimTrailingSlash(supabaseUrl);
-
-  const query = `entities?kind=eq.public_contract&cnpj=eq.${cnpj}&select=id,name,cnpj,attributes,updated_at&order=updated_at.desc`;
-
-  const response = await fetcher(`${base}/rest/v1/${query}`, {
-    headers: {
-      accept: "application/json",
-      apikey: publishableKey,
-      authorization: `Bearer ${publishableKey}`,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Supabase REST ${response.status} ao buscar contratos.`);
-  }
-
-  const rows = (await response.json()) as SupabaseContratoRow[];
+  const { rows } = await fetchD1Entities<ContratoPublicoAttributes>(
+    { kind: "public_contract", cnpj, limit: 1000 },
+    fetcher,
+  );
 
   const contratos: ContratoPublico[] = rows.map((row) => ({
     id: row.id,
@@ -140,7 +99,7 @@ export async function fetchContratosByCnpj(
     syncedAt: row.updated_at,
   }));
 
-  const lastSyncedAt: string | undefined = rows.find((r) => r.updated_at)?.updated_at;
+  const lastSyncedAt: string | undefined = firstUpdatedAt(rows);
   return { contratos, lastSyncedAt };
 }
 

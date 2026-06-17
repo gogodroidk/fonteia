@@ -1,5 +1,5 @@
 import type { CamaraProposicao } from "@fonteia/sources";
-import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type JuridicoDataSource = "supabase" | "empty";
 
@@ -10,49 +10,8 @@ function toErrorMessage(error: unknown): string {
 }
 
 // Máximo de páginas por requisição — protege contra loop infinito em datasets
-// grandes. O PostgREST corta em 1000 linhas por padrão (max-rows). Proposições
-// recentes ficam na casa dos milhares, então precisamos de algumas páginas.
-const PAGE_SIZE = 1000;
+// grandes. A paginação é feita pelo cliente D1 (primário) com fallback Supabase.
 const MAX_PROPOSICOES_PAGES = 12; // até 12.000 linhas
-
-/** Lê todas as linhas de uma view PostgREST paginando por Range. */
-async function fetchAllRows<T>(
-  fetcher: typeof fetch,
-  supabaseUrl: string,
-  publishableKey: string,
-  query: string,
-  maxPages: number,
-  label: string,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 0; page < maxPages; page++) {
-    const offset = page * PAGE_SIZE;
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as T[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-
-    if (page === maxPages - 1) {
-      console.warn(
-        `[juridico-api] Atingido o limite de ${maxPages} páginas (${rows.length} linhas em ${label}). Pode haver mais dados não carregados.`,
-      );
-    }
-  }
-  return rows;
-}
 
 // ─── Proposições (kind=legal_proposition) ────────────────────────────────────
 
@@ -67,31 +26,21 @@ export interface JuridicoLoadResult {
   errors?: string[] | undefined;
 }
 
-interface SupabaseProposicaoRow {
-  attributes: CamaraProposicao;
-  updated_at?: string;
-}
-
 async function fetchSupabaseProposicoes(
   fetcher: typeof fetch,
 ): Promise<{ proposicoes: ProposicaoItem[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
   // kind = legal_proposition é a entidade de proposição (Câmara — Dados Abertos).
-  const rows = await fetchAllRows<SupabaseProposicaoRow>(
-    fetcher,
-    supabaseUrl,
-    publishableKey,
-    "entities?kind=eq.legal_proposition&select=attributes,updated_at&order=updated_at.desc",
-    MAX_PROPOSICOES_PAGES,
-    "proposicoes",
+  // Lê do D1 (primário) com fallback para o Supabase via o cliente compartilhado.
+  const { rows } = await fetchAllD1Entities<CamaraProposicao>(
+    { kind: "legal_proposition" },
+    { maxPages: MAX_PROPOSICOES_PAGES, fetcher },
   );
 
   const proposicoes = rows
-    .map((row) => row.attributes)
+    .map((r) => r.attributes)
     .filter((item) => item?.sourceId === "camara-dados-abertos");
 
-  return { proposicoes, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
+  return { proposicoes, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listProposicoes(fetcher: typeof fetch = fetch): Promise<JuridicoLoadResult> {
@@ -155,14 +104,6 @@ export interface ProcessosLoadResult {
   errors?: string[] | undefined;
 }
 
-/** Linha crua devolvida pelo PostgREST para kind=legal_process. */
-interface SupabaseProcessoRow {
-  id: string;
-  external_ids: Record<string, unknown>;
-  attributes: ProcessoJudicialAttributes;
-  updated_at?: string;
-}
-
 /** Extrai o assunto principal (primeiro da lista) como string legível. */
 export function assuntoPrincipal(attributes: ProcessoJudicialAttributes): string {
   const list = attributes.assuntos ?? [];
@@ -180,26 +121,23 @@ export function assuntoPrincipal(attributes: ProcessoJudicialAttributes): string
 async function fetchSupabaseProcessos(
   fetcher: typeof fetch,
 ): Promise<{ processos: ProcessoJudicialItem[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
-  const rows = await fetchAllRows<SupabaseProcessoRow>(
-    fetcher,
-    supabaseUrl,
-    publishableKey,
-    "entities?kind=eq.legal_process&select=id,external_ids,attributes,updated_at&order=updated_at.desc",
-    5, // 130 registros — uma página basta, folga de 5
-    "processos",
+  // kind = legal_process é o processo judicial. Lê do D1 (primário) com
+  // fallback para o Supabase via o cliente compartilhado.
+  const { rows } = await fetchAllD1Entities<ProcessoJudicialAttributes>(
+    { kind: "legal_process" },
+    { maxPages: 5, fetcher },
   );
 
   const processos: ProcessoJudicialItem[] = rows.map((row) => ({
     id: row.id,
-    numeroProcesso: typeof row.external_ids?.["numeroProcesso"] === "string"
-      ? row.external_ids["numeroProcesso"]
-      : "",
+    numeroProcesso:
+      typeof row.external_ids["numeroProcesso"] === "string"
+        ? (row.external_ids["numeroProcesso"] as string)
+        : "",
     attributes: row.attributes ?? {},
   }));
 
-  return { processos, lastSyncedAt: rows.find((r) => r.updated_at)?.updated_at };
+  return { processos, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listProcessos(fetcher: typeof fetch = fetch): Promise<ProcessosLoadResult> {

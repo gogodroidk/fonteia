@@ -1,5 +1,6 @@
 import type { PncpLicitacao } from "@fonteia/sources";
-import { fetchJsonFromApi, getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchJsonFromApi } from "../../lib/api-client";
+import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type LicitacoesDataSource = "api" | "supabase" | "empty";
 
@@ -9,11 +10,6 @@ export interface LicitacoesLoadResult {
   message: string;
   lastSyncedAt?: string | undefined;
   errors?: string[] | undefined;
-}
-
-interface SupabaseEntityRow {
-  attributes: PncpLicitacao;
-  updated_at?: string;
 }
 
 function toErrorMessage(error: unknown): string {
@@ -30,53 +26,24 @@ async function fetchApiLicitacoes(fetcher: typeof fetch): Promise<PncpLicitacao[
   return payload.licitacoes;
 }
 
-// Máximo de páginas por requisição — protege contra loop infinito em datasets grandes.
-// Com pageSize=1000 e maxPages=10 buscamos até 10.000 licitações.
-const MAX_SUPABASE_PAGES = 10;
-
 async function fetchSupabaseLicitacoes(
   fetcher: typeof fetch,
 ): Promise<{ licitacoes: PncpLicitacao[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
-  // Paginação por Range: o PostgREST corta em 1000 linhas por padrão (max-rows),
-  // então buscamos em páginas de 1000 até acabar (limitado a MAX_SUPABASE_PAGES páginas).
-  // kind = bidding_opportunity é a entidade de licitação/contratação (ENTITY_KINDS).
-  const pageSize = 1000;
-  const rows: SupabaseEntityRow[] = [];
-  for (let page = 0; page < MAX_SUPABASE_PAGES; page++) {
-    const offset = page * pageSize;
-    const query =
-      "entities?kind=eq.bidding_opportunity&select=attributes,updated_at&order=updated_at.desc";
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + pageSize - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as SupabaseEntityRow[];
-    rows.push(...batch);
-    if (batch.length < pageSize) break;
-
-    if (page === MAX_SUPABASE_PAGES - 1) {
-      console.warn(`[licitacoes-api] Atingido o limite de ${MAX_SUPABASE_PAGES} páginas (${rows.length} linhas). Pode haver mais licitações não carregadas.`);
-    }
-  }
+  // BULK no Cloudflare D1 (primário) com fallback transparente para o Supabase REST,
+  // via cliente compartilhado. kind = bidding_opportunity é a entidade de
+  // licitação/contratação (ENTITY_KINDS). O cliente pagina em lotes de 1000 até
+  // maxPages=10 (até 10.000 linhas), preservando o corte de antes.
+  const { rows } = await fetchAllD1Entities<PncpLicitacao>(
+    { kind: "bidding_opportunity" },
+    { maxPages: 10, fetcher },
+  );
 
   // Garante que só pegamos licitações do PNCP (entities pode misturar fontes futuras).
   const licitacoes = rows
     .map((row) => row.attributes)
     .filter((item) => item?.sourceId === "pncp-contratacoes");
 
-  return { licitacoes, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
+  return { licitacoes, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listLicitacoes(fetcher: typeof fetch = fetch): Promise<LicitacoesLoadResult> {

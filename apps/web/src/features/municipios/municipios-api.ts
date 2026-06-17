@@ -1,5 +1,5 @@
 import type { IbgeMunicipio } from "@fonteia/sources";
-import { getSupabasePublicConfig, trimTrailingSlash } from "../../lib/api-client";
+import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type MunicipiosDataSource = "supabase" | "empty";
 
@@ -17,84 +17,27 @@ export interface MunicipiosLoadResult {
   errors?: string[] | undefined;
 }
 
-interface SupabaseEntityRow {
-  attributes: IbgeMunicipio;
-  updated_at?: string;
-}
-
-interface BiddingIbgeRow {
-  attributes: { codigoIbge?: string };
-}
-
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 // Máximo de páginas por requisição — protege contra loop infinito em datasets
-// grandes. O PostgREST corta em 1000 linhas por padrão (max-rows). Municípios
-// são ~5570, então precisamos de algumas páginas; bidding pode crescer mais.
-const PAGE_SIZE = 1000;
+// grandes. Municípios são ~5570, então precisamos de algumas páginas; bidding
+// pode crescer mais.
 const MAX_MUNICIPIOS_PAGES = 8; // até 8.000 linhas (>5570)
 const MAX_BIDDING_PAGES = 30; // até 30.000 linhas
-
-/** Lê todas as linhas de uma view PostgREST paginando por Range. */
-async function fetchAllRows<T>(
-  fetcher: typeof fetch,
-  supabaseUrl: string,
-  publishableKey: string,
-  query: string,
-  maxPages: number,
-  label: string,
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 0; page < maxPages; page++) {
-    const offset = page * PAGE_SIZE;
-    const response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
-      headers: {
-        accept: "application/json",
-        apikey: publishableKey,
-        authorization: `Bearer ${publishableKey}`,
-        Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        "Range-Unit": "items",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Supabase REST returned ${response.status}`);
-    }
-
-    const batch = (await response.json()) as T[];
-    rows.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-
-    if (page === maxPages - 1) {
-      console.warn(
-        `[municipios-api] Atingido o limite de ${maxPages} páginas (${rows.length} linhas em ${label}). Pode haver mais dados não carregados.`,
-      );
-    }
-  }
-  return rows;
-}
 
 /**
  * Conta licitações (kind=bidding_opportunity) por código IBGE, lendo o campo
  * attributes->>codigoIbge. Mantemos a leitura simples e agregamos no cliente —
  * mesmo padrão da listagem de licitações (robusto a RLS e sem depender de RPC).
  */
-async function fetchBiddingCountsByIbge(
-  fetcher: typeof fetch,
-  supabaseUrl: string,
-  publishableKey: string,
-): Promise<Map<string, number>> {
+async function fetchBiddingCountsByIbge(fetcher: typeof fetch): Promise<Map<string, number>> {
   // Pegamos o objeto attributes e lemos codigoIbge no cliente (mesmo padrão do
   // licitacoes-api — leitura simples, robusta a RLS e sem depender de RPC).
-  const rows = await fetchAllRows<BiddingIbgeRow>(
-    fetcher,
-    supabaseUrl,
-    publishableKey,
-    "entities?kind=eq.bidding_opportunity&select=attributes&order=updated_at.desc",
-    MAX_BIDDING_PAGES,
-    "licitacoes",
+  const { rows } = await fetchAllD1Entities<{ codigoIbge?: string }>(
+    { kind: "bidding_opportunity" },
+    { maxPages: MAX_BIDDING_PAGES, fetcher },
   );
 
   const counts = new Map<string, number>();
@@ -110,35 +53,30 @@ async function fetchBiddingCountsByIbge(
 async function fetchSupabaseMunicipios(
   fetcher: typeof fetch,
 ): Promise<{ municipios: MunicipioWithStats[]; lastSyncedAt?: string | undefined }> {
-  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
-
   // kind = municipality é a entidade de município (IBGE Localidades).
-  const rows = await fetchAllRows<SupabaseEntityRow>(
-    fetcher,
-    supabaseUrl,
-    publishableKey,
-    "entities?kind=eq.municipality&select=attributes,updated_at&order=normalized_name.asc",
-    MAX_MUNICIPIOS_PAGES,
-    "municipios",
+  const { rows } = await fetchAllD1Entities<IbgeMunicipio>(
+    { kind: "municipality" },
+    { maxPages: MAX_MUNICIPIOS_PAGES, fetcher },
   );
 
   // Cruza com a contagem de licitações por código IBGE. Se falhar, segue com 0.
   let counts = new Map<string, number>();
   try {
-    counts = await fetchBiddingCountsByIbge(fetcher, supabaseUrl, publishableKey);
+    counts = await fetchBiddingCountsByIbge(fetcher);
   } catch (error) {
     console.warn("[municipios-api] Falha ao cruzar licitações por IBGE:", toErrorMessage(error));
   }
 
-  const municipios = rows
-    .map((row) => row.attributes)
-    .filter((item) => item?.sourceId === "ibge-localidades")
-    .map<MunicipioWithStats>((item) => ({
-      ...item,
-      licitacoesCount: counts.get(item.codigoIbge) ?? 0,
-    }));
+  const municipiosBase = rows
+    .map((r) => r.attributes)
+    .filter((item) => item?.sourceId === "ibge-localidades");
 
-  return { municipios, lastSyncedAt: rows.find((row) => row.updated_at)?.updated_at };
+  const municipios = municipiosBase.map<MunicipioWithStats>((item) => ({
+    ...item,
+    licitacoesCount: counts.get(item.codigoIbge) ?? 0,
+  }));
+
+  return { municipios, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
 export async function listMunicipios(fetcher: typeof fetch = fetch): Promise<MunicipiosLoadResult> {
