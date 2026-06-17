@@ -304,7 +304,7 @@ function buildInsert(rows: EntityRow[]): { sql: string; params: Array<string | n
 // Constantes de migração
 // ───────────────────────────────────────────────────────────────────────────
 const PG_PAGE_SIZE = 500; // linhas lidas por página do Postgres (keyset)
-const ROWS_PER_INSERT = 50; // ≤ 50 tuplas/statement (limite ~100KB/statement do D1)
+const ROWS_PER_INSERT = 8; // ≤ 8 tuplas/statement → 8×12=96 params < 100 (limite D1 bind vars)
 const TIME_BUDGET_MS = 115_000; // para de iniciar novas páginas após isto (margem do limite ~150s)
 
 // Autoriza /migrate: exige Bearer == SERVICE_ROLE_KEY (env) OU == Vault MIGRATE_SECRET.
@@ -395,7 +395,7 @@ async function handleMigrate(request: Request, url: URL): Promise<Response> {
         break;
       }
 
-      // Grava em sub-lotes de ROWS_PER_INSERT (≤50 tuplas/statement) no D1.
+      // Grava em sub-lotes de ROWS_PER_INSERT (≤8 tuplas/statement → ≤96 params) no D1.
       for (let i = 0; i < rows.length; i += ROWS_PER_INSERT) {
         const chunk = rows.slice(i, i + ROWS_PER_INSERT);
         const { sql, params } = buildInsert(chunk);
