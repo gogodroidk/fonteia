@@ -14,6 +14,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { digitsOnly, extractCnpj, brMoneyToNumber, parseDateBrt } from "../_shared/br.ts";
 
 const CKAN = "https://dados.prefeitura.sp.gov.br/api/3/action/datastore_search";
 const DATASET_URL = "https://dados.prefeitura.sp.gov.br/dataset/base-de-compras-e-licitacoes";
@@ -44,28 +48,7 @@ interface CkanRecord { _id: number; [k: string]: unknown; }
 interface CkanResult { total?: number; records?: CkanRecord[]; fields?: Array<{ id: string; type: string }>; }
 interface CkanResponse { success?: boolean; result?: CkanResult; error?: unknown; }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-function digitsOnly(v: unknown): string { return String(v ?? "").replace(/\D/g, ""); }
-function extractCnpj(v: unknown): string | null { const d = digitsOnly(v); return d.length === 14 ? d : null; }
-
-function brMoneyToNumber(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).replace(/[^\d.,-]/g, "").trim();
-  if (s === "") return null;
-  const norm = s.replace(/\./g, "").replace(",", ".");
-  const n = Number(norm);
-  return Number.isFinite(n) ? n : null;
-}
-
-function parseDate(v: unknown): string {
-  const t = String(v ?? "").trim();
-  if (t === "") return "";
-  if (/[zZ]$/.test(t) || /[+-]\d{2}:\d{2}$/.test(t)) return t;
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t)) return `${t}-03:00`;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return `${t}T00:00:00-03:00`;
-  return t;
-}
+// digitsOnly, extractCnpj, brMoneyToNumber e parseDateBrt importados de _shared/br.ts
 
 function pick(rec: CkanRecord, keys: string[]): string {
   for (const k of keys) {
@@ -109,8 +92,8 @@ function normalize(rec: CkanRecord, resourceId: string, ano: string, collectedAt
     licitacao: licitacao || null,
     vigencia: vigencia || null,
     evento: evento || null,
-    dataAssinatura: parseDate(dataAssinatura),
-    dataPublicacao: parseDate(dataPublicacao),
+    dataAssinatura: parseDateBrt(dataAssinatura),
+    dataPublicacao: parseDateBrt(dataPublicacao),
     uf: "SP", ufNome: "São Paulo", municipio: "São Paulo", codigoIbge: "3550308",
     esfera: "M", poder: "E",
     ano: Number(ano) || ano,
@@ -124,7 +107,12 @@ async function fetchPage(resourceId: string, limit: number, offset: number): Pro
   u.searchParams.set("resource_id", resourceId);
   u.searchParams.set("limit", String(limit));
   u.searchParams.set("offset", String(offset));
-  const res = await fetch(u.toString(), { headers: HEADERS });
+  const res = await fetchWithRetry(u.toString(), {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status} em ${u.toString()}`);
   const body = (await res.json()) as CkanResponse;
   if (!body.success || !body.result) {
@@ -134,6 +122,19 @@ async function fetchPage(resourceId: string, limit: number, offset: number): Pro
 }
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-sp-capital-contratos] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
   const anosParam = url.searchParams.get("anos");
   const anos = anosParam
@@ -178,7 +179,7 @@ Deno.serve(async (req) => {
     const windowed = anos.length === 1 && (offsetStart > 0 || maxRecords > 0);
 
     for (const ano of anos) {
-      const resourceId = RESOURCES[ano];
+      const resourceId = RESOURCES[ano]!;
       let offset = windowed ? offsetStart : 0;
       let collectedThisYear = 0;
       let pagina = 0;
@@ -215,11 +216,24 @@ Deno.serve(async (req) => {
       if (RATE_MS > 0) await sleep(RATE_MS);
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, fonte: SOURCE_ID, anos, janela: windowed ? { offsetStart, maxRecords } : undefined, coletadas, porAno: perAno, ingested, errors: errors.length > 0 ? errors : undefined }),
-      { headers: { "Content-Type": "application/json" } },
+    return jsonResponse(
+      {
+        ok: true,
+        fonte: SOURCE_ID,
+        anos,
+        janela: windowed ? { offsetStart, maxRecords } : undefined,
+        coletadas,
+        porAno: perAno,
+        ingested,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+      {},
+      req,
     );
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });
+
+// Re-exports para documentar origem dos utilitários
+export { digitsOnly };

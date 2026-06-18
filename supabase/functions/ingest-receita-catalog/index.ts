@@ -15,6 +15,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const BASE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -108,14 +111,30 @@ function normalizeLot(edital: RawEdital, lote: RawLot, collectedAt: string): Rec
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (!res.ok) throw new Error(`${res.status} em ${url}`);
   return (await res.json()) as T;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-receita-catalog] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
   const maxEditais = Number(url.searchParams.get("maxEditais") ?? "0"); // 0 = todos
 
@@ -166,14 +185,12 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, editais: editais.length, lots: lots.length, ingested, errors }),
-      { headers: { "Content-Type": "application/json" } },
+    return jsonResponse(
+      { ok: true, editais: editais.length, lots: lots.length, ingested, errors },
+      {},
+      req,
     );
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

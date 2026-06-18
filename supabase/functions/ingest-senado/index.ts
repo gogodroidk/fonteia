@@ -22,6 +22,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const BASE = "https://legis.senado.leg.br/dadosabertos";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -150,17 +153,33 @@ function normalize(raw: RawParlamentar): Record<string, unknown> {
 // ---------- Fetch ----------
 
 async function fetchSenadores(): Promise<RawParlamentar[]> {
-  const res = await fetch(`${BASE}/senador/lista/atual`, { headers: HEADERS });
+  const res = await fetchWithRetry(`${BASE}/senador/lista/atual`, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (!res.ok) throw new Error(`${res.status} ao buscar lista de senadores`);
   const json = (await res.json()) as SenadoResponse;
   return json?.ListaParlamentarEmExercicio?.Parlamentares?.Parlamentar ?? [];
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 // ---------- Handler ----------
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-senado] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   try {
     const collectedAt = new Date().toISOString();
     const supabase = createClient(
@@ -194,18 +213,12 @@ Deno.serve(async (_req) => {
       if (i + RPC_BATCH < items.length) await sleep(250);
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        coletados: items.length,
-        ingested,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      coletados: items.length,
+      ingested,
+    }, {}, req);
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

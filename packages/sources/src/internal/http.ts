@@ -40,9 +40,18 @@ export interface RetryOptions {
  *   o `signal` e continuam funcionando normalmente).
  * - Não faz retry em 4xx (exceto 429) pois indicam erro do cliente.
  */
+export interface FetchWithRetryOptions extends RetryOptions {
+  /**
+   * Fetcher injetável (para testes). Quando omitido ou undefined, usa o `fetch`
+   * global. Aceita explicitamente `undefined` para facilitar o padrão
+   * `{ fetcher: options.fetcher }` sem violar exactOptionalPropertyTypes.
+   */
+  fetcher?: typeof fetch | undefined;
+}
+
 export async function fetchWithRetry(
   input: string | URL | Request,
-  options: RetryOptions & { fetcher?: typeof fetch } = {},
+  options: FetchWithRetryOptions = {},
 ): Promise<Response> {
   const {
     timeoutMs = 15_000,
