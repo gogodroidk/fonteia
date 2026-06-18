@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useSeo, breadcrumbJsonLd, SITE_URL } from "../../../lib/seo";
 import { LogoMark } from "../../../components/ui/logo-mark";
 /* ── Dados dos posts ─────────────────────────────────────────────────────── */

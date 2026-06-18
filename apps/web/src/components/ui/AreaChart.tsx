@@ -36,16 +36,13 @@ export function AreaChart({
   const range = max - min || 1;
 
   const nx = (i: number): number => (i / (data.length - 1)) * width;
-  const nxStr = (i: number): string => nx(i).toFixed(1);
   const ny = (v: number): number => height - ((v - min) / range) * height;
-  const nyStr = (v: number): string => ny(v).toFixed(1);
 
   const line = data
     .map((v, i) => `${i === 0 ? "M" : "L"}${nx(i)} ${ny(v)}`)
     .join(" ");
 
   const lastIdx = data.length - 1;
-  const lastVal = data[lastIdx] ?? 0;
 
   const gridLines: number[] = [0.25, 0.5, 0.75, 1];
 

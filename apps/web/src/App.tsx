@@ -13,7 +13,6 @@ import {
   LayoutGrid,
   Landmark,
   Leaf,
-  LogOut,
   MapPin,
   Menu,
   MoreHorizontal,

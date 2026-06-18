@@ -178,7 +178,7 @@ async function persistLot(env: Env, lot: ReceitaLeilaoLot, sourceRunId: string):
 }
 
 export default {
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+  async scheduled(event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
     console.log(`[ingest] scheduled cron triggered at ${new Date(event.scheduledTime).toISOString()}`);
 
     let sourceRunId: string | undefined;
