@@ -174,6 +174,28 @@ function dbHeaders(db: DbCtx, extra: Record<string, string> = {}): Record<string
   };
 }
 
+// Resolve o token da InfoSimples: primeiro a env var (caso setada no dashboard),
+// senao o Vault do Supabase (RPC get_vault_secret) — que pode ser provisionado
+// via SQL. Assim a integracao liga por Secret de Edge Function OU por Vault.
+async function resolveToken(): Promise<string> {
+  const envTok = (Deno.env.get("INFOSIMPLES_TOKEN") ?? "").trim();
+  if (envTok) return envTok;
+  const db = dbCtx();
+  if (!db) return "";
+  try {
+    const res = await fetchWithRetry(`${db.url}/rest/v1/rpc/get_vault_secret`, {
+      timeoutMs: 8000,
+      retries: 1,
+      init: { method: "POST", headers: dbHeaders(db), body: JSON.stringify({ p_name: "INFOSIMPLES_TOKEN" }) },
+    });
+    if (!res.ok) return "";
+    const v = (await res.json()) as unknown;
+    return typeof v === "string" ? v.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 interface CacheRow {
   payload: unknown;
   fetched_at: string;
@@ -326,7 +348,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return reply({
       service: "infosimples-proxy",
       status: "ok",
-      configured: Boolean((Deno.env.get("INFOSIMPLES_TOKEN") ?? "").trim()),
+      configured: Boolean(await resolveToken()),
       kinds: Object.keys(LOOKUPS),
       time: new Date().toISOString(),
     });
@@ -335,7 +357,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // DORMENTE: sem token => 200 configured:false, SEM erro. O front mantem o
   // comportamento atual (RPI/base ingerida). Responde antes de qualquer authz
   // de sessao p/ nunca custar nada e nunca quebrar a tela.
-  const token = (Deno.env.get("INFOSIMPLES_TOKEN") ?? "").trim();
+  const token = await resolveToken();
   if (!token) {
     return reply({
       ok: true,
