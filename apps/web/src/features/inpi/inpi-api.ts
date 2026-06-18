@@ -18,6 +18,7 @@
 // As APIs que consultam marca por CNPJ de forma completa são de TERCEIROS PAGOS
 // (Infosimples, Netrin, Apify) que raspam o pePI. Decisão do dono pendente.
 
+import { supabase } from "../../auth/supabase-client";
 import {
   getConfiguredApiUrl,
   getSupabasePublicConfig,
@@ -122,6 +123,102 @@ export function inpiBuscaUrl(): string {
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+// ─── Caminho PREMIUM opcional: InfoSimples via Edge "infosimples-proxy" ──────────
+//
+// A Edge "infosimples-proxy" é um agregador PAGO por consulta e fica DORMENTE até
+// o dono configurar o segredo INFOSIMPLES_TOKEN. Enquanto dormente ela responde
+// { configured:false } e NÃO gastamos nada — o fluxo abaixo apenas ignora e o
+// comportamento atual (RPI ingerida) segue intacto. Quando configured:true e o
+// usuário está em plano pago, ela devolve as marcas vivas do INPI por CNPJ.
+//
+// Auth: precisa do header `apikey` (publishable) E do Bearer de SESSÃO do usuário
+// (plano pago é checado no servidor). Sem sessão/sem plano, a Edge recusa e nós
+// caímos no comportamento atual sem quebrar a tela.
+
+/** Forma estável de uma marca vinda do proxy InfoSimples (normalizada na Edge). */
+interface InfosimplesTrademark {
+  numero: string;
+  marca: string;
+  classe: string;
+  situacao: string;
+  tipo: string;
+  titular: string;
+  prioridade: string;
+  registro: string;
+}
+
+/** Envelope da resposta do infosimples-proxy (subset usado aqui). */
+interface InfosimplesProxyResponse {
+  ok?: boolean;
+  configured?: boolean;
+  source?: string;
+  trademarks?: InfosimplesTrademark[];
+}
+
+/** Monta a URL da Edge infosimples-proxy a partir da base da function "fonteia". */
+function infosimplesProxyUrl(kind: string, cnpj: string): string | null {
+  const fonteiaUrl = getConfiguredApiUrl();
+  if (!fonteiaUrl) return null;
+  const base = trimTrailingSlash(fonteiaUrl).replace(/\/[^/]+$/, "/infosimples-proxy");
+  return `${base}?kind=${encodeURIComponent(kind)}&cnpj=${cnpj}`;
+}
+
+/** Converte uma marca do proxy para o tipo `InpiTrademark` da tela. */
+function infosimplesToTrademark(t: InfosimplesTrademark, cnpj: string): InpiTrademark {
+  return {
+    id: t.numero || `${cnpj}-${t.marca}`,
+    sourceId: "infosimples-inpi",
+    nome: t.marca,
+    processNumber: t.numero,
+    niceClasses: toNiceClasses(t.classe),
+    status: t.situacao,
+    titularCnpj: cnpj,
+    titularNome: t.titular,
+    titularUf: "",
+  };
+}
+
+/**
+ * Tenta buscar marcas por CNPJ via o proxy PAGO (InfoSimples). Retorna:
+ *   - InpiTrademark[] (possivelmente vazio) quando o proxy está ATIVO (configured:true);
+ *   - null quando DORMENTE (configured:false) ou em qualquer falha — sinal para
+ *     o chamador manter o comportamento atual (base RPI ingerida).
+ * NUNCA lança: degrada em silêncio para não quebrar a página do INPI.
+ */
+async function fetchTrademarksViaInfosimples(
+  cnpj: string,
+  fetcher: typeof fetch,
+): Promise<InpiTrademark[] | null> {
+  const target = infosimplesProxyUrl("inpi-marcas-cnpj", cnpj);
+  if (!target) return null;
+
+  // Bearer de SESSÃO quando houver (a Edge exige usuário logado + plano pago).
+  // Sem sessão, mandamos a publishable como Bearer — a Edge responde login_requerido
+  // e nós tratamos como "indisponível" (null) sem quebrar.
+  const { key } = getSupabasePublicConfig();
+  let bearer = key;
+  try {
+    const sessionToken = (await supabase?.auth.getSession())?.data.session?.access_token;
+    if (sessionToken) bearer = sessionToken;
+  } catch {
+    // sem sessão — segue com a publishable; a Edge recusa e caímos no fallback.
+  }
+
+  try {
+    const response = await fetcher(target, {
+      headers: { accept: "application/json", apikey: key, authorization: `Bearer ${bearer}` },
+    });
+    const body = (await response.json()) as InfosimplesProxyResponse;
+    // Dormente, recusado (login/plano/cota) ou erro de negócio => fallback.
+    if (body.configured !== true || body.ok !== true) return null;
+    const list = Array.isArray(body.trademarks) ? body.trademarks : [];
+    return list.map((t) => infosimplesToTrademark(t, cnpj));
+  } catch (error) {
+    console.warn("[inpi-api] infosimples-proxy indisponível:", toErrorMessage(error));
+    return null;
+  }
 }
 
 // ─── Consulta de marcas por CNPJ ─────────────────────────────────────────────────
@@ -312,15 +409,33 @@ export async function searchInpiByCnpj(
     sourceUrl: e.sourceUrl,
   };
 
-  // 2) Marcas do titular — lidas da base ingerida da RPI (kind='trademark') por
-  // CNPJ. Pode vir vazio: a RPI não traz CNPJ estruturado, então só casam as
-  // marcas cujo titular trouxe o CNPJ no nome. Nunca inventar.
+  // 2a) Caminho PREMIUM (opcional): se o proxy InfoSimples estiver ATIVO e o
+  // usuário tiver plano pago, ele devolve as marcas vivas do INPI por CNPJ
+  // (fonte completa, não limitada à RPI). Quando DORMENTE ou indisponível,
+  // retorna null e seguimos com a base ingerida da RPI (2b), sem quebrar nada.
   let trademarks: InpiTrademark[] = [];
+  let fromInfosimples = false;
   try {
-    trademarks = await fetchTrademarksByCnpj(cnpj, fetcher);
+    const premium = await fetchTrademarksViaInfosimples(cnpj, fetcher);
+    if (premium !== null) {
+      trademarks = premium;
+      fromInfosimples = true;
+    }
   } catch (error) {
-    // Falha silenciosa: a empresa ainda é útil; marca segue pendente.
-    console.warn("[inpi-api] Falha ao buscar marcas:", toErrorMessage(error));
+    console.warn("[inpi-api] Premium (InfoSimples) falhou:", toErrorMessage(error));
+  }
+
+  // 2b) Fallback (comportamento atual): marcas do titular lidas da base ingerida
+  // da RPI (kind='trademark') por CNPJ. Pode vir vazio: a RPI não traz CNPJ
+  // estruturado, então só casam as marcas cujo titular trouxe o CNPJ no nome.
+  // Nunca inventar.
+  if (!fromInfosimples) {
+    try {
+      trademarks = await fetchTrademarksByCnpj(cnpj, fetcher);
+    } catch (error) {
+      // Falha silenciosa: a empresa ainda é útil; marca segue pendente.
+      console.warn("[inpi-api] Falha ao buscar marcas:", toErrorMessage(error));
+    }
   }
 
   const trademarksPending = trademarks.length === 0;
@@ -333,6 +448,8 @@ export async function searchInpiByCnpj(
     inpiBuscaUrl: buscaUrl,
     message: trademarksPending
       ? "Empresa identificada na Receita Federal. Sem marcas ligadas a este CNPJ na RPI do INPI — a fonte oficial não vincula CNPJ ao titular. Consulte a busca oficial do INPI."
-      : "Marcas encontradas para o titular na RPI do INPI.",
+      : fromInfosimples
+        ? "Marcas encontradas para o titular via consulta premium ao INPI (InfoSimples)."
+        : "Marcas encontradas para o titular na RPI do INPI.",
   };
 }
