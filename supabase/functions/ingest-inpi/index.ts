@@ -40,9 +40,14 @@
 //   3. Parseia cada <processo> por regex (sem DOM — streaming-friendly), normaliza
 //      -> kind='trademark', grava em lotes via a RPC public.ingest_inpi.
 //
-// Retomada (keyset por byte): ?startByte=<n>&window=<bytes> reposiciona a janela
-// no stream comprimido para varrer o resto em invocacoes seguintes (time-budget).
-// A resposta devolve `nextStartByte` quando ha mais a ler.
+// IMPORTANTE sobre retomada: DEFLATE e um bitstream continuo — NAO da para
+// inflar a partir de um offset arbitrario no meio (testado: "invalid block
+// type"). Entao SEMPRE inflamos do inicio do stream. Felizmente o arquivo
+// inteiro (~9 MB comprimidos => ~49 MB XML, 29.522 processos) infla em <0.2s e
+// cabe folgado no budget. O default ja varre o arquivo todo numa invocacao. Para
+// links lentos, ?skip=<n> reprocessa do inicio (re-infla, barato) e pula os N
+// primeiros processos ja gravados — a resposta devolve `nextSkip` quando o
+// `limit` cortou antes do fim.
 //
 // Idempotente: id = numero do processo (9 digitos). A RPC faz upsert por indice
 // unico parcial em (external_ids->>'processNumber') where kind='trademark'.
@@ -57,9 +62,9 @@
 // Parametros de query (opcionais):
 //   ?revista=2893    -> forca o numero da revista (default: descobre a mais recente).
 //   ?uf=SP           -> filtra (nesta funcao) so as marcas com titular daquela UF.
-//   ?limit=5000      -> teto de registros normalizados nesta invocacao.
-//   ?window=3000000  -> bytes COMPRIMIDOS a baixar da entrada (janela do stream).
-//   ?startByte=0     -> deslocamento (em bytes comprimidos) p/ retomar a varredura.
+//   ?limit=40000     -> teto de processos normalizados nesta invocacao (default cobre tudo).
+//   ?skip=0          -> pula os N primeiros <processo> (retomada por contagem).
+//   ?window=12000000 -> bytes COMPRIMIDOS a baixar (default cobre o arquivo inteiro).
 //
 // Deploy: Verify JWT LIGADO (igual as outras); o invocador manda Authorization.
 
@@ -81,8 +86,10 @@ const SOURCE_ID = "inpi-dados-abertos";
 // pelo header de qualquer forma, com 72 como fallback.
 const FALLBACK_DATA_OFFSET = 72;
 
-const DEFAULT_WINDOW = 3_000_000; // bytes comprimidos => ~15 MB XML, ~8.800 processos
-const DEFAULT_LIMIT = 6000; // teto de processos normalizados por invocacao
+// Default cobre o arquivo INTEIRO: o ZIP de marcas tem ~9.3 MB; pegamos uma
+// janela generosa (12 MB) a partir do inicio do stream e inflamos tudo (~0.2s).
+const DEFAULT_WINDOW = 12_000_000; // bytes comprimidos (>= filesize) => arquivo todo
+const DEFAULT_LIMIT = 40_000; // teto de processos (a edicao tem ~29.5k; folga p/ crescer)
 const RPC_BATCH = 500;
 
 // Ancora conhecida para estimar a revista mais recente sem sondar centenas de
@@ -368,37 +375,43 @@ function parseProcesso(block: string, revista: number, collectedAt: string): Tra
 }
 
 /**
- * Quebra o XML (janela inflada, possivelmente truncada) em <processo> completos
- * e normaliza. `uf` filtra pelo titular principal; `limit` corta o total.
- * Devolve tambem o offset (em chars do XML) do fim do ultimo processo consumido,
- * util como diagnostico de progresso.
+ * Quebra o XML (janela inflada, possivelmente truncada no fim) em <processo>
+ * completos e normaliza. `skip` pula os N primeiros processos (retomada por
+ * contagem); `uf` filtra pelo titular principal; `limit` corta o total coletado.
+ *
+ * `reachedEnd` indica que varremos ate o ultimo processo do arquivo (nao paramos
+ * por `limit`) — usado p/ saber se ainda ha o que coletar numa proxima chamada.
  */
 function parseWindow(
   xml: string,
   revista: number,
   collectedAt: string,
   uf: string,
+  skip: number,
   limit: number,
-): { items: Trademark[]; lastProcessEnd: number; sawProcessos: number } {
+): { items: Trademark[]; sawProcessos: number; reachedEnd: boolean } {
   const items: Trademark[] = [];
   const seen = new Set<string>();
-  let lastProcessEnd = 0;
   let sawProcessos = 0;
+  let reachedEnd = true;
 
   const re = /<processo\b[\s\S]*?<\/processo>/g;
   for (let m = re.exec(xml); m !== null; m = re.exec(xml)) {
     const block = m[0]!;
     sawProcessos++;
-    lastProcessEnd = m.index + block.length;
+    if (sawProcessos <= skip) continue; // retomada: pula os ja processados
     const item = parseProcesso(block, revista, collectedAt);
     if (!item) continue;
     if (uf && (item.titularUf ?? "").toUpperCase() !== uf) continue;
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     items.push(item);
-    if (limit > 0 && items.length >= limit) break;
+    if (limit > 0 && items.length >= limit) {
+      reachedEnd = false; // paramos por limit, pode haver mais
+      break;
+    }
   }
-  return { items, lastProcessEnd, sawProcessos };
+  return { items, sawProcessos, reachedEnd };
 }
 
 // ── HTTP handler ────────────────────────────────────────────────────────────
@@ -421,7 +434,7 @@ Deno.serve(async (req) => {
   const ufFilter = (url.searchParams.get("uf") ?? "").trim().toUpperCase();
   const limit = Number(url.searchParams.get("limit") ?? "") || DEFAULT_LIMIT;
   const window = Number(url.searchParams.get("window") ?? "") || DEFAULT_WINDOW;
-  const startByte = Math.max(0, Number(url.searchParams.get("startByte") ?? "") || 0);
+  const skip = Math.max(0, Number(url.searchParams.get("skip") ?? "") || 0);
   const revistaParam = Number(url.searchParams.get("revista") ?? "") || 0;
 
   try {
@@ -444,15 +457,19 @@ Deno.serve(async (req) => {
     const head = await fetchRange(url0, 0, 256 - 1);
     const baseOffset = dataOffsetFromHeader(head);
 
-    // 3) Range-fetch da janela (a partir de startByte dentro do stream comprimido).
-    const compStart = baseOffset + startByte;
+    // 3) Range-fetch SEMPRE do inicio do stream (DEFLATE nao permite retomar do
+    // meio). A janela (default) cobre o arquivo inteiro; inflar tudo custa ~0.2s.
+    const compStart = baseOffset;
     const compEnd = compStart + window - 1;
     const compressed = await fetchRange(url0, compStart, compEnd);
     const inflated = await inflatePartial(compressed);
     const xml = new TextDecoder("utf-8").decode(inflated);
 
-    // 4) Parse + normaliza (so <processo> completos; o ultimo truncado e descartado).
-    const { items, sawProcessos } = parseWindow(xml, revista, collectedAt, ufFilter, limit);
+    // 4) Parse + normaliza (so <processo> completos; o ultimo truncado e
+    // descartado). `skip` pula os ja gravados em chamadas anteriores.
+    const { items, sawProcessos, reachedEnd } = parseWindow(
+      xml, revista, collectedAt, ufFilter, skip, limit,
+    );
 
     // 5) Grava em lotes via a RPC.
     const supabase = createClient(

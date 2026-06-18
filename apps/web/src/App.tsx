@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  Brain,
   FileText,
   Gavel,
   HelpCircle,
@@ -217,6 +218,9 @@ const PrivacidadeCentralPage = lazy(() =>
   import("./app/privacidade/page").then((m) => ({ default: m.PrivacidadeCentralPage })),
 );
 const EmpresaPage = lazy(() => import("./app/publico/empresa-page").then((m) => ({ default: m.EmpresaPage })));
+const CerebroPage = lazy(() =>
+  import("./app/cerebro/page").then((m) => ({ default: m.CerebroPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -239,10 +243,12 @@ type RouteKey =
   | "inpi"
   | "raio-x"
   | "leads"
+  | "cerebro"
   | "onboarding";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
   { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
+  { path: "/app/cerebro", route: "cerebro", label: "Cérebro", icon: Brain },
   { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
   { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
   { path: "/app/politica", route: "politica", label: "Política", icon: Users },
@@ -287,6 +293,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   inpi: "INPI",
   "raio-x": "Raio-X de Empresa",
   leads: "Leads com Motivo",
+  cerebro: "Cérebro",
   onboarding: "Perfil",
 };
 
@@ -300,6 +307,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/ambiental")) return "ambiental";
   if (path.startsWith("/app/juridico")) return "juridico";
   if (path.startsWith("/app/inpi")) return "inpi";
+  if (path.startsWith("/app/cerebro")) return "cerebro";
   if (path.startsWith("/app/raio-x")) return "raio-x";
   if (path.startsWith("/app/leads")) return "leads";
   if (path.startsWith("/app/onboarding")) return "onboarding";
@@ -641,6 +649,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "juridico" && <JuridicoPage />}
                 {route === "inpi" && <InpiPage />}
                 {route === "raio-x" && <RaioXPage />}
+                {route === "cerebro" && <CerebroPage />}
                 {route === "leads" && <LeadsPage />}
                 {route === "onboarding" && <OnboardingProfissaoPage onFinish={() => go("/app")} />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
