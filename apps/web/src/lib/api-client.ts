@@ -8,14 +8,20 @@
 // (.env.local em dev, variáveis de ambiente na CI/Cloudflare Pages).
 // Sem elas o app opera em modo degradado (sem dados) — não crasha.
 
-/** URL + chave pública do Supabase, lidos das env vars de build. */
+// URL + chave PUBLISHABLE do Supabase: PÚBLICAS por design (vão no bundle). Reserva
+// pública garante que o app funcione mesmo sem env vars na CI/Cloudflare Pages.
+// Segredo real (service_role/tokens) nunca entra aqui.
+const FALLBACK_SUPABASE_URL = "https://pwiuiihsyazghdsrpshg.supabase.co";
+const FALLBACK_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
+
+/** URL + chave pública do Supabase: env var de build quando presente, senão a reserva pública. */
 export function getSupabasePublicConfig(): { url: string; key: string } {
   // Acesso estático (não bracket-notation) para que o bundler substitua em build time.
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   return {
-    url: typeof url === "string" && url.trim().length > 0 ? url.trim() : "",
-    key: typeof key === "string" && key.trim().length > 0 ? key.trim() : "",
+    url: typeof url === "string" && url.trim().length > 0 ? url.trim() : FALLBACK_SUPABASE_URL,
+    key: typeof key === "string" && key.trim().length > 0 ? key.trim() : FALLBACK_SUPABASE_PUBLISHABLE_KEY,
   };
 }
 
@@ -35,12 +41,12 @@ export function getConfiguredApiUrl(): string | undefined {
     return explicit;
   }
 
-  const supabaseUrl = getPublicEnv("VITE_SUPABASE_URL");
-  if (!supabaseUrl) {
-    // Sem env vars configuradas — modo degradado, sem dados.
+  // Usa a config pública (env var ou reserva) — nunca fica sem base em produção.
+  const { url } = getSupabasePublicConfig();
+  if (!url) {
     return undefined;
   }
-  return `${trimTrailingSlash(supabaseUrl)}/functions/v1/fonteia`;
+  return `${trimTrailingSlash(url)}/functions/v1/fonteia`;
 }
 
 export async function fetchJsonFromApi<T>(path: string, fetcher: typeof fetch = fetch): Promise<T> {
