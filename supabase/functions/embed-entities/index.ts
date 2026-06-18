@@ -1,3 +1,5 @@
+import { fetchWithTimeout } from "../_shared/http.ts";
+
 // Supabase Edge Function: "embed-entities" — gera embeddings das `entities`
 // para a busca semântica (pgvector / RPC match_entities).
 //
@@ -214,11 +216,11 @@ async function embedBatchWithModel(
       outputDimensionality: EMBED_DIM,
     })),
   };
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify(body),
-  });
+  }, 30000);
   const data = (await res.json()) as GeminiBatchResponse;
   if (!res.ok || data.error) {
     throw new Error(`${model} -> ${res.status}: ${data.error?.message ?? "erro"}`);
@@ -237,6 +239,9 @@ async function embedBatchWithModel(
 
 // Formata um array de floats no literal aceito pelo pgvector: "[0.1,0.2,...]".
 function toVectorLiteral(values: number[]): string {
+  if (!values.every((n) => Number.isFinite(n))) {
+    throw new Error("embedding inválido: componente não-finito");
+  }
   return `[${values.join(",")}]`;
 }
 
@@ -277,13 +282,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
 
   let rows: EntityRow[];
   try {
-    const res = await fetch(`${restBase}?${params.toString()}`, {
+    const res = await fetchWithTimeout(`${restBase}?${params.toString()}`, {
       headers: {
         apikey: serviceKey,
         authorization: `Bearer ${serviceKey}`,
         accept: "application/json",
       },
-    });
+    }, 15000);
     if (!res.ok) {
       return json({ error: "select_falhou", detail: await res.text() }, 502);
     }
@@ -332,9 +337,9 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     // UPDATE por linha (PATCH PostgREST). Mantém idempotência: filtra embedding=is.null.
-    const updates = items.map((s, idx) => {
+    const updates: Promise<number>[] = items.map((s, idx) => {
       const patchParams = new URLSearchParams({ id: `eq.${s.id}`, embedding: "is.null" });
-      return fetch(`${restBase}?${patchParams.toString()}`, {
+      return fetchWithTimeout(`${restBase}?${patchParams.toString()}`, {
         method: "PATCH",
         headers: {
           apikey: serviceKey,
@@ -343,7 +348,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
           prefer: "return=minimal",
         },
         body: JSON.stringify({ embedding: toVectorLiteral(vectors[idx]) }),
-      }).then((r) => (r.ok ? 1 : 0)).catch(() => 0);
+      }, 15000).then(async (r) => {
+        if (r.ok) return 1;
+        errors.push(`update ${s.id} -> ${r.status}: ${(await r.text().catch(() => "")).slice(0, 120)}`);
+        return 0;
+      }).catch((e) => {
+        errors.push(`update ${s.id} -> ${String(e)}`);
+        return 0;
+      });
     });
 
     const results = await Promise.all(updates);

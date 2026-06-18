@@ -166,7 +166,7 @@ function JargaoPopover({ entry, children }: JargaoPopoverProps) {
     }
 
     document.addEventListener("mousedown", handleOutside);
-    document.addEventListener("touchstart", handleOutside);
+    document.addEventListener("touchstart", handleOutside, { passive: true });
     return () => {
       document.removeEventListener("mousedown", handleOutside);
       document.removeEventListener("touchstart", handleOutside);

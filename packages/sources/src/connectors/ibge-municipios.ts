@@ -10,6 +10,8 @@
 // Estratégia JSON-first, igual ao conector do PNCP (pncp-licitacoes.ts): a fonte
 // oficial entrega tudo estruturado; só normalizamos.
 
+import { fetchWithRetry } from "../internal/http";
+
 export const IBGE_LOCALIDADES_BASE = "https://servicodados.ibge.gov.br/api/v1/localidades";
 
 /** User-Agent honesto — não fingir navegador (espelha "pncp-contratacoes"). */
@@ -99,16 +101,26 @@ export function municipiosUrl(): string {
 // Fetch
 // ---------------------------------------------------------------------------
 
-async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
-  const response = await fetcher(url, { headers: DEFAULT_HEADERS });
+async function getJson<T>(url: string, fetcher: typeof fetch | undefined): Promise<T> {
+  const response = await fetchWithRetry(url, {
+    init: { headers: DEFAULT_HEADERS },
+    fetcher,
+  });
   if (!response.ok) {
     throw new Error(`IBGE respondeu ${response.status} em ${url}`);
   }
-  return (await response.json()) as T;
+  const raw = (await response.json()) as unknown;
+  // Guarda mínima: a lista de municípios deve ser um array (fix #6).
+  if (!Array.isArray(raw)) {
+    throw new Error(
+      "IBGE /localidades/municipios: payload inesperado — esperado array de municípios.",
+    );
+  }
+  return raw as T;
 }
 
 /** Busca a lista completa (crua) de municípios do IBGE. Uma única chamada. */
-export function fetchMunicipiosRaw(fetcher: typeof fetch = fetch): Promise<IbgeMunicipioRaw[]> {
+export function fetchMunicipiosRaw(fetcher?: typeof fetch): Promise<IbgeMunicipioRaw[]> {
   return getJson(municipiosUrl(), fetcher);
 }
 

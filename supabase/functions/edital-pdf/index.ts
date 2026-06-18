@@ -28,6 +28,10 @@
 //      Também aceita a notação padded: ?edital=0317900/000002/2026
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { hasValidApiKey } from "../_shared/auth.ts";
+import { fetchWithTimeout } from "../_shared/http.ts";
+
+const PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
 
 const SLE_BASE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -60,11 +64,13 @@ function normalizeExercicio(s: string): string {
 }
 
 // Converte "317900/2/2026" (edle) ou "0317900/000002/2026" (edital) nas 3 partes.
+// Rejeita componentes não-numéricos para prevenir SSRF.
 function parseRef(raw: string): { unidade: string; numero: string; exercicio: string } | null {
   const parts = raw.trim().split("/");
   if (parts.length !== 3) return null;
   const [u, n, e] = parts;
   if (!u || !n || !e) return null;
+  if (!/^\d+$/.test(u.trim()) || !/^\d+$/.test(n.trim()) || !/^\d+$/.test(e.trim())) return null;
   return { unidade: u.trim(), numero: n.trim(), exercicio: e.trim() };
 }
 
@@ -76,12 +82,12 @@ async function fetchEditalPdf(
   numero: string,
   exercicio: string,
   doc: DocSuffix,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   // O SLE aceita tanto "317900" quanto "0317900" — usamos como veio.
   const url = `${SLE_BASE}/api/edital/${unidade}/${numero}/${exercicio}/${doc}`;
-  const resp = await fetch(url, {
+  const resp = await fetchWithTimeout(url, {
     headers: { "User-Agent": UA, Accept: "application/json" },
-  });
+  }, 30000);
 
   if (resp.status === 404) {
     const label = doc === "relacao-lotes" ? "Relação de itens" : "Edital";
@@ -104,7 +110,7 @@ async function fetchEditalPdf(
 
   // base64 → Uint8Array (Deno nativo, sem libs externas)
   const binaryStr = atob(payload.data);
-  const bytes = new Uint8Array(binaryStr.length);
+  const bytes = new Uint8Array(new ArrayBuffer(binaryStr.length));
   for (let i = 0; i < binaryStr.length; i++) {
     bytes[i] = binaryStr.charCodeAt(i);
   }
@@ -130,7 +136,7 @@ class SleNotFoundError extends Error {
 // Persiste no Supabase Storage (bucket "editais") via service role.
 // Retorna a URL pública do arquivo.
 async function storeInSupabase(
-  pdfBytes: Uint8Array,
+  pdfBytes: Uint8Array<ArrayBuffer>,
   unidade: string,
   numero: string,
   exercicio: string,
@@ -145,7 +151,7 @@ async function storeInSupabase(
   const path = `${exercicio}/${padUnidade(unidade)}/${padNumero(numero)}/edital.pdf`;
   const storageUrl = `${supabaseUrl}/storage/v1/object/editais/${path}`;
 
-  const uploadResp = await fetch(storageUrl, {
+  const uploadResp = await fetchWithTimeout(storageUrl, {
     method: "PUT",
     headers: {
       Authorization: `Bearer ${serviceRoleKey}`,
@@ -153,8 +159,8 @@ async function storeInSupabase(
       "Content-Type": "application/pdf",
       "x-upsert": "true", // idempotente: re-upload não gera erro
     },
-    body: pdfBytes,
-  });
+    body: pdfBytes.buffer as ArrayBuffer,
+  }, 30000);
 
   if (!uploadResp.ok) {
     const body = await uploadResp.text().catch(() => "");
@@ -177,9 +183,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   // Auth própria: exige header apikey (chave pública do projeto — padrão das outras funções).
-  const apikey = (request.headers.get("apikey") ?? "").trim();
-  if (!apikey) {
-    return jsonErr("apikey ausente. Envie a chave pública do projeto no header 'apikey'.", 401);
+  if (!hasValidApiKey(request, PUBLISHABLE_KEY)) {
+    return jsonErr("apikey invalida.", 401);
   }
 
   const { searchParams } = new URL(request.url);
@@ -212,7 +217,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
     ref = parseRef(edital);
     if (!ref) return jsonErr("Parâmetro 'edital' inválido. Formato esperado: '0317900/000002/2026'.", 400);
   } else if (uParam && nParam && eParam) {
-    ref = { unidade: uParam, numero: nParam, exercicio: eParam };
+    ref = parseRef(`${uParam}/${nParam}/${eParam}`);
+    if (!ref) return jsonErr("Parâmetros 'unidade'/'numero'/'exercicio' inválidos (apenas dígitos).", 400);
   } else {
     return jsonErr(
       "Informe ?edle=317900/2/2026  OU  ?edital=0317900/000002/2026  OU  " +
@@ -237,7 +243,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
       if (supabaseUrl) {
         const path = `${exercicio}/${padUnidade(unidade)}/${padNumero(numero)}/edital.pdf`;
         const existingUrl = `${supabaseUrl}/storage/v1/object/public/editais/${path}`;
-        const headResp = await fetch(existingUrl, { method: "HEAD" }).catch(() => null);
+        const headResp = await fetchWithTimeout(existingUrl, { method: "HEAD" }, 8000).catch(() => null);
         if (headResp?.ok) {
           // Já em cache no Storage — redireciona
           return new Response(null, {
@@ -261,7 +267,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     }
 
     // Modo proxy (padrão): devolve o PDF diretamente com Content-Disposition attachment
-    return new Response(pdfBytes, {
+    return new Response(pdfBytes.buffer as ArrayBuffer, {
       status: 200,
       headers: {
         ...CORS,
@@ -287,6 +293,6 @@ Deno.serve(async (request: Request): Promise<Response> => {
       );
     }
     console.error("[edital-pdf] erro:", err);
-    return jsonErr(`Falha ao buscar o PDF: ${String(err)}`, 502);
+    return jsonErr("Falha ao buscar o PDF.", 502);
   }
 });

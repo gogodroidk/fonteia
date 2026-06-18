@@ -68,7 +68,7 @@ function PostCard({ post }: { post: PostCard }) {
         <span style={{ fontSize: "12px", color: "var(--t-low)" }}>{post.readTime} de leitura</span>
       </div>
 
-      <h2
+      <h3
         style={{
           fontSize: "clamp(16px, 3vw, 19px)",
           fontWeight: 700,
@@ -79,7 +79,7 @@ function PostCard({ post }: { post: PostCard }) {
         }}
       >
         {post.title}
-      </h2>
+      </h3>
 
       <p
         style={{

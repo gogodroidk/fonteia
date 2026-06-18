@@ -28,6 +28,7 @@ import {
 import { listLeads, type Lead } from "../../features/leads/leads-api";
 import { inferServicos, inferSetor } from "../../features/leads/leads-heuristics";
 import { gerarMensagens } from "../../features/leads/leads-templates";
+import { navigateSpa } from "../_nav";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -165,11 +166,19 @@ function ServicoChip({ icon, label }: { icon: string; label: string }) {
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   function handleCopy() {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 1800);
     });
   }
 
@@ -463,20 +472,20 @@ function LeadCard({ lead }: LeadCardProps) {
         {/* Rodapé: Raio-X + PNCP */}
         <div className="row between wrap" style={{ gap: 8, marginTop: "auto", paddingTop: 4 }}>
           {raiox ? (
-            <a
-              href={raiox}
+            <button
+              type="button"
               className="btn btn--primary btn--sm"
               style={{
                 fontSize: 12.5,
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
-                textDecoration: "none",
               }}
+              onClick={() => navigateSpa(raiox)}
             >
               <Search size={13} aria-hidden="true" />
               Ver Raio-X
-            </a>
+            </button>
           ) : (
             <span />
           )}

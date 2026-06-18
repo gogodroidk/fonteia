@@ -8,6 +8,8 @@
 // Secrets (injetados/configurados): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { fetchWithTimeout } from "../_shared/http.ts";
 
 const RESEND_URL = "https://api.resend.com/emails";
 const FROM = "Fonte.ia <alertas@olli.com.br>";
@@ -42,7 +44,14 @@ function fmtPrazo(iso: string | null): string {
   });
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req: Request) => {
+  // OPT-IN: quando ALERTS_CRON_SECRET está configurado, exige o Bearer correspondente.
+  // Sem o secret definido (env vazio), o gate é ignorado — cron atual não quebra.
+  const cronSecret = Deno.env.get("ALERTS_CRON_SECRET") ?? "";
+  if (cronSecret && !hasValidBearerSecret(req, cronSecret)) {
+    return json({ ok: false, error: "nao_autorizado" }, 401);
+  }
+
   const resendKey = Deno.env.get("RESEND_API_KEY");
   if (!resendKey) return json({ ok: false, error: "RESEND_API_KEY ausente" }, 503);
 
@@ -85,7 +94,7 @@ Deno.serve(async () => {
     ].join("");
 
     try {
-      const res = await fetch(RESEND_URL, {
+      const res = await fetchWithTimeout(RESEND_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -94,12 +103,19 @@ Deno.serve(async () => {
           subject: `Prazo chegando — ${titulo}`,
           html,
         }),
-      });
+      }, 15000);
       if (!res.ok) {
         erros.push({ id: a.id, detail: `resend ${res.status}: ${(await res.text()).slice(0, 200)}` });
         continue;
       }
-      await supabase.from("user_alerts").update({ notified_at: new Date().toISOString() }).eq("id", a.id);
+      const { error: updErr } = await supabase
+        .from("user_alerts")
+        .update({ notified_at: new Date().toISOString() })
+        .eq("id", a.id);
+      if (updErr) {
+        erros.push({ id: a.id, detail: `update notified_at falhou: ${updErr.message}` });
+        continue;
+      }
       enviados++;
     } catch (e) {
       erros.push({ id: a.id, detail: String(e) });

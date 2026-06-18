@@ -49,7 +49,7 @@ export interface AiGenerateResult {
   text: string;
   /** Qual provedor atendeu de fato (útil para debug/telemetria). */
   provider: AiProviderName;
-  /** Id do modelo usado (ex.: "gemini-2.0-flash", "claude-opus-4-8"). */
+  /** Id do modelo usado (ex.: "gemini-2.5-flash", "claude-opus-4-8"). */
   model: string;
 }
 
@@ -81,6 +81,13 @@ export class AiProviderError extends Error {
     public readonly provider: AiProviderName,
     message: string,
     public readonly status?: number,
+    /**
+     * Sinaliza recusa de conteúdo do provedor (ex.: classificadores de segurança
+     * que devolvem HTTP 200 mas se recusam a responder, ou finishReason de bloqueio).
+     * O roteador trata isto como qualquer outra falha (cai para o próximo provedor),
+     * mas o flag permite distinguir "recusa" de "erro técnico" em telemetria/logs.
+     */
+    public readonly refusal: boolean = false,
   ) {
     super(message);
     this.name = "AiProviderError";

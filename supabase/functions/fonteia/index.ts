@@ -9,6 +9,9 @@
 //   GEMINI_API_KEY   obrigatório p/ ligar o Raio-X (aistudio.google.com → "Get API key")
 //   GEMINI_MODEL     opcional; default tenta uma lista de modelos Flash atuais
 
+import { hasValidApiKey, getVerifiedUserId } from "../_shared/auth.ts";
+import { fetchWithTimeout, fetchWithRetry } from "../_shared/http.ts";
+
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -58,7 +61,7 @@ async function isProUser(request: Request): Promise<boolean> {
   try {
     const base = Deno.env.get("SUPABASE_URL");
     if (!base) return false;
-    const res = await fetch(`${base}/rest/v1/rpc/my_plan`, {
+    const res = await fetchWithTimeout(`${base}/rest/v1/rpc/my_plan`, {
       method: "POST",
       headers: {
         apikey: PUBLISHABLE_KEY,
@@ -66,7 +69,7 @@ async function isProUser(request: Request): Promise<boolean> {
         "content-type": "application/json",
       },
       body: "{}",
-    });
+    }, 10000);
     if (!res.ok) return false;
     const data = (await res.json()) as { plan?: string };
     return data.plan === "pro" || data.plan === "corporativo";
@@ -204,7 +207,7 @@ async function callGeminiRaw(
   contents: GeminiContent[],
   generationConfig: Record<string, unknown>,
 ): Promise<Response> {
-  return await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+  return await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
@@ -212,7 +215,7 @@ async function callGeminiRaw(
       contents,
       generationConfig,
     }),
-  });
+  }, 30000);
 }
 
 // Percorre a lista de modelos (DEFAULT_MODELS ou GEMINI_MODEL) e devolve o primeiro
@@ -286,13 +289,16 @@ async function analyzeLotWithGemini(
   throw new Error(lastError);
 }
 
+const isDigits = (s: string) => /^\d+$/.test(s);
+
 async function fetchEditalBase64(edle: string): Promise<string | null> {
   const parts = edle.split(/[/-]/).filter((p) => p.length > 0);
   if (parts.length < 3) return null;
   const [u, n, e] = parts;
   if (!u || !n || !e) return null;
+  if (!isDigits(u) || !isDigits(n) || !isDigits(e)) return null;
   const url = `${SLE}/api/edital/${u.padStart(7, "0")}/${n.padStart(6, "0")}/${e}/edital-completo`;
-  const res = await fetch(url, { headers: { accept: "application/json", "user-agent": UA } });
+  const res = await fetchWithTimeout(url, { headers: { accept: "application/json", "user-agent": UA } }, 20000);
   if (!res.ok) return null;
   const data = (await res.json()) as { data?: string };
   return typeof data.data === "string" ? data.data : null;
@@ -316,7 +322,7 @@ async function analyzeEditalWithGemini(
   let lastError = "nenhum modelo respondeu";
   for (const model of models) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: "POST",
@@ -335,6 +341,7 @@ async function analyzeEditalWithGemini(
             generationConfig: { temperature: 0.2, maxOutputTokens: 8192 },
           }),
         },
+        60000,
       );
       const data = (await response.json()) as GeminiResponse;
       if (response.ok && !data.promptFeedback?.blockReason) {
@@ -448,7 +455,7 @@ interface EmbedResponse {
 // Embeda UMA query (taskType RETRIEVAL_QUERY — par do RETRIEVAL_DOCUMENT usado
 // no backfill). Devolve o vetor de 768 dims ou lança.
 async function embedQuery(apiKey: string, text: string): Promise<number[]> {
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent`,
     {
       method: "POST",
@@ -460,6 +467,7 @@ async function embedQuery(apiKey: string, text: string): Promise<number[]> {
         outputDimensionality: EMBED_DIM,
       }),
     },
+    20000,
   );
   const data = (await res.json()) as EmbedResponse;
   if (!res.ok || data.error) {
@@ -488,7 +496,10 @@ async function matchEntities(
 ): Promise<MatchRow[]> {
   const base = Deno.env.get("SUPABASE_URL");
   if (!base) throw new Error("SUPABASE_URL ausente");
-  const res = await fetch(`${base}/rest/v1/rpc/match_entities`, {
+  if (!embedding.every((n) => Number.isFinite(n))) {
+    throw new Error("embedding inválido: componente não-finito");
+  }
+  const res = await fetchWithTimeout(`${base}/rest/v1/rpc/match_entities`, {
     method: "POST",
     headers: {
       apikey: PUBLISHABLE_KEY,
@@ -500,7 +511,7 @@ async function matchEntities(
       match_kind: kind,
       match_count: count,
     }),
-  });
+  }, 15000);
   if (!res.ok) {
     throw new Error(`match_entities ${res.status}: ${await res.text()}`);
   }
@@ -549,32 +560,18 @@ function clientIp(request: Request): string {
 }
 
 // Determina a chave de rate limit para o request:
-//   - "user:{sub}" se o Authorization Bearer for um JWT de sessão (≠ publishable key).
-//     O payload é decodificado localmente (sem verificar assinatura) só para extrair
-//     o sub — serve apenas como chave de contagem, fail-open em qualquer erro.
-//   - "ip:{ip}" como fallback (sem sessão, ou erro no decode).
-function rateLimitKey(request: Request): string {
-  try {
-    const auth = request.headers.get("authorization") ?? "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-    // Publishable key (sb_publishable_...) não é um JWT de sessão — vai pro fallback.
-    if (!token || token === PUBLISHABLE_KEY || token.startsWith("sb_publishable_")) {
-      return `ip:${clientIp(request)}`;
-    }
-    // JWT tem exatamente 3 partes separadas por "."
-    const parts = token.split(".");
-    if (parts.length !== 3) return `ip:${clientIp(request)}`;
-    // Decodifica o payload (parte do meio) em base64url → JSON, sem verificar assinatura.
-    const payloadB64 = parts[1]!.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = payloadB64 + "=".repeat((4 - (payloadB64.length % 4)) % 4);
-    const payloadJson = atob(padded);
-    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
-    const sub = typeof payload["sub"] === "string" ? payload["sub"].trim() : "";
-    if (sub) return `user:${sub}`;
-  } catch {
-    // Fail-open: qualquer erro de decode → cai pro IP
+//   - "user:{uid}" quando há um Bearer de sessão e o token é VERIFICADO contra o
+//     Supabase Auth (getVerifiedUserId). Nunca usa o `sub` não verificado.
+//   - "ip:{ip}" como fallback (sem sessão, publishable key, ou token inválido).
+async function rateLimitKey(request: Request): Promise<string> {
+  const auth = request.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  // Publishable key (sb_publishable_...) não é um JWT de sessão — vai pro fallback.
+  if (!token || token === PUBLISHABLE_KEY || token.startsWith("sb_publishable_")) {
+    return `ip:${clientIp(request)}`;
   }
-  return `ip:${clientIp(request)}`;
+  const uid = await getVerifiedUserId(request, Deno.env.get("SUPABASE_URL") ?? "", PUBLISHABLE_KEY);
+  return uid ? `user:${uid}` : `ip:${clientIp(request)}`;
 }
 
 interface RateLimitResult {
@@ -588,7 +585,7 @@ async function checkRateLimit(key: string): Promise<RateLimitResult> {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!base || !serviceKey) return { allowed: true, retry_after: 0 };
   try {
-    const res = await fetch(`${base}/rest/v1/rpc/check_ai_rate_limit`, {
+    const res = await fetchWithTimeout(`${base}/rest/v1/rpc/check_ai_rate_limit`, {
       method: "POST",
       headers: {
         apikey: serviceKey,
@@ -600,7 +597,7 @@ async function checkRateLimit(key: string): Promise<RateLimitResult> {
         p_limit: RATE_LIMIT_PER_WINDOW,
         p_window_seconds: RATE_WINDOW_SECONDS,
       }),
-    });
+    }, 8000);
     if (!res.ok) return { allowed: true, retry_after: 0 };
     const data = (await res.json()) as { allowed?: boolean; retry_after?: number };
     return {
@@ -619,9 +616,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   // Auth própria: exige a chave pública do projeto no header `apikey`.
-  const apikey = request.headers.get("apikey") ?? "";
-  if (apikey.trim() === "") {
-    return json({ error: "apikey ausente" }, 401);
+  if (!hasValidApiKey(request, PUBLISHABLE_KEY)) {
+    return json({ error: "apikey invalida" }, 401);
   }
 
   const { pathname } = new URL(request.url);
@@ -629,7 +625,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
   // Rate limit por usuário/IP: aplica-se ANTES da lógica das rotas de IA (POST).
   // Preserva 100% as rotas — só intercepta com 429 quem estourar o limite. GET/health passam.
   if (request.method === "POST" && isAiRoute(pathname)) {
-    const rl = await checkRateLimit(rateLimitKey(request));
+    const rl = await checkRateLimit(await rateLimitKey(request));
     if (!rl.allowed) {
       return new Response(
         JSON.stringify({ error: "rate_limited", retry_after: rl.retry_after }),
@@ -675,7 +671,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       const results = await matchEntities(embedding, kind, limit);
       return json({ query, kind, count: results.length, results, model: EMBED_MODEL });
     } catch (error) {
-      return json({ error: "Falha na busca semantica.", detail: String(error) }, 502);
+      console.error("[fonteia] ai/search:", String(error));
+      return json({ error: "Falha na busca semantica." }, 502);
     }
   }
 
@@ -722,7 +719,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
       });
       return json({ answer: result.answer, model: result.model });
     } catch (error) {
-      return json({ error: "Falha ao responder.", detail: String(error) }, 502);
+      console.error("[fonteia] ai/chat:", String(error));
+      return json({ error: "Falha ao responder." }, 502);
     }
   }
 
@@ -775,7 +773,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
         model: result.model,
       });
     } catch (error) {
-      return json({ error: "Falha ao interpretar.", detail: String(error) }, 502);
+      console.error("[fonteia] ai/intent:", String(error));
+      return json({ error: "Falha ao interpretar." }, 502);
     }
   }
 
@@ -812,7 +811,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
         disclaimer: "Analise do edital por IA. Confirme tudo no edital oficial antes de dar lance.",
       });
     } catch (error) {
-      return json({ error: "Falha ao analisar o edital.", detail: String(error) }, 502);
+      console.error("[fonteia] ia/edital:", String(error));
+      return json({ error: "Falha ao analisar o edital." }, 502);
     }
   }
 
@@ -845,7 +845,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
           "Análise gerada por IA a partir dos dados públicos da Receita. Confirme tudo no edital oficial antes de dar lance.",
       });
     } catch (error) {
-      return json({ error: "Falha ao gerar a analise.", detail: String(error) }, 502);
+      console.error("[fonteia] ia/raio-x:", String(error));
+      return json({ error: "Falha ao gerar a analise." }, 502);
     }
   }
 

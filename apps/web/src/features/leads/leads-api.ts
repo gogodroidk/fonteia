@@ -6,24 +6,10 @@
  */
 
 import { fetchAllD1Entities, type D1EntityRow } from "../../lib/d1-client";
+import type { ContratoPublicoAttributes } from "../raio-x/raio-x-api";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-/**
- * Atributos normalizados de um contrato público (PNCP).
- * Estes campos vêm dentro de entities.attributes (JSONB).
- */
-export interface ContratoPublicoAttributes {
-  fornecedorNome?: string | undefined;
-  orgao?: string | undefined;
-  objeto?: string | undefined;
-  valorGlobal?: number | undefined;
-  modalidade?: string | undefined;
-  dataVigenciaInicio?: string | undefined;
-  uf?: string | undefined;
-  municipio?: string | undefined;
-  numeroControlePNCP?: string | undefined;
-}
+// Re-exporta para consumidores que importavam daqui.
+export type { ContratoPublicoAttributes };
 
 /** Lead enriquecido que a UI consome. */
 export interface Lead {

@@ -133,6 +133,7 @@ export class AiRouter {
     };
 
     let lastError: AiProviderError | undefined;
+    let lastTriedProvider: AiProviderName | undefined;
     let anyConfigured = false;
 
     for (const name of order) {
@@ -141,6 +142,7 @@ export class AiRouter {
         continue;
       }
       anyConfigured = true;
+      lastTriedProvider = name;
       const model = this.modelFor(name, policy.weight);
       try {
         return await provider.generate(effectiveRequest, model);
@@ -157,8 +159,9 @@ export class AiRouter {
     if (!anyConfigured) {
       throw new AiNotConfiguredError();
     }
-    // Algum provedor estava configurado mas todos falharam.
-    throw lastError ?? new AiProviderError(order[0] ?? "gemini", "Falha ao gerar resposta.");
+    // Algum provedor estava configurado mas todos falharam. Reporta o provedor que
+    // de fato falhou por último (não order[0], que pode nem ter sido tentado).
+    throw lastError ?? new AiProviderError(lastTriedProvider ?? "gemini", "Falha ao gerar resposta.");
   }
 }
 

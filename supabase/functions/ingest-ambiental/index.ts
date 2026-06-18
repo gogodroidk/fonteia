@@ -33,6 +33,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithTimeout } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { parseDateBrt } from "../_shared/br.ts";
 
 const ZIP_URL =
   "https://stibamadadosabertosprd.blob.core.windows.net/dados-abertos/dados/SIFISC/auto_infracao/auto_infracao/auto_infracao_csv.zip";
@@ -47,9 +51,9 @@ const RPC_BATCH = 500;
 // ── ZIP Range helpers ───────────────────────────────────────────────────────
 
 async function fetchRange(start: number, end: number): Promise<Uint8Array> {
-  const res = await fetch(ZIP_URL, {
+  const res = await fetchWithTimeout(ZIP_URL, {
     headers: { "user-agent": UA, Range: `bytes=${start}-${end}` },
-  });
+  }, 15000);
   if (res.status !== 206 && res.status !== 200) {
     throw new Error(`IBAMA Blob respondeu ${res.status} em Range ${start}-${end}`);
   }
@@ -81,7 +85,12 @@ async function listZipEntries(): Promise<ZipEntry[]> {
     const extraLen = readU16(head, 28);
     const name = new TextDecoder("utf-8").decode(head.subarray(30, 30 + nameLen));
     const dataOffset = offset + 30 + nameLen + extraLen;
+    // ZIP64: compressedSize=0 no local header quando bit 3 está setado (data descriptor).
+    // Neste ZIP de dados abertos assumimos que não há bit 3 (simplificação documentada).
     entries.push({ name, dataOffset, compressedSize });
+    // Se compressedSize=0 (ZIP64 ou arquivo vazio), não conseguimos avançar pelo header.
+    // Interrompemos a listagem — a entrada anterior (se houver) já é suficiente.
+    if (compressedSize === 0) break;
     offset = dataOffset + compressedSize;
   }
   return entries;
@@ -187,23 +196,21 @@ function parseCsvSemicolon(text: string): string[][] {
 
 // ── Normalização ────────────────────────────────────────────────────────────
 
+/**
+ * "0,00" -> 0 (zero é válido); vazio/undefined -> undefined.
+ * Diferente de parseBrlToCents genérico que descartava zero:
+ * aqui retornamos 0 quando o campo existe mas é zero,
+ * e undefined apenas quando o campo está ausente/vazio.
+ */
 function parseBrlToCents(value: string | undefined): number | undefined {
-  if (!value) return undefined;
+  if (value === undefined) return undefined;
   const cleaned = value.trim();
-  if (cleaned === "" || cleaned === "0" || cleaned === "0,00") return undefined;
+  if (cleaned === "") return undefined;
   const normalized = cleaned.replace(/\./g, "").replace(",", ".");
   const num = Number(normalized);
-  if (!Number.isFinite(num) || num <= 0) return undefined;
+  if (!Number.isFinite(num)) return undefined;
+  // Valor zero é explicitamente representado (multa de 0,00 é válida)
   return Math.round(num * 100);
-}
-
-function parseDate(value: string | undefined): string {
-  if (!value) return "";
-  const s = value.trim();
-  if (s === "") return "";
-  const iso = s.includes(" ") ? s.replace(" ", "T") : s;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString();
 }
 
 function clean(value: string | undefined): string {
@@ -261,7 +268,7 @@ function normalizeInfracoes(rows: string[][]): Infracao[] {
       infrator: clean(at(row, I.nome)),
       uf: clean(at(row, I.uf)).toUpperCase(),
       tipoInfracao: tipo || "Não informado",
-      data: parseDate(at(row, I.data)),
+      data: parseDateBrt(at(row, I.data)),
       descricao: clean(at(row, I.desc)),
     };
     if (cpfCnpj !== "") item.cpfCnpj = cpfCnpj;
@@ -278,6 +285,19 @@ function normalizeInfracoes(rows: string[][]): Infracao[] {
 // ── HTTP handler ────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-ambiental] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
   const ufFilter = (url.searchParams.get("uf") ?? "").trim().toUpperCase();
   const limit = Number(url.searchParams.get("limit") ?? "") || 0;
@@ -291,20 +311,19 @@ Deno.serve(async (req) => {
     const latest = pickLatestEntry(entries);
     if (!latest) {
       // Degradação elegante: fonte respondeu mas sem CSV reconhecível.
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          fonte: PORTAL,
-          motivo: "Nenhuma entrada CSV encontrada no ZIP do IBAMA.",
-          coletados: 0,
-          ingested: 0,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
+      return jsonResponse({
+        ok: false,
+        fonte: PORTAL,
+        motivo: "Nenhuma entrada CSV encontrada no ZIP do IBAMA.",
+        coletados: 0,
+        ingested: 0,
+      }, { status: 200 }, req);
     }
 
     // 2) Infla a fatia inicial do ano mais recente.
-    const windowEnd = latest.dataOffset + Math.min(window, latest.compressedSize) - 1;
+    // Se compressedSize=0 (ZIP64/data-descriptor), usa window como teto sem clamp.
+    const effectiveCompressed = latest.compressedSize > 0 ? latest.compressedSize : window;
+    const windowEnd = latest.dataOffset + Math.min(window, effectiveCompressed) - 1;
     const compressed = await fetchRange(latest.dataOffset, windowEnd);
     const inflated = await inflatePartial(compressed);
     const text = new TextDecoder("utf-8").decode(inflated);
@@ -338,24 +357,22 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        fonte: PORTAL,
-        arquivo: latest.name,
-        ano: entryYear(latest.name),
-        uf: ufFilter || null,
-        coletados: items.length,
-        ingested,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      fonte: PORTAL,
+      arquivo: latest.name,
+      ano: entryYear(latest.name),
+      uf: ufFilter || null,
+      coletados: items.length,
+      ingested,
+    }, {}, req);
   } catch (e) {
     // Degradação elegante: IBAMA inacessível/instável -> 502, pipeline segue,
     // a tela cai no empty state.
-    return new Response(
-      JSON.stringify({ ok: false, fonte: PORTAL, error: String(e), coletados: 0, ingested: 0 }),
-      { status: 502, headers: { "Content-Type": "application/json" } },
+    return jsonResponse(
+      { ok: false, fonte: PORTAL, error: String(e), coletados: 0, ingested: 0 },
+      { status: 502 },
+      req,
     );
   }
 });

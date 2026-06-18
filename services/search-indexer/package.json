@@ -1,6 +1,9 @@
 {
   "name": "@fonteia/search-indexer",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "scripts": {
+    "test": "echo no-op",
+    "typecheck": "echo no-op"
+  }
 }
-

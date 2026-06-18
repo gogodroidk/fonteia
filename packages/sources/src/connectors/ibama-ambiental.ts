@@ -26,6 +26,8 @@
 //
 // Idempotente: o id = SEQ_AUTO_INFRACAO (perene). Rodar de novo faz upsert.
 
+import { fetchWithRetry } from "../internal/http";
+
 export const IBAMA_BLOB_AUTO_INFRACAO_ZIP =
   "https://stibamadadosabertosprd.blob.core.windows.net/dados-abertos/dados/SIFISC/auto_infracao/auto_infracao/auto_infracao_csv.zip";
 
@@ -50,6 +52,10 @@ const DEFAULT_COMPRESSED_WINDOW = 2_000_000;
 // Limite de entradas a percorrer no diretório do ZIP (proteção contra loop).
 const MAX_ZIP_ENTRIES = 200;
 
+// Valor sentinela de ZIP64: compressedSize/uncompressedSize = 0xFFFFFFFF indica
+// que o tamanho real está num campo extra ZIP64 (não parseado aqui).
+const ZIP64_SENTINEL = 0xffffffff;
+
 // ---------------------------------------------------------------------------
 // Tipo normalizado — o que o produto lê (guardado em entities.attributes).
 // Chave estável = SEQ_AUTO_INFRACAO.
@@ -73,7 +79,7 @@ export interface IbamaInfracao {
   tipoInfracao: string;
   /** Valor da multa em CENTAVOS (inteiro). undefined quando não há multa. */
   valorMultaCents?: number | undefined;
-  /** Data/hora do auto de infração em ISO (ou a string original se não parsear). */
+  /** Data/hora do auto de infração em ISO com offset BRT (-03:00). */
   data: string;
   /** Descrição livre do auto (DES_AUTO_INFRACAO). "" quando ausente. */
   descricao: string;
@@ -89,10 +95,11 @@ async function fetchRange(
   url: string,
   start: number,
   end: number,
-  fetcher: typeof fetch,
+  fetcher: typeof fetch | undefined,
 ): Promise<Uint8Array> {
-  const res = await fetcher(url, {
-    headers: { ...DEFAULT_HEADERS, Range: `bytes=${start}-${end}` },
+  const res = await fetchWithRetry(url, {
+    init: { headers: { ...DEFAULT_HEADERS, Range: `bytes=${start}-${end}` } },
+    fetcher,
   });
   if (res.status !== 206 && res.status !== 200) {
     throw new Error(`IBAMA Blob respondeu ${res.status} em Range ${start}-${end}`);
@@ -128,7 +135,7 @@ function readU32(b: Uint8Array, o: number): number {
 /** Caminha o ZIP por Range e lista as entradas (sem baixar os dados). */
 export async function listZipEntries(
   url: string,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<ZipEntry[]> {
   const entries: ZipEntry[] = [];
   let offset = 0;
@@ -145,15 +152,31 @@ export async function listZipEntries(
     const nameBytes = head.subarray(30, 30 + nameLen);
     const name = new TextDecoder("utf-8").decode(nameBytes);
     const dataOffset = offset + 30 + nameLen + extraLen;
+
+    // fix #2b: guarda ZIP64 — se compressedSize for 0xFFFFFFFF (sentinela ZIP64)
+    // ou 0 (data descriptor / entrada vazia), o offset calculado seria inválido.
+    // Pulamos a entrada em vez de propagar um offset incorreto.
+    if (compressedSize === ZIP64_SENTINEL || compressedSize === 0) {
+      // Não podemos calcular o próximo offset com segurança; paramos a varredura.
+      // A entrada pode ainda ser adicionada se precisarmos dela; como não
+      // conseguimos pular, simplesmente interrompemos.
+      break;
+    }
+
     entries.push({ name, dataOffset, compressedSize, uncompressedSize });
     offset = dataOffset + compressedSize;
   }
   return entries;
 }
 
-/** Extrai o ano de "auto_infracao_2026.csv" -> 2026 (NaN se não casar). */
+/** Extrai o ano de "auto_infracao_2026.csv" -> 2026 (NaN se não casar).
+ *
+ * fix #2c: regex ancorada ao nome do arquivo para evitar falsos positivos em
+ * paths com diretórios (ex.: "2024/auto_infracao_2026.csv").
+ */
 function entryYear(name: string): number {
-  const m = name.match(/(\d{4})/);
+  // Captura o ano do padrão "auto_infracao_AAAA.csv" (case-insensitive).
+  const m = /auto_infracao_(\d{4})\.csv$/i.exec(name);
   return m ? Number(m[1]) : Number.NaN;
 }
 
@@ -182,8 +205,12 @@ export function pickLatestEntry(entries: ZipEntry[]): ZipEntry | undefined {
 // ---------------------------------------------------------------------------
 
 export async function inflatePartial(compressed: Uint8Array): Promise<Uint8Array> {
-  // deno-lint-ignore no-explicit-any
-  const DS: any = (globalThis as any).DecompressionStream;
+  // fix #2a: tipar DecompressionStream sem `any` — usa `unknown` + narrowing.
+  // `typeof DecompressionStream` só existe quando definido no runtime; usamos
+  // `globalThis` para acessar sem erros de compilação em ambientes sem a Web API.
+  type DecompressionStreamCtor = typeof DecompressionStream | undefined;
+  const DS = (globalThis as Record<string, unknown>)["DecompressionStream"] as DecompressionStreamCtor;
+
   if (typeof DS !== "function") {
     throw new Error("DecompressionStream indisponível neste runtime (necessário deflate-raw).");
   }
@@ -276,27 +303,46 @@ export function parseCsvSemicolon(text: string): string[][] {
 // Normalização
 // ---------------------------------------------------------------------------
 
-/** "8000,00" / "107.000,50" -> centavos inteiros. undefined se vazio/invalido. */
+/**
+ * "8000,00" / "107.000,50" -> centavos inteiros.
+ *
+ * fix #2e: "0,00" e "0" devolvem 0 (zero explícito), não undefined — só
+ * devolve undefined para vazio/ausente (string vazia ou undefined).
+ */
 export function parseBrlToCents(value: string | undefined): number | undefined {
-  if (!value) return undefined;
+  if (value === undefined) return undefined;
   const cleaned = value.trim();
-  if (cleaned === "" || cleaned === "0" || cleaned === "0,00") return undefined;
+  if (cleaned === "") return undefined;
   // Remove separador de milhar "." e troca decimal "," por ".".
   const normalized = cleaned.replace(/\./g, "").replace(",", ".");
   const num = Number(normalized);
-  if (!Number.isFinite(num) || num <= 0) return undefined;
+  if (!Number.isFinite(num)) return undefined;
+  if (num < 0) return undefined;
   return Math.round(num * 100);
 }
 
-/** "2026-01-02 12:02:27" -> ISO; devolve a original se não parsear. */
+/**
+ * "2026-01-02 12:02:27" -> ISO com offset BRT (-03:00).
+ *
+ * fix #2d: strings sem timezone são BRT, não UTC. Anexamos "-03:00" em vez de
+ * deixar o construtor Date interpretar como UTC (que causaria desvio de 3h).
+ * Devolve a string original se não parsear como data conhecida.
+ */
 function parseDate(value: string | undefined): string {
   if (!value) return "";
   const s = value.trim();
   if (s === "") return "";
-  // O IBAMA já entrega "YYYY-MM-DD HH:MM:SS"; basta trocar o espaço por "T".
-  const iso = s.includes(" ") ? s.replace(" ", "T") : s;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? s : d.toISOString();
+  // "YYYY-MM-DD HH:MM:SS" (formato IBAMA) ou "YYYY-MM-DDTHH:MM:SS" -> BRT
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s)) {
+    const iso = s.replace(" ", "T");
+    // Já tem timezone? Mantém.
+    if (/[zZ]$/.test(iso) || /[+-]\d{2}:\d{2}$/.test(iso)) return iso;
+    // Sem timezone: assume BRT (-03:00) — nunca interpreta como UTC.
+    return `${iso}-03:00`;
+  }
+  // "YYYY-MM-DD" puro -> meia-noite BRT.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00-03:00`;
+  return s;
 }
 
 function clean(value: string | undefined): string {
@@ -393,7 +439,7 @@ export async function fetchRecentInfracoes(
 ): Promise<FetchInfracoesResult> {
   const url = options.url ?? IBAMA_BLOB_AUTO_INFRACAO_ZIP;
   const window = options.compressedWindow ?? DEFAULT_COMPRESSED_WINDOW;
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher;
 
   const entries = await listZipEntries(url, fetcher);
   const latest = pickLatestEntry(entries);

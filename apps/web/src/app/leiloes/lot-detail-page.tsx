@@ -735,7 +735,8 @@ export function LotDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [lot, session?.access_token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lot.id, session?.access_token]);
 
   // SHA-256 hash do conteúdo factual exibido (prova de integridade do que está na tela).
   // Computado async via Web Crypto a partir de campos estáveis do lote (sem inferências).

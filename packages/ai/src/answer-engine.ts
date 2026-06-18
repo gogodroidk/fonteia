@@ -26,15 +26,18 @@ export interface FonteiaAnswer {
   nextActions: string[];
   citations: AnswerCitation[];
   guardrails: string[];
+  /**
+   * true quando a pergunta excedeu MAX_QUESTION_LENGTH e foi cortada antes do
+   * processamento (mitiga prompt-injection). Sinalizamos em vez de mutilar em
+   * silêncio — o caller/UI pode avisar o usuário que a pergunta foi encurtada.
+   */
+  questionTruncated?: boolean;
 }
 
 function stringifyClaimValue(value: Claim["value"]): string {
+  // Claim["value"] é string | number | boolean | null — nao ha ramo "object".
   if (value === null) {
     return "nao informado";
-  }
-
-  if (typeof value === "object") {
-    return JSON.stringify(value);
   }
 
   return String(value);
@@ -57,8 +60,16 @@ function citationsForClaims(claims: Claim[], evidence: Evidence[]): AnswerCitati
 const MAX_QUESTION_LENGTH = 500;
 
 export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
-  // Trunca a pergunta se exceder o limite antes de qualquer processamento.
-  const safeContext: AnswerContext = context.question.length > MAX_QUESTION_LENGTH
+  // Mantemos o limite (mitiga prompt-injection), mas SINALIZAMOS o corte em vez
+  // de mutilar a pergunta sem aviso.
+  const questionTruncated = context.question.length > MAX_QUESTION_LENGTH;
+  if (questionTruncated) {
+    // Log explícito para nao cortar em silêncio (telemetria/diagnóstico).
+    console.warn(
+      `[fonteia/answer-engine] pergunta truncada de ${context.question.length} para ${MAX_QUESTION_LENGTH} caracteres (limite anti-injecao).`,
+    );
+  }
+  const safeContext: AnswerContext = questionTruncated
     ? { ...context, question: context.question.slice(0, MAX_QUESTION_LENGTH) }
     : context;
   const claims = selectRelevantClaims(safeContext);
@@ -73,6 +84,7 @@ export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
       nextActions: ["Conectar mais fontes oficiais", "Tentar uma pergunta mais especifica", "Verificar a fonte original manualmente"],
       citations: [],
       guardrails: [...FONTEIA_ANSWER_GUARDRAILS],
+      questionTruncated,
     };
   }
 
@@ -98,6 +110,7 @@ export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
     nextActions: ["Abrir evidencias", "Salvar dossie", "Criar alerta para mudancas", "Cruzar com modulos relacionados"],
     citations,
     guardrails: [...FONTEIA_ANSWER_GUARDRAILS],
+    questionTruncated,
   };
 }
 

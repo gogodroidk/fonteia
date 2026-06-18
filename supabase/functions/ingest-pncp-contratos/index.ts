@@ -10,20 +10,6 @@
 //   GET https://pncp.gov.br/api/consulta/v1/contratos
 //       ?dataInicial=AAAAMMDD&dataFinal=AAAAMMDD&pagina={n}&tamanhoPagina=50
 //
-// Shape da resposta (campos principais):
-//   numeroControlePNCP, niFornecedor (CNPJ/CPF), nomeRazaoSocialFornecedor,
-//   valorGlobal, objetoContrato, orgaoEntidade, unidadeOrgao,
-//   dataVigenciaInicio, dataVigenciaFim, dataAssinatura, tipoPessoa,
-//   situacaoContrato, tipoContrato, modalidadeNome, linkSistemaOrigem.
-//
-// Mapeamento de entidade:
-//   entities.kind        = 'public_contract'
-//   entities.name        = nomeRazaoSocialFornecedor
-//   entities.cnpj        = niFornecedor (só dígitos, apenas quando PJ — 14 dígitos)
-//   entities.external_ids = { numeroControlePNCP }
-//   entities.attributes  = payload normalizado (exceto campo raw)
-//   entities.source_ids  = ['pncp-contratos']
-//
 // Idempotente: dedup por numeroControlePNCP (índice único na migration).
 //
 // Parâmetros de query (todos opcionais):
@@ -40,6 +26,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { digitsOnly, extractCnpj } from "../_shared/br.ts";
 
 const BASE  = "https://pncp.gov.br/api/consulta";
 const PORTAL = "https://pncp.gov.br";
@@ -104,6 +94,8 @@ interface PncpPage {
 
 // ---- Helpers ------------------------------------------------------------------
 
+// digitsOnly e extractCnpj importados de _shared/br.ts
+
 function parseDate(value: string | null | undefined): string {
   if (!value) return "";
   const t = value.trim();
@@ -112,16 +104,6 @@ function parseDate(value: string | null | undefined): string {
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(t)) return `${t}-03:00`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return `${t}T00:00:00-03:00`;
   return t;
-}
-
-function digitsOnly(value: string | null | undefined): string {
-  return (value ?? "").replace(/\D/g, "");
-}
-
-/** Extrai CNPJ (14 dígitos) ou devolve null para CPF/outros. */
-function extractCnpj(ni: string | null | undefined): string | null {
-  const d = digitsOnly(ni);
-  return d.length === 14 ? d : null;
 }
 
 function portalUrl(num: string): string {
@@ -141,8 +123,6 @@ function ymd(date: Date): string {
   return `${y}${m}${d}`;
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
 // ---- Normalização -------------------------------------------------------------
 
 function normalize(raw: RawContrato, collectedAt: string): Record<string, unknown> {
@@ -160,13 +140,11 @@ function normalize(raw: RawContrato, collectedAt: string): Record<string, unknow
     raw.linkSistemaOrigem?.trim() || portalUrl(raw.numeroControlePNCP);
 
   const out: Record<string, unknown> = {
-    // campos usados pela RPC ingest_pncp_contratos
     id:              raw.numeroControlePNCP,
     sourceId:        SOURCE_ID,
     sourceUrl,
     collectedAt,
 
-    // campos mapeados para entities.attributes
     fornecedorNome,
     fornecedorCnpj,
     orgao:           orgaoNome,
@@ -191,14 +169,12 @@ function normalize(raw: RawContrato, collectedAt: string): Record<string, unknow
     poder:           orgao.poderId ?? null,
   };
 
-  // opcionais presentes só quando não-nulos
   if (raw.valorInicial !== undefined && raw.valorInicial !== null) out.valorInicial = raw.valorInicial;
   if (raw.informacaoComplementar) out.informacaoComplementar = raw.informacaoComplementar.trim();
   if (raw.numeroContratoEmpenho)  out.numeroContratoEmpenho  = raw.numeroContratoEmpenho;
   if (raw.anoContrato !== undefined) out.anoContrato = raw.anoContrato;
   if (raw.processo) out.processo = raw.processo;
 
-  // raw completo como sub-objeto (a RPC grava em raw_records.payload via v_item->'raw')
   out.raw = raw;
 
   return out;
@@ -223,7 +199,12 @@ function buildUrl(
 }
 
 async function getJson(url: string): Promise<PncpPage> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (res.status === 204 || res.status === 404) return { data: [], totalPaginas: 0, empty: true };
   if (!res.ok) throw new Error(`HTTP ${res.status} em ${url}`);
   return (await res.json()) as PncpPage;
@@ -232,6 +213,19 @@ async function getJson(url: string): Promise<PncpPage> {
 // ---- Handler principal -------------------------------------------------------
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-pncp-contratos] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
 
   const dias       = Number(url.searchParams.get("dias") ?? "30");
@@ -290,21 +284,19 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        janela: { dataInicial, dataFinal },
-        uf: uf ?? null,
-        coletadas: items.length,
-        ingested,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      janela: { dataInicial, dataFinal },
+      uf: uf ?? null,
+      coletadas: items.length,
+      ingested,
+      errors: errors.length > 0 ? errors : undefined,
+    }, {}, req);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: String(e) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });
+
+// Re-export para satisfazer possíveis imports de utilitários (não é necessário
+// mas documenta que digitsOnly vem de _shared/br.ts).
+export { digitsOnly };

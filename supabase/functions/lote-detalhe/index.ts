@@ -14,6 +14,10 @@
 // Receita), sem segredo e sem escrita. Visitantes anônimos podem ver o lote.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { hasValidApiKey } from "../_shared/auth.ts";
+import { fetchWithTimeout } from "../_shared/http.ts";
+
+const PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
 
 const BASE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -53,11 +57,13 @@ interface RawLoteDetalhe {
 }
 
 // "317900/2/2026" ou "0317900/000002/2026" -> partes padronizadas para a API.
+// Rejeita componentes não-numéricos para prevenir SSRF.
 function padEdle(edle: string): { unidade: string; numero: string; exercicio: string } | null {
   const parts = edle.split(/[/-]/).filter((p) => p.length > 0);
   if (parts.length < 3) return null;
   const [u, n, e] = parts;
   if (!u || !n || !e) return null;
+  if (!/^\d+$/.test(u) || !/^\d+$/.test(n) || !/^\d+$/.test(e)) return null;
   return { unidade: u.padStart(7, "0"), numero: n.padStart(6, "0"), exercicio: e };
 }
 
@@ -78,17 +84,21 @@ function buildTitulo(itens: Array<{ descricao: string }>): string | null {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
+  if (!hasValidApiKey(req, PUBLISHABLE_KEY)) {
+    return json({ ok: false, error: "apikey invalida" }, 401);
+  }
+
   const url = new URL(req.url);
   const edle = url.searchParams.get("edle") ?? url.searchParams.get("edital") ?? "";
   const lote = url.searchParams.get("lote") ?? "";
   const parts = padEdle(edle);
-  if (!parts || !lote) {
-    return json({ ok: false, error: "Parâmetros 'edle' e 'lote' são obrigatórios." }, 400);
+  if (!parts || !lote || !/^\d+$/.test(lote)) {
+    return json({ ok: false, error: "Parâmetros 'edle' e 'lote' são obrigatórios (apenas dígitos)." }, 400);
   }
 
   const api = `${BASE}/api/lote/${parts.unidade}/${parts.numero}/${parts.exercicio}/${encodeURIComponent(lote)}`;
   try {
-    const res = await fetch(api, { headers: { accept: "application/json", "user-agent": UA } });
+    const res = await fetchWithTimeout(api, { headers: { accept: "application/json", "user-agent": UA } }, 15000);
     if (!res.ok) return json({ ok: false, error: `Receita respondeu ${res.status}` }, 502);
     const data = (await res.json()) as RawLoteDetalhe;
 
@@ -125,6 +135,7 @@ Deno.serve(async (req: Request) => {
       avisos,
     });
   } catch (e) {
-    return json({ ok: false, error: String(e) }, 502);
+    console.error("[lote-detalhe] erro:", String(e));
+    return json({ ok: false, error: "Falha ao consultar o lote." }, 502);
   }
 });

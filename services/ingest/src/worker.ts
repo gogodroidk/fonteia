@@ -105,11 +105,25 @@ async function sha256Hex(value: unknown): Promise<string> {
   return "sha256:" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Idempotência multi-tabela no PostgREST:
+//   O PostgREST NÃO abre transação que abranja vários requests HTTP — cada UPSERT
+//   abaixo (raw_records, entities, evidence) é commitado isoladamente. Não há
+//   rollback conjunto: se um passo posterior falhar, os anteriores permanecem.
+//   Isso é aceitável aqui porque CADA upsert é idempotente por uma chave natural
+//   (unique index parcial em 0001_core_schema.sql), então uma re-execução do cron
+//   converge para o mesmo estado sem duplicar linhas:
+//     - raw_records: on_conflict=(source_id,external_id)  (idx_raw_records_source_external_unique)
+//     - entities   : on_conflict=(external_ids->>'receitaLotId')  (idx_entities_auction_lot_receita_unique;
+//                    semanticamente a chave natural é (kind, external_id) para auction_lot)
+//     - evidence   : on_conflict=(raw_record_id,kind)     (idx_evidence_raw_kind_unique)
+//   `resolution=merge-duplicates` SEM `on_conflict` explícito faz o PostgREST cair
+//   na PK, ignorando o índice natural pretendido e quebrando a deduplicação — por
+//   isso os três passos declaram o on_conflict explicitamente.
 async function persistLot(env: Env, lot: ReceitaLeilaoLot, sourceRunId: string): Promise<void> {
   const contentHash = await sha256Hex(lot.raw);
 
-  // UPSERT raw_records
-  const rawRes = await supabaseFetch(env, "/raw_records", {
+  // UPSERT raw_records — conflito na chave natural (source_id, external_id).
+  const rawRes = await supabaseFetch(env, "/raw_records?on_conflict=source_id,external_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=representation" },
     body: JSON.stringify({
@@ -125,7 +139,9 @@ async function persistLot(env: Env, lot: ReceitaLeilaoLot, sourceRunId: string):
   const rawRows = (await rawRes.json()) as Array<{ id: string }>;
   const rawRecordId = rawRows[0]?.id;
 
-  // UPSERT entities — conflict on external_id column (mapped from external_ids->>'receitaLotId' via unique index)
+  // UPSERT entities — conflito na coluna `external_id` (mapeada de external_ids->>'receitaLotId'
+  // pelo unique index parcial idx_entities_auction_lot_receita_unique). A chave natural da
+  // entidade é (kind, external_id): como aqui kind é sempre 'auction_lot', external_id basta.
   await supabaseFetch(env, "/entities?on_conflict=external_id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
@@ -143,8 +159,8 @@ async function persistLot(env: Env, lot: ReceitaLeilaoLot, sourceRunId: string):
 
   if (!rawRecordId) return;
 
-  // UPSERT evidence
-  await supabaseFetch(env, "/evidence", {
+  // UPSERT evidence — conflito na chave natural (raw_record_id, kind).
+  await supabaseFetch(env, "/evidence?on_conflict=raw_record_id,kind", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify({

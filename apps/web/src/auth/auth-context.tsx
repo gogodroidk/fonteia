@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const DEMO_STORAGE_KEY = "fonteia.demo.user";
 
 function buildDemoUser(email: string, fullName?: string): User {
-  const name = fullName ?? email.split("@")[0] ?? "Visitante";
+  const name = fullName ?? email.split("@")[0];
   // DemoUser cobre todos os campos que a UI acessa: id, email, user_metadata.
   // O cast para User é necessário porque o SDK Supabase adiciona campos internos
   // opcionais não acessados pela UI (ex.: phone, identities). É seguro aqui pois
@@ -56,7 +56,21 @@ function buildDemoUser(email: string, fullName?: string): User {
 function loadDemoUser(): User | null {
   try {
     const raw = window.localStorage.getItem(DEMO_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    // Validar shape mínimo antes de confiar — evita ClassCastException silenciosa
+    // se o localStorage contiver dados corrompidos ou de versão antiga.
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      "id" in parsed &&
+      typeof (parsed as Record<string, unknown>)["id"] === "string" &&
+      "email" in parsed &&
+      typeof (parsed as Record<string, unknown>)["email"] === "string"
+    ) {
+      return parsed as User;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -87,12 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
-      setLoading(false);
-    });
-
+    // No Supabase JS v2, `onAuthStateChange` emite `INITIAL_SESSION` logo na
+    // montagem — equivalente a getSession(). Usar apenas este listener evita a
+    // race condition em que getSession() e INITIAL_SESSION chegam em ordens
+    // distintas e fazem dois set-states concorrentes (o último "ganha", podendo
+    // sobrescrever uma sessão válida com null em telas lentas).
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {

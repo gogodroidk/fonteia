@@ -68,6 +68,9 @@ export interface Env {
   ANTHROPIC_MODEL?: string;
   // D1 — banco publico de entidades (tabela `entities`). Binding configurado no wrangler.toml.
   DB?: D1Database;
+  // Chave publishable PUBLICA do Supabase (a mesma que vai no bundle web). Usada APENAS
+  // como gate basico das rotas /d1/* — configurada via `wrangler secret put` ou var no dashboard.
+  SUPABASE_PUBLISHABLE_KEY?: string;
 }
 
 interface ExecutionContext {
@@ -219,7 +222,9 @@ async function fetchDestaquesLive(): Promise<{ payload: ReceitaLeiloesDestaquesP
 // ---------------------------------------------------------------------------
 
 // Origens permitidas para acesso à API.
-// TODO: rate limiting via Cloudflare (Workers Rate Limiting API ou Cloudflare Rules).
+// Rate limiting: implementado best-effort por isolate (ver `rateLimit`/`rateBuckets`
+// abaixo) e aplicado às rotas /d1/*. Rate limiting DURÁVEL/global exige um binding
+// (Cloudflare Workers Rate Limiting API, Durable Objects ou KV).
 const ALLOWED_ORIGINS = new Set([
   "https://fontebrasil.online",
   "https://www.fontebrasil.online",
@@ -263,6 +268,49 @@ function json(body: unknown, status = 200, corsHeaders: Record<string, string> =
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Gate de apikey + rate limiting (defesa em profundidade das rotas /d1/*)
+// ---------------------------------------------------------------------------
+
+/** Comparacao de strings em tempo constante (anti timing-attack), igual ao _shared/auth.ts. */
+function timingSafeEqual(a: string, b: string): boolean { if (a.length !== b.length) return false; let diff = 0; for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i); return diff === 0; }
+
+/**
+ * Valida o header `apikey` contra a chave publishable PUBLICA do projeto.
+ * Fail-closed: se SUPABASE_PUBLISHABLE_KEY nao estiver configurada, retorna false
+ * (as rotas /d1/* respondem 401). A chave publishable e publica por design (vai no
+ * bundle web), entao este e um gate BASICO — barra scrapers casuais, nao um atacante
+ * determinado que leia o bundle. Protecao duravel exige auth/rate-limit reais.
+ */
+function hasValidApiKey(request: Request, env: Env): boolean {
+  const expected = env.SUPABASE_PUBLISHABLE_KEY;
+  if (!expected || expected.length === 0) return false;
+  return timingSafeEqual(request.headers.get("apikey") ?? "", expected);
+}
+
+// Rate limiting BEST-EFFORT: contador em janela fixa por isolate (Map em memoria).
+// LIMITACAO: os contadores vivem por isolate (resetam em cold start e NAO sao
+// compartilhados entre isolates/colos da Cloudflare). Para rate limiting DURAVEL/global
+// e preciso um binding: Cloudflare Workers Rate Limiting API, Durable Objects ou KV.
+// Mantemos puramente em memoria (caches.default/KV/DO seriam necessarios p/ durabilidade).
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/** true se PERMITIDO; false se estourou o limite na janela atual. Incrementa o balde. */
+function rateLimit(key: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now > bucket.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  bucket.count += 1;
+  return bucket.count <= limit;
+}
+
+// Limite padrao das rotas /d1/*: 60 requisicoes por janela de 60s, por IP.
+const D1_RATE_LIMIT = 60;
+const D1_RATE_WINDOW_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // IA — roteador multimodelo (Gemini gratuito + Claude fallback) via @fonteia/ai
@@ -353,6 +401,52 @@ const FONTEIA_SYSTEM_PROMPT = [
   "**Pontos de atencao** — riscos reais e o que SEMPRE conferir no edital oficial antes de dar lance.",
 ].join("\n");
 
+// Cap por campo do lote — defende contra injeção de prompt longa / abuso de tokens,
+// no mesmo espírito de MAX_INPUT_CHARS/capText (o lote vem do cliente, não confiar no cast).
+const MAX_LOT_FIELD_CHARS = 500;
+
+/** String()-coage, apara e corta um campo a `max` chars. Nunca lança. */
+function capField(v: unknown, max = MAX_LOT_FIELD_CHARS): string {
+  return String(v ?? "").trim().slice(0, max);
+}
+
+/**
+ * Constrói uma cópia saneada do lote usada para montar o prompt: cada campo string
+ * é limitado, minimumBidCents é coagido a número finito não-negativo e
+ * eligiblePersonTypes é normalizado para conter apenas "pf"/"pj". O prompt é montado
+ * SOMENTE a partir destes valores — o cast cru de `parsed.lot` nunca alimenta o modelo.
+ */
+function sanitizeLot(raw: ReceitaLeilaoLot): ReceitaLeilaoLot {
+  const bid = Number(raw.minimumBidCents);
+  const eligible = Array.isArray(raw.eligiblePersonTypes)
+    ? raw.eligiblePersonTypes.filter((t): t is "pf" | "pj" => t === "pf" || t === "pj")
+    : [];
+
+  const lot: ReceitaLeilaoLot = {
+    id: capField(raw.id),
+    sourceId: "receita-leiloes-sle",
+    edital: capField(raw.edital),
+    edle: capField(raw.edle),
+    lotNumber: capField(raw.lotNumber),
+    displayNumber: capField(raw.displayNumber),
+    city: capField(raw.city),
+    agency: capField(raw.agency),
+    minimumBidCents: Number.isFinite(bid) && bid > 0 ? bid : 0,
+    proposalDeadline: capField(raw.proposalDeadline),
+    eligiblePersonTypes: eligible,
+    sourceUrl: capField(raw.sourceUrl),
+    collectedAt: capField(raw.collectedAt),
+    // `raw` não é lido por lotFactsForPrompt — passa intacto, mas NUNCA vai ao prompt.
+    raw: raw.raw,
+  };
+
+  if (typeof raw.imageUrl === "string") {
+    lot.imageUrl = capField(raw.imageUrl);
+  }
+
+  return lot;
+}
+
 function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
   const reais = (lot.minimumBidCents / 100).toLocaleString("pt-BR", {
     style: "currency",
@@ -411,9 +505,10 @@ const handler: ExportedHandler<Env> = {
     const requestOrigin = request.headers.get("origin");
 
     if (request.method === "OPTIONS") {
-      // Para preflight das rotas de IA, retorna CORS restrito; para demais, público.
-      const isIaRoute = pathname === "/ia/raio-x" || pathname.startsWith("/ai/");
-      const headers = isIaRoute ? getCorsHeaders(requestOrigin) : CORS_HEADERS_PUBLIC;
+      // CORS restrito para rotas de IA e /d1/*; demais (leiloes/health) ficam públicas.
+      const isRestrictedRoute =
+        pathname === "/ia/raio-x" || pathname.startsWith("/ai/") || pathname.startsWith("/d1/");
+      const headers = isRestrictedRoute ? getCorsHeaders(requestOrigin) : CORS_HEADERS_PUBLIC;
       return new Response(null, { status: 204, headers });
     }
 
@@ -485,8 +580,11 @@ const handler: ExportedHandler<Env> = {
         ? parsed.question.slice(0, MAX_QUESTION_LENGTH)
         : undefined;
 
+      // Saneia/limita TODO campo do lote antes de montar o prompt (não confiar no cast cru).
+      const safeLot = sanitizeLot(parsed.lot);
+
       try {
-        const { answer, model } = await analyzeLot(parsed.lot, question, env);
+        const { answer, model } = await analyzeLot(safeLot, question, env);
         return json({
           answer,
           model,
@@ -558,11 +656,14 @@ const handler: ExportedHandler<Env> = {
     }
 
     function parseEntityRow(row: Record<string, unknown>): Record<string, unknown> {
+      // PII (LGPD): nunca expor cpf_hash. cnpj/ibge_code sao dados publicos e ficam.
+      // Defensivamente removemos tambem qualquer chave `cpf` que apareca na linha.
+      const { cpf_hash: _omitCpfHash, cpf: _omitCpf, ...rest } = row;
       return {
-        ...row,
-        external_ids: parseJsonColumn(row["external_ids"]),
-        attributes: parseJsonColumn(row["attributes"]),
-        source_ids: parseJsonColumn(row["source_ids"]),
+        ...rest,
+        external_ids: parseJsonColumn(rest["external_ids"]),
+        attributes: parseJsonColumn(rest["attributes"]),
+        source_ids: parseJsonColumn(rest["source_ids"]),
       };
     }
 
@@ -575,7 +676,19 @@ const handler: ExportedHandler<Env> = {
             message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
           },
           503,
+          getCorsHeaders(requestOrigin),
         );
+      }
+
+      // Gate de apikey (chave publishable publica) — fail-closed se nao configurada.
+      if (!hasValidApiKey(request, env)) {
+        return json({ error: "apikey_invalida", message: "Requer header apikey valido (chave publishable do projeto)." }, 401, getCorsHeaders(requestOrigin));
+      }
+
+      // Rate limit best-effort por IP (ver nota em rateLimit/rateBuckets).
+      const rlIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+      if (!rateLimit(`d1:${rlIp}`, D1_RATE_LIMIT, D1_RATE_WINDOW_MS)) {
+        return json({ error: "rate_limited", message: "Muitas requisicoes. Tente novamente em instantes." }, 429, getCorsHeaders(requestOrigin), { "retry-after": String(Math.ceil(D1_RATE_WINDOW_MS / 1000)) });
       }
 
       const kind   = url.searchParams.get("kind")   ?? undefined;
@@ -598,10 +711,10 @@ const handler: ExportedHandler<Env> = {
       try {
         const result = await env.DB.prepare(sql).bind(...params).all<Record<string, unknown>>();
         const entities = result.results.map(parseEntityRow);
-        return json({ count: entities.length, limit, offset, kind: kind ?? null, cnpj: cnpj ?? null, q: q ?? null, entities });
+        return json({ count: entities.length, limit, offset, kind: kind ?? null, cnpj: cnpj ?? null, q: q ?? null, entities }, 200, getCorsHeaders(requestOrigin));
       } catch (error) {
         console.error("[api] /d1/entities failed:", error);
-        return json({ error: "Falha ao consultar entidades no D1." }, 502);
+        return json({ error: "Falha ao consultar entidades no D1." }, 502, getCorsHeaders(requestOrigin));
       }
     }
 
@@ -615,19 +728,31 @@ const handler: ExportedHandler<Env> = {
             message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
           },
           503,
+          getCorsHeaders(requestOrigin),
         );
+      }
+
+      // Gate de apikey (chave publishable publica) — fail-closed se nao configurada.
+      if (!hasValidApiKey(request, env)) {
+        return json({ error: "apikey_invalida", message: "Requer header apikey valido (chave publishable do projeto)." }, 401, getCorsHeaders(requestOrigin));
+      }
+
+      // Rate limit best-effort por IP (ver nota em rateLimit/rateBuckets).
+      const rlIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+      if (!rateLimit(`d1:${rlIp}`, D1_RATE_LIMIT, D1_RATE_WINDOW_MS)) {
+        return json({ error: "rate_limited", message: "Muitas requisicoes. Tente novamente em instantes." }, 429, getCorsHeaders(requestOrigin), { "retry-after": String(Math.ceil(D1_RATE_WINDOW_MS / 1000)) });
       }
 
       const entityId = decodeURIComponent(d1EntityMatch[1] ?? "");
       try {
         const row = await env.DB.prepare("SELECT * FROM entities WHERE id = ?").bind(entityId).first<Record<string, unknown>>();
         if (!row) {
-          return json({ error: "Entidade nao encontrada", path: pathname }, 404);
+          return json({ error: "Entidade nao encontrada", path: pathname }, 404, getCorsHeaders(requestOrigin));
         }
-        return json(parseEntityRow(row));
+        return json(parseEntityRow(row), 200, getCorsHeaders(requestOrigin));
       } catch (error) {
         console.error("[api] /d1/entities/:id failed:", error);
-        return json({ error: "Falha ao consultar entidade no D1." }, 502);
+        return json({ error: "Falha ao consultar entidade no D1." }, 502, getCorsHeaders(requestOrigin));
       }
     }
 
@@ -640,7 +765,19 @@ const handler: ExportedHandler<Env> = {
             message: "O binding D1 (DB) nao esta configurado neste Worker. Verifique o wrangler.toml.",
           },
           503,
+          getCorsHeaders(requestOrigin),
         );
+      }
+
+      // Gate de apikey (chave publishable publica) — fail-closed se nao configurada.
+      if (!hasValidApiKey(request, env)) {
+        return json({ error: "apikey_invalida", message: "Requer header apikey valido (chave publishable do projeto)." }, 401, getCorsHeaders(requestOrigin));
+      }
+
+      // Rate limit best-effort por IP (ver nota em rateLimit/rateBuckets).
+      const rlIp = request.headers.get("cf-connecting-ip") ?? "unknown";
+      if (!rateLimit(`d1:${rlIp}`, D1_RATE_LIMIT, D1_RATE_WINDOW_MS)) {
+        return json({ error: "rate_limited", message: "Muitas requisicoes. Tente novamente em instantes." }, 429, getCorsHeaders(requestOrigin), { "retry-after": String(Math.ceil(D1_RATE_WINDOW_MS / 1000)) });
       }
 
       try {
@@ -649,10 +786,10 @@ const handler: ExportedHandler<Env> = {
           .all<{ kind: string; n: number }>();
         const byKind = result.results;
         const total  = byKind.reduce((acc, row) => acc + Number(row.n), 0);
-        return json({ total, byKind });
+        return json({ total, byKind }, 200, getCorsHeaders(requestOrigin));
       } catch (error) {
         console.error("[api] /d1/stats failed:", error);
-        return json({ error: "Falha ao consultar estatisticas no D1." }, 502);
+        return json({ error: "Falha ao consultar estatisticas no D1." }, 502, getCorsHeaders(requestOrigin));
       }
     }
 

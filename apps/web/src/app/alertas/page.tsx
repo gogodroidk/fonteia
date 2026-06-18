@@ -170,22 +170,16 @@ function ToggleRow({ label, description, icon, checked, onChange }: ToggleRowPro
           </div>
         </div>
       </div>
-      <div
+      <button
+        type="button"
         className={"switch" + (checked ? " on" : "")}
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        tabIndex={0}
         onClick={() => onChange(!checked)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onChange(!checked);
-          }
-        }}
       >
         <i />
-      </div>
+      </button>
     </div>
   );
 }
@@ -359,7 +353,7 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
   const [alerts, setAlerts] = useState<ServerAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | undefined>();
-  const [removing, setRemoving] = useState<string | undefined>();
+  const [removing, setRemoving] = useState<Set<string>>(() => new Set());
   const [removeError, setRemoveError] = useState<string | undefined>();
 
   const isLoggedIn = user !== null;
@@ -395,19 +389,31 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
 
   async function handleRemove(lotId: string): Promise<void> {
     if (!supabase) return;
-    setRemoving(lotId);
+    setRemoving((prev) => {
+      const next = new Set(prev);
+      next.add(lotId);
+      return next;
+    });
     setRemoveError(undefined);
 
     const { error } = await supabase.rpc("delete_alert", { p_lot_id: lotId });
 
     if (error) {
       setRemoveError(error.message);
-      setRemoving(undefined);
+      setRemoving((prev) => {
+        const next = new Set(prev);
+        next.delete(lotId);
+        return next;
+      });
       return;
     }
 
     setAlerts((prev) => prev.filter((a) => a.lot_id !== lotId));
-    setRemoving(undefined);
+    setRemoving((prev) => {
+      const next = new Set(prev);
+      next.delete(lotId);
+      return next;
+    });
   }
 
   // Not logged in or demo mode
@@ -553,7 +559,7 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
             const days = daysUntil(alert.proposal_deadline);
             const deadlineColor =
               days <= 3 ? "var(--danger)" : days <= 7 ? "var(--warn)" : "var(--t-mid)";
-            const isBeingRemoved = removing === alert.lot_id;
+            const isBeingRemoved = removing.has(alert.lot_id);
 
             return (
               <div

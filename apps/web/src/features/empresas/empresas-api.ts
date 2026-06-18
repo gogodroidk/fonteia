@@ -5,6 +5,7 @@ import {
   trimTrailingSlash,
 } from "../../lib/api-client";
 import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
+import { sanitizeCnpj as _sanitizeCnpj } from "../../lib/cnpj";
 
 // ─── Consulta de CNPJ on-demand (via Edge Function "empresas-cnpj") ────────────
 
@@ -48,11 +49,8 @@ interface CnpjErrResponse {
   detail?: string;
 }
 
-/** Mantém só os dígitos do CNPJ; "" se não restarem 14. */
-export function sanitizeCnpj(value: string): string {
-  const digits = value.replace(/\D/g, "");
-  return digits.length === 14 ? digits : "";
-}
+/** Mantém só os dígitos do CNPJ; "" se não restarem 14. Re-exporta de lib/cnpj.ts. */
+export const sanitizeCnpj: (value: string) => string = _sanitizeCnpj;
 
 /**
  * Consulta um CNPJ pela Edge Function "empresas-cnpj" (proxy do Minha Receita,

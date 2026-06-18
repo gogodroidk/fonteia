@@ -190,7 +190,6 @@ async function ensureD1Schema(creds: CfCreds): Promise<void> {
        name TEXT,
        normalized_name TEXT,
        cnpj TEXT,
-       cpf_hash TEXT,
        ibge_code TEXT,
        external_ids TEXT,
        attributes TEXT,
@@ -217,7 +216,6 @@ const COLUMNS = [
   "name",
   "normalized_name",
   "cnpj",
-  "cpf_hash",
   "ibge_code",
   "external_ids",
   "attributes",
@@ -232,7 +230,6 @@ interface EntityRow {
   name: string | null;
   normalized_name: string | null;
   cnpj: string | null;
-  cpf_hash: string | null;
   ibge_code: string | null;
   external_ids: unknown;
   attributes: unknown;
@@ -279,7 +276,6 @@ function rowToParams(row: EntityRow): Array<string | null> {
     row.name ?? null,
     row.normalized_name ?? null,
     row.cnpj ?? null,
-    row.cpf_hash ?? null,
     row.ibge_code ?? null,
     jsonOrNull(row.external_ids),
     jsonOrNull(row.attributes),
@@ -509,7 +505,7 @@ async function handleQuery(url: URL): Promise<Response> {
   const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
   const sql =
-    `SELECT id, kind, name, normalized_name, cnpj, cpf_hash, ibge_code, ` +
+    `SELECT id, kind, name, normalized_name, cnpj, ibge_code, ` +
     `external_ids, attributes, source_ids, created_at, updated_at ` +
     `FROM entities ${whereClause} ORDER BY name LIMIT ? OFFSET ?`;
   params.push(limit, offset);
@@ -521,7 +517,8 @@ async function handleQuery(url: URL): Promise<Response> {
   } catch (e) {
     const status = e instanceof D1Error ? e.status : 502;
     if (status === 401 || status === 403) return cfUnavailable(["CF_API_TOKEN (inválido?)"]);
-    return json({ error: "consulta_d1_falhou", detail: String(e) }, 502);
+    console.error("[d1-bridge] query falhou:", String(e));
+    return json({ error: "consulta_d1_falhou", message: "Falha ao consultar os dados." }, 502);
   }
 }
 
@@ -543,7 +540,8 @@ async function handleStats(): Promise<Response> {
   } catch (e) {
     const status = e instanceof D1Error ? e.status : 502;
     if (status === 401 || status === 403) return cfUnavailable(["CF_API_TOKEN (inválido?)"]);
-    return json({ error: "stats_d1_falhou", detail: String(e) }, 502);
+    console.error("[d1-bridge] stats falhou:", String(e));
+    return json({ error: "stats_d1_falhou", message: "Falha ao consultar as estatísticas." }, 502);
   }
 }
 

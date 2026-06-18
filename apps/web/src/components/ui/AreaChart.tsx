@@ -90,7 +90,7 @@ export function AreaChart({
 
       {data.map((v, i) => (
         <circle
-          key={i}
+          key={`pt-${i}-${v}`}
           cx={nx(i)}
           cy={ny(v)}
           r={i === lastIdx ? 4 : 0}
@@ -105,7 +105,7 @@ export function AreaChart({
           const val = data[safeIdx] ?? 0;
           return (
             <text
-              key={i}
+              key={`lbl-${i}-${lbl}`}
               x={nx(safeIdx)}
               y={ny(val) - 8}
               textAnchor="middle"

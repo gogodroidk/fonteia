@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export interface RingProps {
   /** Progress value between 0 and 1 */
@@ -27,11 +27,22 @@ export function Ring({
   const clampedValue = Math.min(1, Math.max(0, value));
   const off = c * (1 - clampedValue);
 
-  const motionStyle: React.CSSProperties =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      ? {}
-      : { transition: "stroke-dashoffset .9s cubic-bezier(.2,.7,.3,1)" };
+  // `window.matchMedia` must not be called during render (breaks SSR and React
+  // hydration). Read the preference once in an effect and subscribe to changes
+  // so the transition is disabled reactively if the user toggles the OS setting.
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const motionStyle: React.CSSProperties = reducedMotion
+    ? {}
+    : { transition: "stroke-dashoffset .9s cubic-bezier(.2,.7,.3,1)" };
 
   return (
     <div

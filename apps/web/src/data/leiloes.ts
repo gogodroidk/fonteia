@@ -84,7 +84,15 @@ function getOpportunityScore(lot: ReceitaLeilaoLot): number {
 }
 
 export function mapReceitaLotToOpportunity(lot: ReceitaLeilaoLot): AuctionOpportunity {
-  const estimatedValueCents = Math.round(lot.minimumBidCents * 1.55);
+  // Usa o campo real de avaliação do lote quando disponível.
+  // Quando ausente NÃO inventamos valor de mercado — exibimos prefixo "estim."
+  // para deixar explícito ao usuário que não é avaliação oficial.
+  // NUNCA usar estimativa financeira inventada sem aviso — risco de decisão errada.
+  const hasOfficialValuation =
+    typeof lot.valorAvaliacaoCents === "number" && lot.valorAvaliacaoCents > 0;
+  const estimatedValue = hasOfficialValuation
+    ? formatCurrencyFromCents(lot.valorAvaliacaoCents as number)
+    : `estim. ${formatCurrencyFromCents(Math.round(lot.minimumBidCents * 1.55))}`;
   const risk = getRisk(lot);
 
   return {
@@ -93,7 +101,7 @@ export function mapReceitaLotToOpportunity(lot: ReceitaLeilaoLot): AuctionOpport
     city: lot.city,
     eligibility: getEligibility(lot),
     deadline: formatDate(lot.proposalDeadline),
-    estimatedValue: formatCurrencyFromCents(estimatedValueCents),
+    estimatedValue,
     entryValue: formatCurrencyFromCents(lot.minimumBidCents),
     opportunityScore: getOpportunityScore(lot),
     risk,

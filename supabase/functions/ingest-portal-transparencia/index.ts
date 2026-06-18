@@ -12,7 +12,7 @@
 //   (só executável por service_role)
 //
 // Paginação: ~15 itens/página; por padrão até 30 páginas por origem (≈450 sanções/fonte).
-//   ?maxPaginas=N -> teto por origem (0 = ilimitado, cuidado)
+//   ?maxPaginas=N -> teto por origem (0 = ilimitado)
 //   ?origens=CEIS,CNEP -> subset de origens (default: ambas)
 //
 // Fluxo:
@@ -29,6 +29,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const API_BASE = "https://api.portaldatransparencia.gov.br/api-de-dados";
 const PORTAL_BASE = "https://portaldatransparencia.gov.br";
@@ -65,6 +68,7 @@ interface RawFonteSancao {
 interface RawFundamentacao {
   codigo?: string;
   descricao?: string;
+  descricaoResumida?: string;
 }
 
 interface RawPessoa {
@@ -106,8 +110,6 @@ interface RawSancao {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function trimStr(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -214,11 +216,16 @@ async function fetchPage(
   apiKey: string,
 ): Promise<RawSancao[]> {
   const url = `${API_BASE}/${endpoint}?pagina=${pagina}`;
-  const res = await fetch(url, {
-    headers: {
-      "chave-api-dados": apiKey,
-      accept: "application/json",
-      "user-agent": UA,
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: {
+      headers: {
+        "chave-api-dados": apiKey,
+        accept: "application/json",
+        "user-agent": UA,
+      },
     },
   });
   if (res.status === 204) return [];
@@ -234,10 +241,26 @@ async function fetchPage(
 // ── HTTP handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-portal-transparencia] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const urlObj = new URL(req.url);
 
-  const maxPaginasParam = Number(urlObj.searchParams.get("maxPaginas") ?? String(DEFAULT_MAX_PAGINAS));
-  const maxPaginas = maxPaginasParam > 0 ? maxPaginasParam : DEFAULT_MAX_PAGINAS;
+  // maxPaginas=0 significa ILIMITADO (consistente com ingest-pncp e ingest-pncp-contratos).
+  const maxPaginasRaw = urlObj.searchParams.get("maxPaginas");
+  const maxPaginas = maxPaginasRaw !== null ? Number(maxPaginasRaw) : DEFAULT_MAX_PAGINAS;
+  // 0 = sem teto (ilimitado); negativo tratamos como 0 também
+  const effectiveMaxPaginas = maxPaginas > 0 ? maxPaginas : 0;
 
   const origensParam = urlObj.searchParams.get("origens");
   const origensRequested = origensParam
@@ -270,7 +293,10 @@ Deno.serve(async (req) => {
       let pagina = 1;
       let emptyPages = 0;
 
-      while (pagina <= maxPaginas) {
+      // effectiveMaxPaginas=0 -> ilimitado; usa Number.MAX_SAFE_INTEGER como teto prático
+      const pageLimit = effectiveMaxPaginas > 0 ? effectiveMaxPaginas : Number.MAX_SAFE_INTEGER;
+
+      while (pagina <= pageLimit) {
         try {
           const page = await fetchPage(endpoint, pagina, apiKey as string);
           if (page.length === 0) {
@@ -293,7 +319,7 @@ Deno.serve(async (req) => {
         }
 
         pagina += 1;
-        if (pagina <= maxPaginas && RATE_MS > 0) await sleep(RATE_MS);
+        if (pagina <= pageLimit && RATE_MS > 0) await sleep(RATE_MS);
       }
 
       // Pausa entre origens
@@ -303,11 +329,9 @@ Deno.serve(async (req) => {
     }
 
     // 3) Grava em lotes via RPC.
-    // O payload usa os campos do SancaoItem como attributes no RPC.
-    // Mapeia para o formato que a RPC espera (campos planos na JSONB).
     const rpcItems = items.map((item) => ({
-      id: String(item.raw.id),            // id numérico da sanção
-      origem: item.origem,                // "CEIS" ou "CNEP"
+      id: String(item.raw.id),
+      origem: item.origem,
       nome: item.nome,
       cnpj: item.cnpj ?? "",
       tipoSancao: item.tipoSancao,
@@ -346,21 +370,15 @@ Deno.serve(async (req) => {
         .eq("id", SOURCE_ID);
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        origens,
-        maxPaginas,
-        coletados: items.length,
-        ingested,
-        errors,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      origens,
+      maxPaginas: effectiveMaxPaginas === 0 ? "ilimitado" : effectiveMaxPaginas,
+      coletados: items.length,
+      ingested,
+      errors,
+    }, {}, req);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: String(e) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

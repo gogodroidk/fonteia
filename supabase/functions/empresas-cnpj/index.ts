@@ -23,6 +23,11 @@
 //
 // Deploy: verify_jwt=FALSE (a auth é por header `apikey`, feita aqui dentro).
 
+import { hasValidApiKey } from "../_shared/auth.ts";
+import { fetchWithTimeout } from "../_shared/http.ts";
+
+const PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
+
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -178,9 +183,9 @@ function normalize(raw: RawEmpresa, cnpj: string): EmpresaNormalizada {
 async function fetchEmpresa(cnpj: string): Promise<EmpresaNormalizada | { notFound: true } | { failed: string }> {
   let res: Response;
   try {
-    res = await fetch(`${MINHA_RECEITA}/${cnpj}`, {
+    res = await fetchWithTimeout(`${MINHA_RECEITA}/${cnpj}`, {
       headers: { accept: "application/json", "user-agent": UA },
-    });
+    }, 12000);
   } catch (e) {
     return { failed: String(e) };
   }
@@ -210,9 +215,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
   }
 
   // Auth própria: exige a chave pública do projeto no header `apikey` (igual à "fonteia").
-  const apikey = request.headers.get("apikey") ?? "";
-  if (apikey.trim() === "") {
-    return json({ ok: false, error: "apikey ausente" }, 401);
+  if (!hasValidApiKey(request, PUBLISHABLE_KEY)) {
+    return json({ ok: false, error: "apikey invalida" }, 401);
   }
 
   const url = new URL(request.url);
@@ -244,10 +248,8 @@ Deno.serve(async (request: Request): Promise<Response> => {
     );
   }
   if ("failed" in result) {
-    return json(
-      { ok: false, error: "Não foi possível consultar o CNPJ agora.", detail: result.failed },
-      502,
-    );
+    console.error("[empresas-cnpj] consulta falhou:", result.failed);
+    return json({ ok: false, error: "Não foi possível consultar o CNPJ agora." }, 502);
   }
 
   return json({ ok: true, empresa: result, fonte: MINHA_RECEITA });

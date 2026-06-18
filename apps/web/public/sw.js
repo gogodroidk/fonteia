@@ -15,9 +15,35 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+/**
+ * Returns true for requests that must never be cached:
+ *   - Supabase REST/Functions/realtime endpoints
+ *   - Any request that carries an Authorization header (authenticated session)
+ */
+function isUncacheable(req) {
+  const url = req.url;
+  if (
+    url.includes("supabase.co") ||
+    url.includes("/rest/v1") ||
+    url.includes("/functions/v1")
+  ) {
+    return true;
+  }
+  if (req.headers.has("authorization")) {
+    return true;
+  }
+  return false;
+}
+
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || !req.url.startsWith("http")) return;
+
+  // Skip caching for authenticated / API requests — always go to network.
+  if (isUncacheable(req)) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   event.respondWith(
     fetch(req)

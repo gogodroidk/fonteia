@@ -36,12 +36,15 @@ export function CouponRedeem({
     if (loading || trimmed === "") return;
     setLoading(true);
     setResult(null);
-    const r = await redeemCoupon(trimmed);
-    setResult(r);
-    setLoading(false);
-    if (r.ok) {
-      onRedeemed?.(r.grantedUntil ?? null);
-      setCode("");
+    try {
+      const r = await redeemCoupon(trimmed);
+      setResult(r);
+      if (r.ok) {
+        onRedeemed?.(r.grantedUntil ?? null);
+        setCode("");
+      }
+    } finally {
+      setLoading(false);
     }
   }
 

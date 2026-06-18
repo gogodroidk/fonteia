@@ -52,16 +52,24 @@ export async function fetchSancoesByCnpj(
 
 // ─── Contratos públicos filtrados por CNPJ ────────────────────────────────────
 
-/** Atributos de um contrato público (source: pncp-contratos). */
+/**
+ * Atributos de um contrato público (source: pncp-contratos).
+ * Tipo canônico — importado por raio-x-api e leads-api.
+ *
+ * valorGlobal é number | string | null porque o PNCP ora devolve número,
+ * ora string; os consumidores devem sempre usar Number() + isFinite().
+ */
 export interface ContratoPublicoAttributes {
-  orgao?: string;
-  objeto?: string;
+  /** Razão social do fornecedor (presente em contratos do PNCP). */
+  fornecedorNome?: string | undefined;
+  orgao?: string | undefined;
+  objeto?: string | undefined;
   valorGlobal?: number | string | null;
-  modalidade?: string;
-  dataVigenciaInicio?: string;
-  uf?: string;
-  municipio?: string;
-  numeroControlePNCP?: string;
+  modalidade?: string | undefined;
+  dataVigenciaInicio?: string | undefined;
+  uf?: string | undefined;
+  municipio?: string | undefined;
+  numeroControlePNCP?: string | undefined;
 }
 
 /** Item de contrato público normalizado. */

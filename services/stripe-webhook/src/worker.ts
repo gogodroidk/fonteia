@@ -134,6 +134,31 @@ interface SubscriptionUpsert {
   updated_at: string;
 }
 
+/**
+ * Escrita SO de identidade: grava apenas chaves de correlacao, nunca plan_id/status.
+ * Usada pelo checkout.session.completed para nao regredir uma linha ja ativa.
+ * Como o body NAO traz plan_id/status, o PostgREST (merge-duplicates) preserva esses campos.
+ */
+interface SubscriptionIdentityUpsert {
+  stripe_subscription_id: string;
+  stripe_customer_id?: string;
+  email?: string;
+  updated_at: string;
+}
+
+/**
+ * Atualizacao SO de status: grava status (+ identidade), nunca plan_id.
+ * Usada pelo invoice.payment_failed para marcar past_due sem rebaixar o plano.
+ * Sem plan_id no body, o PostgREST preserva o plano autoritativo existente.
+ */
+interface SubscriptionStatusUpdate {
+  stripe_subscription_id: string;
+  status: string;
+  stripe_customer_id?: string;
+  email?: string;
+  updated_at: string;
+}
+
 // ---------------------------------------------------------------------------
 // Verificacao de assinatura (Stripe-Signature) com Web Crypto — HMAC-SHA256
 // ---------------------------------------------------------------------------
@@ -321,7 +346,17 @@ function buildUpsertFromSubscription(
 // Persistencia no Supabase via PostgREST (UPSERT on stripe_subscription_id)
 // ---------------------------------------------------------------------------
 
-async function upsertSubscription(env: Env, row: SubscriptionUpsert): Promise<void> {
+/**
+ * Falha de persistencia (Supabase fora / 5xx / erro de rede no upsert).
+ * Sinaliza ao fetch handler que a resposta deve ser 5xx para o Stripe RE-TENTAR.
+ * Eventos ignorados/processados por design NAO lancam — esses respondem 200.
+ */
+class PersistenceError extends Error {}
+
+async function upsertSubscription(
+  env: Env,
+  row: SubscriptionUpsert | SubscriptionIdentityUpsert | SubscriptionStatusUpdate,
+): Promise<void> {
   const url = `${env.SUPABASE_URL}/rest/v1/subscriptions?on_conflict=stripe_subscription_id`;
   const response = await fetch(url, {
     method: "POST",
@@ -337,12 +372,26 @@ async function upsertSubscription(env: Env, row: SubscriptionUpsert): Promise<vo
   if (!response.ok) {
     const detail = await response.text();
     // Nao vaza secrets — apenas status e corpo de erro do PostgREST.
-    throw new Error(`Supabase upsert failed [${response.status}]: ${detail}`);
+    throw new PersistenceError(`Supabase upsert failed [${response.status}]: ${detail}`);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Tratamento dos eventos
+//
+// IDEMPOTENCIA E ORDEM (importante):
+//   (a) O Stripe NAO garante ordem de entrega nem entrega unica — o mesmo evento
+//       pode chegar mais de uma vez e fora de ordem (ex.: checkout.session.completed
+//       depois de customer.subscription.created/updated ou invoice.paid).
+//   (b) Nao ha storage duravel neste Worker (sem binding KV/D1 no wrangler.toml),
+//       logo NAO existe dedup por event.id.
+//   (c) Por isso TODA escrita e projetada para ser nao-regressiva: o evento de
+//       identidade (checkout.session.completed) nunca grava plan/status; o
+//       invoice.payment_failed nunca rebaixa o plano (so marca past_due); e os
+//       eventos subscription.* / invoice.paid sao a FONTE DE VERDADE de plan/status.
+//       Reaplicar um evento duplicado e seguro porque nenhuma escrita regride o estado.
+//   (d) event.id ja esta tipado em StripeEvent.id e fica disponivel para um dedup
+//       futuro (cache de ids processados) quando houver um binding KV/D1.
 // ---------------------------------------------------------------------------
 
 async function handleEvent(env: Env, event: StripeEvent): Promise<void> {
@@ -353,6 +402,9 @@ async function handleEvent(env: Env, event: StripeEvent): Promise<void> {
     console.log(`[stripe-webhook] evento ignorado (sem type ou object): ${type ?? "<sem type>"}`);
     return;
   }
+
+  // event.id apenas para rastreabilidade nos logs (sem dedup — ver bloco acima).
+  console.log(`[stripe-webhook] processando evento id=${event.id ?? "<sem id>"} type=${type}`);
 
   switch (type) {
     case "customer.subscription.created":
@@ -388,18 +440,18 @@ async function handleEvent(env: Env, event: StripeEvent): Promise<void> {
         return;
       }
       const email = session.customer_details?.email ?? session.customer_email ?? undefined;
-      // O objeto da sessao nao traz price/period; criamos a linha base.
-      // Os eventos subscription.created/updated chegam em seguida e completam os campos.
-      const row: SubscriptionUpsert = {
+      // O objeto da sessao nao traz price/period. Como o Stripe nao garante ordem,
+      // este evento pode chegar DEPOIS de subscription.*/invoice.paid; por isso gravamos
+      // SOMENTE identidade (sem plan_id/status) para nunca regredir uma linha ja ativa.
+      // Os eventos subscription.created/updated e invoice.paid sao a fonte de verdade de plan/status.
+      const row: SubscriptionIdentityUpsert = {
         stripe_subscription_id: subscriptionId,
-        plan_id: "free",
-        status: "incomplete",
         updated_at: new Date().toISOString(),
       };
       setIfDefined(row, "stripe_customer_id", session.customer);
       setIfDefined(row, "email", email ?? undefined);
       await upsertSubscription(env, row);
-      console.log(`[stripe-webhook] checkout.session.completed: sub=${subscriptionId} email=${email ?? "?"}`);
+      console.log(`[stripe-webhook] checkout.session.completed: sub=${subscriptionId} email=${email ?? "?"} (so identidade)`);
       return;
     }
 
@@ -440,16 +492,18 @@ async function handleEvent(env: Env, event: StripeEvent): Promise<void> {
         return;
       }
       const email = invoice.customer_email ?? undefined;
-      const row: SubscriptionUpsert = {
+      // So marca past_due. NAO recalcula plan_id a partir da linha da fatura: isso
+      // poderia rebaixar para "free" se o price estiver ausente/nao mapeado e ainda
+      // sobrescreveria o plano autoritativo. Sem plan_id no body, o PostgREST preserva o plano.
+      const row: SubscriptionStatusUpdate = {
         stripe_subscription_id: subscriptionId,
-        plan_id: getPlanByStripePrice(invoice.lines?.data?.[0]?.price?.id),
         status: "past_due",
         updated_at: new Date().toISOString(),
       };
       setIfDefined(row, "stripe_customer_id", invoice.customer);
       setIfDefined(row, "email", email ?? undefined);
       await upsertSubscription(env, row);
-      console.log(`[stripe-webhook] invoice.payment_failed: sub=${subscriptionId} -> past_due`);
+      console.log(`[stripe-webhook] invoice.payment_failed: sub=${subscriptionId} -> past_due (plano preservado)`);
       return;
     }
 
@@ -501,10 +555,19 @@ const handler: ExportedHandler<Env> = {
     try {
       await handleEvent(env, event);
     } catch (error) {
-      // 7. Erro de processamento: logar sem vazar secrets e responder 200
-      // para evitar retry infinito do Stripe. So a assinatura invalida retorna 400.
+      // 7. Diferencia falha transitoria de persistencia x erro processado por design.
+      // handleEvent so lanca em falha de persistencia (PersistenceError vindo do upsert);
+      // qualquer outro caminho retorna normalmente ou loga+retorna. Por isso:
+      //   - PersistenceError  -> 503: Supabase fora/5xx; o Stripe deve RE-TENTAR.
+      //   - qualquer outro     -> 200: nao re-tentar (nao deveria ocorrer aqui).
+      // So a assinatura invalida retorna 400, e isso e tratado antes do handleEvent.
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[stripe-webhook] erro ao processar ${event.type ?? "<sem type>"}: ${message}`);
+      const status = error instanceof PersistenceError ? 503 : 200;
+      console.error(`[stripe-webhook] erro ao processar ${event.type ?? "<sem type>"} (status ${status}): ${message}`);
+      if (status === 503) {
+        // 5xx faz o Stripe reenviar o evento ate a persistencia voltar.
+        return new Response("Persistence error, retry", { status: 503 });
+      }
       return new Response("Received (processing error logged)", { status: 200 });
     }
 

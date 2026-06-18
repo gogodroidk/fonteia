@@ -23,9 +23,9 @@ export function createFonteiaMobileApp(): FonteiaMobileAppModel {
     name: mobileAppName,
     initialRoute: "home",
     navigation: [
-      { id: "home", label: "Inicio" },
+      { id: "home", label: "Início" },
       { id: "ask", label: "Perguntar" },
-      { id: "modules", label: "Modulos" },
+      { id: "modules", label: "Módulos" },
       { id: "alerts", label: "Alertas" },
     ],
     screens: {

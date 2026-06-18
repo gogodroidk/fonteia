@@ -3,6 +3,10 @@
  *
  * Mapeamento estático de setor → serviços sugeríveis.
  * Sem IA, sem chamadas externas — pura heurística de palavras-chave no objeto/modalidade.
+ *
+ * IMPORTANTE: todas as keywords devem estar em lowercase SEM acentos (NFD stripped).
+ * O `inferServicos`/`inferSetor` normaliza o input com NFD antes de comparar, então
+ * keywords acentuadas nunca batem — são dead code. Mantenha apenas formas sem acento.
  */
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -16,14 +20,18 @@ export interface ServicioSugerivel {
 // ─── Keyword → serviços ──────────────────────────────────────────────────────
 
 interface Regra {
-  /** Palavras-chave para buscar no objeto (lowercase) */
+  /** Palavras-chave para buscar no objeto (lowercase, sem acentos — NFD stripped). */
   keywords: string[];
+  /** Rótulo do setor exibido no card. Inline na própria Regra evita desalinhamento com SETOR_MAP. */
+  setor: string;
   servicos: ServicioSugerivel[];
 }
 
 const REGRAS: Regra[] = [
   {
-    keywords: ["obra", "construção", "construcao", "reforma", "pavimentação", "pavimentacao", "infraestrutura", "engenharia", "edificação", "edificacao", "ampliação", "ampliacao"],
+    setor: "Obras & Engenharia",
+    // Acentuadas removidas: "construção", "pavimentação", "edificação", "ampliação" → sem acento abaixo
+    keywords: ["obra", "construcao", "reforma", "pavimentacao", "infraestrutura", "engenharia", "edificacao", "ampliacao"],
     servicos: [
       { label: "Seguro de obras e riscos de engenharia", icon: "🏗️" },
       { label: "Locação de equipamentos e maquinário", icon: "🚜" },
@@ -31,7 +39,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["ti", "tecnologia", "software", "sistema", "sistemas", "dados", "digital", "informática", "informatica", "computador", "computadores", "licença", "licenca", "nuvem", "cloud", "internet", "rede", "suporte técnico", "suporte tecnico"],
+    setor: "Tecnologia da Informação",
+    // Acentuadas removidas: "informática", "licença", "suporte técnico"
+    keywords: ["ti", "tecnologia", "software", "sistema", "sistemas", "dados", "digital", "informatica", "computador", "computadores", "licenca", "nuvem", "cloud", "internet", "rede", "suporte tecnico"],
     servicos: [
       { label: "Desenvolvimento e integração de sistemas", icon: "💻" },
       { label: "Cibersegurança e proteção de dados (LGPD)", icon: "🔒" },
@@ -39,7 +49,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["evento", "eventos", "cerimônia", "cerimonia", "capacitação", "capacitacao", "treinamento", "curso", "cursos", "seminário", "seminario", "congresso"],
+    setor: "Eventos & Capacitação",
+    // Acentuadas removidas: "cerimônia", "capacitação", "seminário"
+    keywords: ["evento", "eventos", "cerimonia", "capacitacao", "treinamento", "curso", "cursos", "seminario", "congresso"],
     servicos: [
       { label: "Logística e produção de eventos", icon: "🎪" },
       { label: "Alimentação e buffet corporativo", icon: "🍽️" },
@@ -47,7 +59,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["saúde", "saude", "hospital", "médico", "medico", "medicamento", "medicamentos", "equipamento médico", "equipamento medico", "enfermagem", "laboratório", "laboratorio", "radiologia"],
+    setor: "Saúde",
+    // Acentuadas removidas: "saúde", "médico", "equipamento médico", "laboratório"
+    keywords: ["saude", "hospital", "medico", "medicamento", "medicamentos", "equipamento medico", "enfermagem", "laboratorio", "radiologia"],
     servicos: [
       { label: "Fornecimento de materiais hospitalares", icon: "🏥" },
       { label: "Consultoria em gestão de saúde", icon: "📋" },
@@ -55,7 +69,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["transporte", "frota", "veículo", "veiculo", "veículos", "veiculos", "ônibus", "onibus", "caminhão", "caminhao", "ambulância", "ambulancia", "combustível", "combustivel"],
+    setor: "Transporte & Frota",
+    // Acentuadas removidas: "veículo", "veículos", "ônibus", "caminhão", "ambulância", "combustível"
+    keywords: ["transporte", "frota", "veiculo", "veiculos", "onibus", "caminhao", "ambulancia", "combustivel"],
     servicos: [
       { label: "Gestão e manutenção de frotas", icon: "🚛" },
       { label: "Seguro de veículos e frotas", icon: "🛡️" },
@@ -63,7 +79,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["alimento", "alimentos", "merenda", "alimentação", "alimentacao", "gêneros alimentícios", "generos alimenticios", "refeição", "refeicao"],
+    setor: "Alimentação",
+    // Acentuadas removidas: "alimentação", "gêneros alimentícios", "refeição"
+    keywords: ["alimento", "alimentos", "merenda", "alimentacao", "generos alimenticios", "refeicao"],
     servicos: [
       { label: "Distribuição de gêneros alimentícios", icon: "📦" },
       { label: "Gestão de estoque e logística fria", icon: "❄️" },
@@ -71,7 +89,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["segurança", "seguranca", "vigilância", "vigilancia", "monitoramento", "câmera", "camera", "cftv"],
+    setor: "Segurança",
+    // Acentuadas removidas: "segurança", "vigilância", "câmera"
+    keywords: ["seguranca", "vigilancia", "monitoramento", "camera", "cftv"],
     servicos: [
       { label: "Segurança patrimonial e vigilância", icon: "👮" },
       { label: "Sistemas de CFTV e controle de acesso", icon: "📹" },
@@ -79,7 +99,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["limpeza", "conservação", "conservacao", "higiene", "zeladoria", "portaria"],
+    setor: "Limpeza & Facilities",
+    // Acentuadas removidas: "conservação"
+    keywords: ["limpeza", "conservacao", "higiene", "zeladoria", "portaria"],
     servicos: [
       { label: "Serviços de limpeza e higienização", icon: "🧹" },
       { label: "Gestão de facilities", icon: "🏢" },
@@ -87,7 +109,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["mobiliário", "mobiliario", "móveis", "moveis", "cadeira", "mesa", "equipamento", "equipamentos"],
+    setor: "Mobiliário & Equipamentos",
+    // Acentuadas removidas: "mobiliário", "móveis"
+    keywords: ["mobiliario", "moveis", "cadeira", "mesa", "equipamento", "equipamentos"],
     servicos: [
       { label: "Fornecimento de mobiliário corporativo", icon: "🪑" },
       { label: "Locação de equipamentos de escritório", icon: "🖨️" },
@@ -95,7 +119,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["comunicação", "comunicacao", "publicidade", "marketing", "mídia", "midia", "propaganda", "assessoria"],
+    setor: "Comunicação & Marketing",
+    // Acentuadas removidas: "comunicação", "mídia"
+    keywords: ["comunicacao", "publicidade", "marketing", "midia", "propaganda", "assessoria"],
     servicos: [
       { label: "Agência de publicidade e marketing", icon: "📢" },
       { label: "Gestão de redes sociais", icon: "📱" },
@@ -103,7 +129,9 @@ const REGRAS: Regra[] = [
     ],
   },
   {
-    keywords: ["consultoria", "assessoria", "contabilidade", "contábil", "contabil", "auditoria", "gestão", "gestao"],
+    setor: "Consultoria & Gestão",
+    // Acentuadas removidas: "contábil", "gestão"
+    keywords: ["consultoria", "assessoria", "contabilidade", "contabil", "auditoria", "gestao"],
     servicos: [
       { label: "Consultoria de gestão e processos", icon: "📊" },
       { label: "Auditoria e compliance", icon: "🔎" },
@@ -136,34 +164,18 @@ export function inferServicos(objeto: string): ServicioSugerivel[] {
   return FALLBACK_SERVICOS;
 }
 
-const SETOR_MAP: Array<[string, string]> = REGRAS.map((r, i) => {
-  const labels = [
-    "Obras & Engenharia",
-    "Tecnologia da Informação",
-    "Eventos & Capacitação",
-    "Saúde",
-    "Transporte & Frota",
-    "Alimentação",
-    "Segurança",
-    "Limpeza & Facilities",
-    "Mobiliário & Equipamentos",
-    "Comunicação & Marketing",
-    "Consultoria & Gestão",
-  ] as const;
-  return [r.keywords[0] ?? "", labels[i] ?? "Contratação pública"] as [string, string];
-});
-
 /**
  * Retorna o rótulo de setor para exibir no card.
+ * O label vive inline em cada Regra — não pode desalinhar com a lista.
  */
 export function inferSetor(objeto: string): string {
   const lower = objeto.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  for (let i = 0; i < REGRAS.length; i++) {
-    const regra = REGRAS[i];
-    const entry = SETOR_MAP[i];
-    if (regra !== undefined && entry !== undefined) {
-      if (regra.keywords.some((kw) => lower.includes(kw))) return entry[1];
+
+  for (const regra of REGRAS) {
+    if (regra.keywords.some((kw) => lower.includes(kw))) {
+      return regra.setor;
     }
   }
+
   return "Contratação pública";
 }

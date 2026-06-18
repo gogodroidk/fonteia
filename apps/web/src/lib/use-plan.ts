@@ -43,6 +43,10 @@ export function usePlan(): PlanInfo {
         until: typeof d.until === "string" ? d.until : undefined,
         loading: false,
       });
+    }).catch(() => {
+      // Promise rejeitada (rede/supabase offline) → degrada para free,
+      // evita loading:true para sempre.
+      if (!cancelled) setInfo(FREE);
     });
     return () => {
       cancelled = true;

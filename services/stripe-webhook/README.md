@@ -132,9 +132,30 @@ https://fonteia-stripe-webhook.<seu-subdominio>.workers.dev
 | `invoice.paid` | `active` | pelo price da fatura |
 | `invoice.payment_failed` | `past_due` | mantém o plano (acesso em risco) |
 | `customer.subscription.deleted` | `canceled` | `free` |
-| `checkout.session.completed` | `incomplete` (linha base; os eventos de subscription completam) | `free` até confirmar |
+| `checkout.session.completed` | **não grava status** (só identidade) | **não grava plan_id** (os eventos de subscription/invoice definem) |
 
 O front/back-end libera o acesso quando `status` é `active` ou `trialing`.
+
+---
+
+## Idempotência e ordem de eventos
+
+O Stripe **não garante** a ordem de entrega nem a entrega única dos eventos — o mesmo evento
+pode chegar mais de uma vez e fora de ordem.
+
+- **Sem dedup por `event.id`.** Este Worker **não tem binding KV/D1** no `wrangler.toml`, logo
+  não há storage durável para deduplicar por `event.id`. (O campo `event.id` já fica nos logs e
+  está pronto para um dedup futuro quando existir um binding.)
+- **Toda escrita é não-regressiva por design**, o que torna reprocessar um evento duplicado
+  seguro:
+  - `checkout.session.completed` grava **só identidade** (`stripe_subscription_id`,
+    `stripe_customer_id`, `email`) — **nunca** `plan_id`/`status` — então nunca rebaixa uma linha
+    já ativa para `free`/`incomplete`.
+  - `invoice.payment_failed` grava **só** `status=past_due` e **preserva o plano** (não envia
+    `plan_id`; o PostgREST mantém o valor existente).
+  - `customer.subscription.*` e `invoice.paid` são a **fonte de verdade** de `plan_id`/`status`.
+- **Falhas transitórias** de persistência (Supabase fora) respondem `5xx` para o Stripe
+  **reenviar**; eventos ignorados/processados por design respondem `200`.
 
 ---
 
@@ -145,9 +166,10 @@ O front/back-end libera o acesso quando `status` é `active` ou `trialing`.
 - **Secret de teste ≠ secret de produção.** O `whsec_` do endpoint de teste é diferente do de
   LIVE. Se trocar de ambiente, atualize `STRIPE_WEBHOOK_SECRET`.
 - **Assinatura é obrigatória.** O Worker rejeita com `400` qualquer requisição sem assinatura
-  válida ou fora da janela de 5 minutos (proteção contra replay). Erros de processamento
-  internos respondem `200` de propósito, para o Stripe não ficar reenviando em loop — os erros
-  ficam nos logs (`wrangler tail`).
+  válida ou fora da janela de 5 minutos (proteção contra replay). Falhas **transitórias de
+  persistência** (Supabase fora / `5xx` no upsert) respondem `503` de propósito, para o Stripe
+  **reenviar** o evento até a gravação voltar. Eventos ignorados/processados por design respondem
+  `200` (não há retry). Os erros ficam nos logs (`wrangler tail`).
 - **Nunca** coloque `sk_live_...`, `whsec_...` ou a `service_role key` em arquivos do repositório.
   Apenas via `wrangler secret put`.
 

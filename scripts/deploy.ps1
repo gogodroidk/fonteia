@@ -1,25 +1,39 @@
 # ============================================================
-# Fonte.ia — Deploy Script
+# Fonte.ia - Deploy Script
 # Executa: pnpm install + build + Cloudflare Pages deploy
 # ============================================================
-
-# ---------- CREDENCIAIS (preenchidas automaticamente) ----------
-
-$env:CLOUDFLARE_API_TOKEN  = "cfut_PlhVlrkt2dpSeD02PAiG0yJmO9EVyhI1hGhFv0Fmd7ba52f2"
-$env:VITE_SUPABASE_URL     = "https://pwiuiihsyazghdsrpshg.supabase.co"
-$env:VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ"
-$env:VITE_API_URL          = ""   # Deixar vazio: web cai para Supabase REST no alpha
-
-# ---------- INGEST WORKER (preencher manualmente) ----------
-# Copie a service_role key em:
-# https://supabase.com/dashboard/project/pwiuiihsyazghdsrpshg/settings/api-keys/legacy
-# Clique em "Reveal" na linha service_role e depois "Copy"
-$SUPABASE_SERVICE_ROLE_KEY = "COLE_AQUI_A_SERVICE_ROLE_KEY"
-
+#
+# SEGREDOS: este script NUNCA contem credenciais hardcoded.
+# Defina as variaveis de ambiente no seu shell ANTES de rodar
+# (ou use um arquivo .env que NAO seja versionado):
+#
+#   $env:CLOUDFLARE_API_TOKEN          = "<seu token Cloudflare>"
+#   $env:VITE_SUPABASE_URL             = "https://<ref>.supabase.co"
+#   $env:VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
+#   (opcional) $env:VITE_API_URL       = ""   # vazio = web cai para Supabase REST
+#   (opcional) $env:SUPABASE_SERVICE_ROLE_KEY = "<service role>"  # p/ deploy do ingest worker
+#
 # ============================================================
 
 $ErrorActionPreference = "Stop"
 $ROOT = $PSScriptRoot
+
+function Require-Env([string]$name) {
+    $val = [Environment]::GetEnvironmentVariable($name)
+    if ([string]::IsNullOrWhiteSpace($val)) {
+        Write-Host "ERRO: variavel de ambiente '$name' nao definida." -ForegroundColor Red
+        Write-Host "      Veja o cabecalho deste script para a lista de variaveis." -ForegroundColor Red
+        exit 1
+    }
+    return $val
+}
+
+# ---------- Validacao de credenciais (sem valores no codigo) ----------
+[void](Require-Env "CLOUDFLARE_API_TOKEN")
+[void](Require-Env "VITE_SUPABASE_URL")
+[void](Require-Env "VITE_SUPABASE_PUBLISHABLE_KEY")
+if ($null -eq $env:VITE_API_URL) { $env:VITE_API_URL = "" }
+$SUPABASE_SERVICE_ROLE_KEY = [Environment]::GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY")
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -45,9 +59,9 @@ Write-Host "[3/4] Deploy para Cloudflare Pages..." -ForegroundColor Yellow
 corepack pnpm wrangler pages deploy apps/web/dist --project-name=fonteia --branch=main
 Write-Host "OK - Frontend no ar!" -ForegroundColor Green
 
-# 4. Ingest worker (só roda se a service_role key foi preenchida)
+# 4. Ingest worker (so roda se a service_role key estiver no ambiente)
 Write-Host ""
-if ($SUPABASE_SERVICE_ROLE_KEY -ne "COLE_AQUI_A_SERVICE_ROLE_KEY") {
+if (-not [string]::IsNullOrWhiteSpace($SUPABASE_SERVICE_ROLE_KEY)) {
     Write-Host "[4/4] Deploy do Ingest Worker..." -ForegroundColor Yellow
 
     # Criar KV namespace se ainda nao existir
@@ -55,16 +69,15 @@ if ($SUPABASE_SERVICE_ROLE_KEY -ne "COLE_AQUI_A_SERVICE_ROLE_KEY") {
     Write-Host $kvOutput
 
     # Setar secrets do worker
-    echo $env:VITE_SUPABASE_URL     | corepack pnpm wrangler secret put SUPABASE_URL            --config services/ingest/wrangler.jsonc
-    echo $SUPABASE_SERVICE_ROLE_KEY | corepack pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY --config services/ingest/wrangler.jsonc
+    $env:VITE_SUPABASE_URL          | corepack pnpm wrangler secret put SUPABASE_URL               --config services/ingest/wrangler.jsonc
+    $SUPABASE_SERVICE_ROLE_KEY      | corepack pnpm wrangler secret put SUPABASE_SERVICE_ROLE_KEY  --config services/ingest/wrangler.jsonc
 
     # Deploy do worker
     corepack pnpm --filter @fonteia/ingest deploy
     Write-Host "OK - Ingest Worker no ar!" -ForegroundColor Green
 } else {
     Write-Host "[4/4] Ingest Worker pulado." -ForegroundColor DarkGray
-    Write-Host "      Para ativar: preencha SUPABASE_SERVICE_ROLE_KEY neste script" -ForegroundColor DarkGray
-    Write-Host "      e rode novamente." -ForegroundColor DarkGray
+    Write-Host "      Para ativar: defina `$env:SUPABASE_SERVICE_ROLE_KEY e rode novamente." -ForegroundColor DarkGray
 }
 
 Write-Host ""

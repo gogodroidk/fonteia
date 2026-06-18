@@ -8,7 +8,13 @@ export interface Consent {
 
 const KEY = "fonteia.consent";
 
+/** Guard SSR/prerender — mesmo padrão de watchlist.ts. */
+function hasStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
 export function getConsent(): Consent | null {
+  if (!hasStorage()) return null;
   try {
     const raw = window.localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as Consent) : null;
@@ -22,6 +28,7 @@ export function hasConsent(): boolean {
 }
 
 export function saveConsent(c: Omit<Consent, "necessarios" | "ts">): void {
+  if (!hasStorage()) return;
   const full: Consent = { necessarios: true, ts: new Date().toISOString(), ...c };
   try {
     window.localStorage.setItem(KEY, JSON.stringify(full));
@@ -32,5 +39,6 @@ export function saveConsent(c: Omit<Consent, "necessarios" | "ts">): void {
 
 /** Evento usado pela página de Conta para reabrir o painel de cookies. */
 export function openCookieSettings(): void {
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("fonteia:cookies"));
 }
