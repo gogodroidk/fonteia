@@ -221,7 +221,7 @@ export function SegurancaPage() {
   const TITLE =
     "Segurança, Privacidade e LGPD — Como protegemos seus dados | Fonte.ia";
   const DESCRIPTION =
-    "Como a Fonte.ia protege seus dados pessoais, cumpre a LGPD (Lei 13.709/2018), trata dados públicos com rastreabilidade total e usa Stripe para pagamentos seguros. Infraestrutura: Supabase + Cloudflare.";
+    "Como a Fonte.ia protege seus dados pessoais, cumpre a LGPD (Lei 13.709/2018), trata dados públicos de múltiplas fontes oficiais com rastreabilidade total e usa Stripe para pagamentos seguros. Infraestrutura: Supabase + Cloudflare.";
 
   useSeo({
     title: TITLE,
@@ -372,9 +372,9 @@ export function SegurancaPage() {
             Esta página trata de dois assuntos distintos: (1) como protegemos os{" "}
             <strong style={{ color: "var(--t-hi)" }}>dados que você nos confia</strong> ao usar a
             plataforma — nome, e-mail, pagamento — e (2) como tratamos os{" "}
-            <strong style={{ color: "var(--t-hi)" }}>dados públicos dos leilões</strong>, que
-            coletamos de fontes oficiais do governo. São questões diferentes e merecem respostas
-            diferentes.
+            <strong style={{ color: "var(--t-hi)" }}>dados públicos coletados de fontes oficiais do governo</strong>{" "}
+            (Receita Federal, PNCP, CNJ, IBAMA, Câmara, Portal Transparência). São questões
+            diferentes e merecem respostas diferentes.
           </P>
         </header>
 
@@ -435,8 +435,8 @@ export function SegurancaPage() {
             A Olli Inteligência Digital Sistemas LTDA atua como{" "}
             <strong style={{ color: "var(--t-hi)" }}>Controladora</strong> dos dados pessoais
             dos usuários da plataforma (nome, e-mail, dados de navegação estritamente necessários)
-            e como referência aos dados públicos dos leilões, que têm natureza pública por força
-            da Lei de Acesso à Informação (12.527/2011).
+            e como referência aos dados públicos das fontes que indexamos, que têm natureza pública
+            por força da Lei de Acesso à Informação (12.527/2011).
           </P>
 
           <div style={{ marginBottom: "24px" }}>
@@ -474,13 +474,15 @@ export function SegurancaPage() {
         {/* Rastreabilidade dos dados públicos */}
         <section aria-labelledby="rastro-heading" style={{ marginBottom: "56px" }}>
           <SectionTitle id="rastro-heading">
-            Rastreabilidade dos dados dos leilões
+            Rastreabilidade dos dados públicos
           </SectionTitle>
           <P>
-            Os dados dos leilões exibidos na Fonte.ia são públicos — coletados do Sistema de
-            Leilão Eletrônico (SLE) da Receita Federal e de outros portais oficiais, nos termos
-            da Lei de Acesso à Informação. Esta seção explica como garantimos que os dados
-            permanecem íntegros e verificáveis.
+            Os dados exibidos na Fonte.ia são públicos — coletados de portais oficiais como o
+            Sistema de Leilão Eletrônico (SLE) da Receita Federal, o Portal Nacional de
+            Contratações Públicas (PNCP), o Conselho Nacional de Justiça (CNJ), o IBAMA, a
+            Câmara dos Deputados e o Portal da Transparência, nos termos da Lei de Acesso à
+            Informação. Esta seção explica como garantimos que os dados permanecem íntegros e
+            verificáveis independentemente da fonte.
           </P>
 
           <div
@@ -499,7 +501,7 @@ export function SegurancaPage() {
             <FluxoStep
               num={1}
               label="Fonte Oficial"
-              sublabel="SLE · Receita Federal"
+              sublabel="SLE · PNCP · CNJ · IBAMA e outros"
             />
             <FluxoStep
               num={2}
@@ -508,8 +510,8 @@ export function SegurancaPage() {
             />
             <FluxoStep
               num={3}
-              label="Score por Regra"
-              sublabel="Regras fixas, sem estimativa"
+              label="Análise IA"
+              sublabel="Por regras fixas, sem estimativa"
             />
             <FluxoStep
               num={4}
@@ -522,8 +524,8 @@ export function SegurancaPage() {
           <P>
             Todo dado exibido na plataforma tem origem documentada: a URL da fonte oficial e o
             timestamp da coleta ficam registrados. A IA não inventa — se a informação não constar
-            na fonte, o sistema indica "evidência insuficiente". O link para o edital original
-            da Receita Federal está disponível em cada lote para verificação direta.
+            na fonte, o sistema indica "evidência insuficiente". O link para o documento original
+            está disponível em cada registro para verificação direta.
           </P>
         </section>
 

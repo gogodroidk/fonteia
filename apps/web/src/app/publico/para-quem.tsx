@@ -7,9 +7,11 @@ import {
 } from "../../lib/seo";
 import {
   Scale,
+  Briefcase,
+  Search,
+  FileText,
+  Newspaper,
   Truck,
-  ShoppingCart,
-  TrendingUp,
   Heart,
   ArrowRight,
 } from "lucide-react";
@@ -104,7 +106,7 @@ function SegmentoCard({ icon, perfil, dor, beneficios }: SegmentoCardProps) {
             fontStyle: "italic",
           }}
         >
-          “{dor}”
+          "{dor}"
         </p>
       </div>
 
@@ -154,9 +156,9 @@ function SegmentoCard({ icon, perfil, dor, beneficios }: SegmentoCardProps) {
 /* ── Página principal ─────────────────────────────────────────────────────── */
 export function ParaQuemPage() {
   const TITLE =
-    "Para quem é a Fonte.ia — Advogados, despachantes, revendedores e investidores | Fonte.ia";
+    "Para quem é a Fonte.ia — Advogados, compliance, jornalistas, revendedores e pesquisadores de dados públicos | Fonte.ia";
   const DESCRIPTION =
-    "A Fonte.ia serve advogados, despachantes aduaneiros, revendedores e compradores individuais que participam de leilões da Receita Federal. Entenda como cada perfil se beneficia da plataforma.";
+    "A Fonte.ia transforma dados públicos brasileiros em decisões rastreáveis. Serve advogados, consultores, jornalistas, gestores públicos e compradores de leilões que precisam de informação oficial consolidada — de licitações e CNJ a IBAMA e Câmara Federal.";
 
   useSeo({
     title: TITLE,
@@ -179,52 +181,72 @@ export function ParaQuemPage() {
   const segmentos: SegmentoCardProps[] = [
     {
       icon: <Scale size={22} />,
-      perfil: "Advogado e despachante aduaneiro",
-      dor: "Preciso documentar cada decisão que tomo para o cliente. Não posso orientar com base em dados que não consigo rastrear.",
+      perfil: "Advogados e escritórios jurídicos",
+      dor: "Preciso acompanhar licitações, processos CNJ e sanções de fornecedores, tudo rastreável para documentar pareceres. Não posso orientar com base em dados que não consigo provar.",
       beneficios: [
-        "Cada dado tem URL de origem e data de coleta — rastreabilidade auditável para documentar pareceres.",
-        "Resumo do edital em linguagem simples, com os pontos críticos destacados, sem precisar ler 40 páginas de PDF.",
-        "Link direto para o documento oficial da Receita Federal em cada lote, para citação precisa.",
+        "Módulo Licitações: 153.945 contratos e 1.051 editais do PNCP em painel único, filtráveis por órgão, valor e prazo.",
+        "Módulo Jurídico: 280 processos indexados do CNJ com link direto para a movimentação oficial.",
+        "Cada dado tem URL de origem e timestamp de coleta — rastreabilidade auditável para documentar pareceres e contestações.",
       ],
     },
     {
-      icon: <Truck size={22} />,
-      perfil: "Despachante e importador",
-      dor: "Perco horas acompanhando lotes retidos na alfândega espalhados por diferentes editais e sistemas.",
+      icon: <Search size={22} />,
+      perfil: "Revendedores e compradores de leilões",
+      dor: "Quero monitorar lotes da Receita Federal, mas perco horas abrindo editais de dezenas de páginas sem saber se o lote vale a pena.",
       beneficios: [
-        "Painel unificado com todos os lotes ativos do SLE, filtráveis por categoria e localização.",
-        "Alertas automáticos quando novos lotes de categorias de interesse aparecem.",
-        "Informação de elegibilidade (PF/PJ) e prazo de habilitação consolidada antes de abrir o edital.",
-      ],
-    },
-    {
-      icon: <ShoppingCart size={22} />,
-      perfil: "Revendedor (veículos, eletrônicos, mercadorias)",
-      dor: "Quero comprar lotes em série, mas não tenho tempo de monitorar o SLE toda semana e calcular margem de cada lote manualmente.",
-      beneficios: [
-        "Alertas configuráveis por categoria de bem, faixa de lance e prazo — você só vê o que interessa.",
-        "Calculadora de custo total: lance + comissão do leiloeiro + frete estimado, tudo em um lugar.",
+        "1.065 lotes ativos do SLE/Receita Federal com resumo de pontos críticos — elegibilidade, prazo, custo total estimado.",
+        "Alertas configuráveis por categoria e faixa de lance — você vê só o que interessa.",
         "Score de oportunidade por regra fixa, baseado nos dados publicados — sem invenção de valor de mercado.",
       ],
     },
     {
-      icon: <TrendingUp size={22} />,
-      perfil: "Comprador individual curioso",
-      dor: "Já ouvi falar em leilão da Receita Federal, mas parece complicado. Tenho medo de entrar sem entender as regras.",
+      icon: <Briefcase size={22} />,
+      perfil: "Consultores e analistas de fornecedores",
+      dor: "Preciso verificar rapidamente se uma empresa tem sanções, quais contratos já ganhou e se está regular — sem gastar horas em vários portais.",
       beneficios: [
-        "Resumo do edital em linguagem de leigo — sem jargão jurídico, sem leitura de PDF de 50 páginas.",
-        "Calculadora de lance: descubra o custo real (lance + comissão + retirada) antes de propor qualquer valor.",
-        "Guia completo sobre como funciona o processo, desde a habilitação no gov.br até a retirada do bem.",
+        "Módulo Empresas: 461 empresas indexadas (CNPJ.ws) com histórico de contratos e sanções cruzadas.",
+        "Módulo Sanções: 1.592 registros do Portal Transparência — CEIS, CNEP e CEPIM em um lugar.",
+        "Exportação rastreável para relatórios de due diligence, com link à fonte oficial em cada campo.",
+      ],
+    },
+    {
+      icon: <FileText size={22} />,
+      perfil: "Profissionais de compliance e gestores públicos",
+      dor: "Preciso auditar contratações, identificar padrões suspeitos e comprovar que a análise veio de dados oficiais — não de achismos.",
+      beneficios: [
+        "Cruzamento de contratos (PNCP) com sanções (Portal Transparência) e processos (CNJ) em um único ambiente.",
+        "Dados de 5.571 municípios brasileiros (IBGE) para análises de cobertura e comparação regional.",
+        "Toda evidência linkada à fonte original — auditável por terceiros sem depender da plataforma.",
+      ],
+    },
+    {
+      icon: <Newspaper size={22} />,
+      perfil: "Jornalistas e pesquisadores de dados",
+      dor: "Monto pautas com dados públicos, mas gastar semanas consolidando portais diferentes me impede de cobrir mais histórias.",
+      beneficios: [
+        "~170 mil registros de fontes diversas (Receita, PNCP, CNJ, IBAMA, Câmara, Portal Transparência) prontos para cruzamento.",
+        "Módulo Política: 4.000 proposições e 594 parlamentares (Câmara/Senado) com votações rastreáveis.",
+        "Módulo Ambiental: 1.500 autos do IBAMA indexados — base para pautas de fiscalização e meio ambiente.",
+      ],
+    },
+    {
+      icon: <Truck size={22} />,
+      perfil: "Despachantes aduaneiros e importadores",
+      dor: "Perco tempo acompanhando lotes retidos na alfândega espalhados por editais e sistemas diferentes.",
+      beneficios: [
+        "Painel unificado do SLE/Receita com filtros por categoria de bem, UF e prazo — sem abrir edital por edital.",
+        "Informação de elegibilidade PF/PJ e prazo de habilitação consolidada antes de qualquer clique.",
+        "Calculadora de custo total: lance + comissão + frete estimado, tudo em um lugar.",
       ],
     },
     {
       icon: <Heart size={22} />,
-      perfil: "Entidade sem fins lucrativos",
-      dor: "Existem lotes destinados a ONGs e entidades filantrópicas nos editais da Receita Federal, mas é difícil localizá-los.",
+      perfil: "Entidades sem fins lucrativos",
+      dor: "Existem lotes destinados a ONGs e entidades filantrópicas, mas é difícil localizá-los entre dezenas de editais.",
       beneficios: [
-        "Filtro por tipo de participante elegível — identifique lotes reservados ou acessíveis a entidades.",
-        "Alertas específicos para categorias relevantes, como bens de uso social.",
-        "Rastreabilidade da origem do dado para comprovar a elegibilidade junto a financiadores ou parceiros.",
+        "Filtro por tipo de participante elegível — identifique lotes acessíveis a entidades nos 1.065 lotes ativos.",
+        "Rastreabilidade da origem do dado para comprovar elegibilidade junto a financiadores e parceiros.",
+        "Alertas por categoria de bem de uso social — sem precisar monitorar o SLE manualmente.",
       ],
     },
   ];
@@ -349,12 +371,19 @@ export function ParaQuemPage() {
               marginBottom: "20px",
             }}
           >
-            Quem usa a Fonte.ia
+            Quem usa a Fonte.ia — e para quê
           </h1>
           <P>
-            A Fonte.ia foi construída para quem toma decisões em leilões públicos com base em
-            dados — não em intuição. Os perfis abaixo representam os casos de uso reais que
-            moldaram o produto desde o início.
+            A Fonte.ia é uma plataforma de inteligência de dados públicos brasileiros. Ela agrega
+            fontes oficiais — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal da
+            Transparência e IBGE — e entrega informação consolidada, rastreável e pesquisável em um
+            único lugar. O módulo de leilões judiciais da Receita Federal é o mais maduro; os
+            demais estão em expansão contínua.
+          </P>
+          <P>
+            Os perfis abaixo representam os casos de uso reais que moldaram o produto desde o
+            início. Se você toma decisões com base em dados públicos, a Fonte.ia foi construída para
+            reduzir o tempo que você gasta coletando e verificando essas informações.
           </P>
         </header>
 
@@ -413,8 +442,8 @@ export function ParaQuemPage() {
               }}
             >
               <li style={{ fontSize: "14px", lineHeight: 1.65, color: "var(--t-mid)" }}>
-                <strong style={{ color: "var(--t-hi)" }}>Leilões judiciais de imóveis</strong>{" "}
-                — ainda não estamos lá, mas está no roteiro do produto.
+                <strong style={{ color: "var(--t-hi)" }}>Leilões judiciais de imóveis (TJ/TRF)</strong>{" "}
+                — em desenvolvimento no roteiro; ainda não cobrimos leilões de vara cível e execução fiscal de bens imóveis.
               </li>
               <li style={{ fontSize: "14px", lineHeight: 1.65, color: "var(--t-mid)" }}>
                 <strong style={{ color: "var(--t-hi)" }}>Quem quer dar lances por você</strong>{" "}
@@ -422,9 +451,15 @@ export function ParaQuemPage() {
               </li>
               <li style={{ fontSize: "14px", lineHeight: 1.65, color: "var(--t-mid)" }}>
                 <strong style={{ color: "var(--t-hi)" }}>
-                  Quem quer previsão de preço de mercado
+                  Estimativas de preço de mercado
                 </strong>{" "}
-                — não estimamos valor de mercado. Mostramos o que o edital diz; a decisão é sua.
+                — não estimamos valor de mercado. Mostramos o que a fonte oficial publicou; a decisão é sua.
+              </li>
+              <li style={{ fontSize: "14px", lineHeight: 1.65, color: "var(--t-mid)" }}>
+                <strong style={{ color: "var(--t-hi)" }}>
+                  Módulos ainda em fase beta (ambiental, política, INPI)
+                </strong>{" "}
+                — os dados já estão indexados, mas a análise assistida por IA nesses módulos ainda é limitada e está em evolução.
               </li>
             </ul>
           </div>

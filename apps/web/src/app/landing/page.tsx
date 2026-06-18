@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck,
+  Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale, Layers,
+} from "lucide-react";
 import { ScoreRing, FonteDots, ThemeToggle, LogoMark } from "../../components/ui";
 import {
   PLANOS,
@@ -207,10 +210,12 @@ function ModuleChip({
   label,
   active,
   icon,
+  meta,
 }: {
   label: string;
   active: boolean;
   icon: React.ReactNode;
+  meta?: string;
 }) {
   return (
     <div
@@ -263,6 +268,99 @@ function ModuleChip({
       <span style={{ fontWeight: 700, fontSize: 14, color: active ? "var(--t-hi)" : "var(--t-mid)" }}>
         {label}
       </span>
+      {meta && (
+        <span className="num tiny muted" style={{ fontWeight: 600 }}>{meta}</span>
+      )}
+    </div>
+  );
+}
+
+// ─── Module card (ativo, com número real) ────────────────────────────────────
+
+function ModuleCard({
+  icon,
+  title,
+  number,
+  numberLabel,
+  desc,
+  hero = false,
+  growing = false,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  number: string;
+  numberLabel: string;
+  desc: string;
+  hero?: boolean;
+  growing?: boolean;
+}) {
+  return (
+    <div
+      className="card card--pad card--hover"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 10,
+        position: "relative",
+        flex: "1 1 230px",
+        minWidth: 220,
+        paddingTop: 18,
+        borderColor: hero ? "color-mix(in srgb,var(--accent) 50%,var(--border))" : undefined,
+        boxShadow: hero ? "0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent), var(--shadow-md)" : undefined,
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          display: "flex",
+          gap: 6,
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+        }}
+      >
+        {hero && (
+          <span className="badge badge--accent" style={{ fontSize: 9, padding: "2px 7px" }}>
+            Carro-chefe
+          </span>
+        )}
+        <span className="badge badge--ok" style={{ fontSize: 9, padding: "2px 7px" }}>
+          Ativo
+        </span>
+      </div>
+
+      <div
+        style={{
+          width: 42,
+          height: 42,
+          borderRadius: 12,
+          background: "linear-gradient(135deg,var(--brand),var(--accent))",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          boxShadow: "var(--shadow-md)",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+
+      <div className="h3" style={{ fontSize: 15, marginTop: 2 }}>{title}</div>
+
+      <div style={{ marginTop: "auto", paddingTop: 6 }}>
+        <div className="num" style={{ fontWeight: 800, fontSize: 22, color: "var(--t-hi)", lineHeight: 1.1 }}>
+          {number}
+        </div>
+        <div className="tiny muted" style={{ marginTop: 2 }}>
+          {numberLabel}
+          {growing && <span style={{ color: "var(--accent-ink)" }}> · em crescimento</span>}
+        </div>
+      </div>
+
+      <p className="tiny muted" style={{ lineHeight: 1.5, margin: 0 }}>{desc}</p>
     </div>
   );
 }
@@ -285,24 +383,24 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
 
   const FAQ_ITEMS = [
     {
-      q: "O que é um leilão da Receita Federal e como funciona?",
-      a: "A Receita Federal leiloa mercadorias apreendidas (eletrônicos, veículos, bebidas) e abandonadas em alfândegas. A Fonte.ia mostra exatamente os dados publicados na fonte oficial — número do lote, edital, lance mínimo, prazo e quem pode participar (PF/PJ) — sem estimativas ou complementos.",
+      q: "O que é a Fonte.ia?",
+      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne cerca de 170 mil registros oficiais de 8 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções e jurídico — em uma busca única, com cada dado rastreável à fonte. O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
     },
     {
-      q: "Como a Fonte.ia calcula o score de oportunidade de um lote?",
-      a: "O score (0–100) é calculado por regras fixas a partir dos dados publicados na fonte: quem pode participar (PF/PJ), prazo disponível para análise, acessibilidade do valor mínimo e se o lote tem imagem. É um apoio de decisão calculado por regra — não é opinião de IA nem análise humana, e não substitui a leitura do edital.",
-    },
-    {
-      q: "Posso usar para PGFN, SPU, DETRAN e Compras.gov.br além da Receita?",
-      a: "Hoje a plataforma cobre os leilões da Receita Federal (Sistema de Leilão Eletrônico — SLE). A integração com outros órgãos, como PGFN, SPU, DETRAN e Compras.gov.br, está no roteiro de desenvolvimento.",
+      q: "Quais fontes e áreas já estão ativas?",
+      a: "Todas as 8 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência (1.592), empresas por CNPJ (461 organizações, em crescimento) e jurídico do CNJ/DataJud (280 processos, em crescimento).",
     },
     {
       q: "Os dados são confiáveis? De onde vêm?",
       a: "Cada dado exibido vem direto da fonte oficial, com a URL e a data de coleta registradas para você conferir na origem. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
     },
     {
-      q: "Quanto tempo leva para analisar um lote?",
-      a: "Os dados oficiais do lote são exibidos imediatamente. Quando o assistente de IA está ativo, ele gera uma leitura em linguagem simples do lote em segundos, sempre a partir dos dados publicados na fonte.",
+      q: "Como funciona o score dos leilões?",
+      a: "O score (0–100) é específico do módulo de leilões e é calculado por regras fixas a partir dos dados publicados na fonte: quem pode participar (PF/PJ), prazo disponível para análise, acessibilidade do valor mínimo e se o lote tem imagem. É apoio de decisão calculado por regra — não é opinião de IA nem análise humana, e não substitui a leitura do edital.",
+    },
+    {
+      q: "Preciso saber de tecnologia para usar?",
+      a: "Não. Você pergunta em português e recebe a resposta com a fonte: link e data de coleta. A busca é unificada nas 8 áreas e a IA responde 'evidência insuficiente' quando não há fonte que sustente a resposta.",
     },
     {
       q: "Posso cancelar quando quiser?",
@@ -508,7 +606,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Leilões da Receita Federal · mais órgãos no roteiro
+                  Inteligência de dados públicos · 8 fontes oficiais ao vivo
                 </span>
               </div>
             </Reveal>
@@ -523,14 +621,14 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   letterSpacing: "-0.03em",
                 }}
               >
-                Antes de dar lance,<br />
+                Dado público vira<br />
                 <span
                   className="clip-text"
                   style={{
                     backgroundImage: "linear-gradient(100deg,var(--brand-2),var(--accent-2))",
                   }}
                 >
-                  passe o lote no Raio-X.
+                  decisão rastreável.
                 </span>
               </h1>
             </Reveal>
@@ -545,10 +643,11 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   maxWidth: 520,
                 }}
               >
-                A Fonte.ia reúne os lotes dos leilões da Receita Federal com os dados
-                oficiais — lance mínimo, prazo, quem pode participar — e entrega{" "}
-                <strong style={{ color: "var(--t-hi)" }}>score de oportunidade por regra e rastreabilidade até a fonte</strong>{" "}
-                para você analisar com fundamento, não com intuição.
+                A Fonte.ia reúne cerca de 170 mil registros oficiais de 8 áreas — leilões,
+                licitações, empresas, municípios, política, ambiental, sanções e jurídico — em
+                uma busca única, com{" "}
+                <strong style={{ color: "var(--t-hi)" }}>cada dado vinculado à fonte (link e data) e IA que nunca inventa</strong>.{" "}
+                Comece pelos leilões da Receita, nosso módulo mais maduro.
               </p>
             </Reveal>
 
@@ -921,7 +1020,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="tiny muted"
               style={{ fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 20 }}
             >
-              Conectado à Receita Federal · mais órgãos no roteiro
+              Conectado a 8 fontes oficiais brasileiras
             </p>
           </Reveal>
           <Reveal delay={0.05}>
@@ -934,7 +1033,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               }}
             >
               {FONTES.map((f) => {
-                const active = f.id === "rfb";
+                const active = true;
                 return (
                 <div
                   key={f.id}
@@ -1217,40 +1316,20 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               Uma plataforma.<br />Toda a inteligência pública.
             </h2>
             <p className="muted" style={{ fontSize: 15, marginTop: 14, maxWidth: 480, margin: "14px auto 0" }}>
-              Leilões já disponíveis. Os demais módulos abrem conforme a demanda.
+              Oito áreas de dados públicos ao vivo hoje. Comece pelos leilões — o módulo mais maduro — e explore as demais na mesma assinatura.
             </p>
           </Reveal>
 
           <Reveal delay={0.05}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "center", alignItems: "flex-start" }}>
-              <ModuleChip
-                label="Leilões Públicos"
-                active={true}
-                icon={<Zap size={20} fill="#fff" color="#fff" />}
-              />
-              {/* Roadmap compacto — sem "em breve" em destaque */}
-              <div
-                className="card card--pad"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  minWidth: 200,
-                  flex: "1 1 200px",
-                  opacity: 0.7,
-                }}
-              >
-                <span className="tiny muted" style={{ fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase" }}>
-                  Roteiro
-                </span>
-                {["Licitações", "Empresas (CNPJ)", "INPI / Marcas", "Ambiental"].map((m) => (
-                  <div key={m} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <Lock size={11} color="var(--t-low)" aria-hidden="true" />
-                    <span className="small" style={{ color: "var(--t-low)", fontWeight: 600, fontSize: 13 }}>{m}</span>
-                  </div>
-                ))}
-              </div>
+              <ModuleChip label="Leilões" active={true} meta="1.065 lotes · Receita" icon={<Gavel size={20} color="#fff" />} />
+              <ModuleChip label="Licitações & Contratos" active={true} meta="154,9 mil · PNCP" icon={<FileText size={20} color="#fff" />} />
+              <ModuleChip label="Municípios" active={true} meta="5.571 · IBGE" icon={<MapPin size={20} color="#fff" />} />
+              <ModuleChip label="Política" active={true} meta="4.594 · Câmara/Senado" icon={<Landmark size={20} color="#fff" />} />
+              <ModuleChip label="Ambiental" active={true} meta="1.500 · IBAMA" icon={<Leaf size={20} color="#fff" />} />
+              <ModuleChip label="Sanções" active={true} meta="1.592 · Transparência" icon={<ShieldAlert size={20} color="#fff" />} />
+              <ModuleChip label="Empresas (CNPJ)" active={true} meta="461 · em crescimento" icon={<Building2 size={20} color="#fff" />} />
+              <ModuleChip label="Jurídico" active={true} meta="280 · em crescimento" icon={<Scale size={20} color="#fff" />} />
             </div>
           </Reveal>
 

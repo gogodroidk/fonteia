@@ -14,6 +14,11 @@ import { listOrgaos } from "../features/empresas/empresas-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
 import { displayCity } from "../lib/receita-localidades";
 import { useAuth } from "../auth/auth-context";
+import { PRODUCT_MODULES } from "@fonteia/domain";
+
+// Seed totals from domain (always available, no API required)
+const SEED_ACTIVE_MODULES = PRODUCT_MODULES.filter((m) => m.status === "active");
+const SEED_TOTAL_RECORDS = SEED_ACTIVE_MODULES.reduce((sum, m) => sum + (m.recordCount ?? 0), 0);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -896,43 +901,86 @@ export function DashboardPage(props: {
         ) : null}
       </section>
 
-      {/* KPI global: total monitorado */}
-      {!modulesLoading && totalRegistros > 0 ? (
-        <section className="global-kpi-strip">
-          <div className="card card--pad">
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
-              Total monitorado
-            </span>
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 800,
-                letterSpacing: "-.025em",
-                color: "var(--brand-ink)",
-                marginTop: 12,
-              }}
-            >
+      {/* KPI global: sempre visível — seed totals imediatos, live totals quando carregados */}
+      <section className="global-kpi-strip">
+        <div className="card card--pad">
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
+            Total indexado
+          </span>
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              letterSpacing: "-.025em",
+              color: "var(--brand-ink)",
+              marginTop: 12,
+            }}
+          >
+            {!modulesLoading && totalRegistros > 0 ? (
               <CountUp value={totalRegistros} decimals={0} />
-            </div>
+            ) : (
+              <CountUp value={SEED_TOTAL_RECORDS} decimals={0} />
+            )}
           </div>
-          <div className="card card--pad">
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
-              Módulos ativos
-            </span>
-            <div
+          <div style={{ fontSize: 11, color: "var(--t-low)", marginTop: 4 }}>
+            {!modulesLoading && totalRegistros > 0 ? "ao vivo" : "seed indexado"}
+          </div>
+        </div>
+        <div className="card card--pad">
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
+            Módulos ativos
+          </span>
+          <div
+            style={{
+              fontSize: 28,
+              fontWeight: 800,
+              letterSpacing: "-.025em",
+              color: "var(--accent-ink)",
+              marginTop: 12,
+            }}
+          >
+            {SEED_ACTIVE_MODULES.length}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--t-low)", marginTop: 4 }}>
+            fontes oficiais
+          </div>
+        </div>
+        <div className="card card--pad">
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
+            Carro-chefe
+          </span>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              marginTop: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span
               style={{
-                fontSize: 28,
-                fontWeight: 800,
-                letterSpacing: "-.025em",
-                color: "var(--accent-ink)",
-                marginTop: 12,
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "2px 8px",
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#1D5FE0",
+                background: "color-mix(in srgb, #1D5FE0 12%, var(--surface))",
+                border: "1px solid color-mix(in srgb, #1D5FE0 25%, transparent)",
               }}
             >
-              {MODULE_CARDS.length}
-            </div>
+              RFB
+            </span>
+            Leilões
           </div>
-        </section>
-      ) : null}
+          <div style={{ fontSize: 11, color: "var(--t-low)", marginTop: 4 }}>
+            Receita Federal
+          </div>
+        </div>
+      </section>
 
       {/* KPIs de leilões */}
       <section className="kpi-strip">
@@ -984,16 +1032,25 @@ export function DashboardPage(props: {
           ZONA 2 — Grid de Módulos
       ════════════════════════════════════════════════════════════ */}
       <section>
-        <div className="section-label">Módulos disponíveis</div>
+        <div className="section-label">
+          {SEED_ACTIVE_MODULES.length} módulos ativos — navegue por qualquer um
+        </div>
         <div className="section-sub">
-          Visão geral de todas as fontes monitoradas pelo Fonte.ia
+          Dados rastreáveis à fonte oficial. Leilões é o carro-chefe; todos os demais estão indexados e navegáveis.
         </div>
         <div className="modules-grid">
           {MODULE_CARDS.map((config) => {
             const data = moduleData[config.key];
-            const isReady = data.loaded || config.key === "inpi";
-            return isReady && !modulesLoading ? (
-              <ModuleCard key={config.key} config={config} data={data} />
+            // Show card immediately with seed fallback count; skeleton only if still loading
+            // and not yet loaded for this specific module
+            const seedModule = SEED_ACTIVE_MODULES.find((m) => m.id === config.key);
+            const seedCount = seedModule?.recordCount ?? 0;
+            const displayData: typeof data = data.loaded
+              ? data
+              : { ...data, count: seedCount, items: [] };
+            const isReady = data.loaded || config.key === "inpi" || seedCount > 0;
+            return isReady ? (
+              <ModuleCard key={config.key} config={config} data={displayData} />
             ) : (
               <ModuleCardSkeleton key={config.key} />
             );

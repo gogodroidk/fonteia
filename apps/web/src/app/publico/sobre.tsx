@@ -189,7 +189,7 @@ function Selo({ children }: { children: React.ReactNode }) {
 export function SobrePage() {
   const TITLE = "Sobre a Fonte.ia — Olli Inteligência Digital Sistemas LTDA | Fonte.ia";
   const DESCRIPTION =
-    "Conheça a empresa por trás da Fonte.ia: Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05. Missão, princípios e como transformamos dados públicos em decisões rastreáveis.";
+    "Conheça a empresa por trás da Fonte.ia: Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05. Plataforma modular de inteligência de dados públicos brasileiros — leilões, licitações, empresas, jurídico, ambiental e mais.";
 
   useSeo({
     title: TITLE,
@@ -342,9 +342,17 @@ export function SobrePage() {
               Olli Inteligência Digital Sistemas LTDA
             </strong>
             , empresa brasileira dedicada a transformar dados públicos em decisões rastreáveis.
-            Não somos um leiloeiro e não compramos nem vendemos bens — somos uma plataforma de
-            inteligência que lê fontes oficiais do governo e as entrega organizadas, com análise
-            de IA, para quem precisa tomar decisões melhores e mais rápidas.
+            Somos uma plataforma modular de inteligência de dados: coletamos, organizamos e
+            analisamos informações de fontes oficiais do governo — leilões, licitações, contratos,
+            empresas, processos judiciais, dados ambientais, legislativo e muito mais — e as
+            entregamos com análise de IA para quem precisa tomar decisões melhores e mais rápidas.
+            Não somos um leiloeiro, não compramos nem vendemos bens, e não inventamos dados.
+          </P>
+          <P>
+            O primeiro módulo em produção cobre{" "}
+            <strong style={{ color: "var(--t-hi)" }}>leilões judiciais e da Receita Federal</strong>
+            . Os demais módulos — licitações, empresas, jurídico, ambiental, política e municípios
+            — estão em desenvolvimento e serão liberados progressivamente.
           </P>
         </header>
 
@@ -367,20 +375,22 @@ export function SobrePage() {
               maxWidth: "60ch",
             }}
           >
-            Tornar os leilões públicos brasileiros acessíveis a quem pesquisa com método, não
+            Tornar os dados públicos brasileiros acessíveis a quem pesquisa com método, não
             com sorte.
           </p>
           <P>
-            Os dados dos leilões da Receita Federal existem — estão publicados no Sistema de
-            Leilão Eletrônico (SLE), em editais PDF de dezenas de páginas, espalhados por órgão
-            e por data. Quem não tem tempo ou ferramentas para consolidar essas informações fica
-            em desvantagem. A Fonte.ia resolve esse problema: coleta as fontes, organiza os
-            dados e entrega análise em linguagem de leigo, com rastreabilidade total à origem.
+            O Brasil publica uma quantidade extraordinária de dados oficiais: leilões da Receita
+            Federal no SLE, mais de 153 mil contratos e 1.051 licitações no PNCP, 5.571 municípios
+            catalogados pelo IBGE, 4.000 proposições legislativas na Câmara e no Senado, 1.500
+            casos ambientais no IBAMA, 1.592 sanções no Portal da Transparência, 280 processos
+            no CNJ. O problema nunca foi a falta de dados — foi a falta de organização, contexto e
+            acesso unificado.
           </P>
           <P>
-            A empresa nasceu da constatação de que os dados já são públicos — o que falta é
-            organização, contexto e acesso. A IA não inventa informação; ela lê o que o governo
-            publicou e ajuda você a entender mais rápido.
+            A Fonte.ia resolve isso: coleta as fontes, normaliza os registros, vincula cada dado
+            ao documento de origem e entrega análise em linguagem clara. A IA lê o que o governo
+            publicou e ajuda você a entender mais rápido. Sem estimativas inventadas, sem fontes
+            ocultas, sem intermediários.
           </P>
         </section>
 
@@ -389,7 +399,7 @@ export function SobrePage() {
           <SectionTitle id="o-que-fazemos-heading">O que fazemos</SectionTitle>
           <P>
             A plataforma opera em três camadas complementares. Cada dado exibido percorre esse
-            fluxo antes de chegar até você.
+            fluxo antes de chegar até você — independentemente do módulo consultado.
           </P>
           <div
             className="sobre-faz-grid"
@@ -403,18 +413,132 @@ export function SobrePage() {
             <FazCard
               icon={<Database size={20} />}
               titulo="Agregamos"
-              descricao="Coletamos dados de fontes oficiais — Receita Federal (SLE) e, em breve, PGFN, SPU, DETRAN e Compras.gov.br — e os reunimos em um único painel."
+              descricao="Coletamos dados de fontes oficiais — SLE/Receita Federal, PNCP, CNJ, IBAMA, Câmara dos Deputados, Senado Federal, Portal da Transparência e IBGE — reunindo mais de 170 mil registros em um único painel."
             />
             <FazCard
               icon={<Search size={20} />}
               titulo="Rastreamos"
-              descricao="Cada dado exibido tem URL de origem e data/hora de coleta registradas. Você pode verificar na fonte oficial a qualquer momento — o link está sempre disponível."
+              descricao="Cada dado exibido tem URL de origem e data/hora de coleta registradas. Você pode verificar na fonte oficial a qualquer momento — o link está sempre disponível, em qualquer módulo da plataforma."
             />
             <FazCard
               icon={<Sparkles size={20} />}
               titulo="Analisamos"
-              descricao="A IA lê o edital e resume os pontos críticos em linguagem de leigo: elegibilidade, prazos, riscos e custo total estimado. Sem invenção, sem estimativas de mercado."
+              descricao="A IA lê editais, contratos e documentos públicos e resume os pontos críticos em linguagem de leigo: elegibilidade, prazos, riscos e contexto. Sem invenção — só o que o governo publicou."
             />
+          </div>
+        </section>
+
+        {/* Módulos */}
+        <section aria-labelledby="modulos-heading" style={{ marginBottom: "56px" }}>
+          <SectionTitle id="modulos-heading">Módulos da plataforma</SectionTitle>
+          <P>
+            A Fonte.ia é construída como uma plataforma modular. Cada módulo cobre um domínio de
+            dados públicos com fontes, lógica de coleta e análise próprias. O acesso a todos os
+            módulos está incluído nos planos — à medida que cada um entra em produção.
+          </P>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "10px",
+            }}
+          >
+            {[
+              {
+                label: "Leilões judiciais e Receita Federal",
+                status: "Em produção",
+                statusOk: true,
+                detail: "1.065 lotes · SLE/Receita Federal",
+              },
+              {
+                label: "Licitações e contratos públicos",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "153.945 contratos · 1.051 editais · PNCP",
+              },
+              {
+                label: "Empresas e CNPJ",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "461 empresas indexadas · Receita Federal",
+              },
+              {
+                label: "Jurídico e processos",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "280 processos · CNJ",
+              },
+              {
+                label: "Ambiental",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "1.500 casos · IBAMA",
+              },
+              {
+                label: "Política e legislativo",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "4.000 proposições · 594 parlamentares · Câmara/Senado",
+              },
+              {
+                label: "Municípios",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "5.571 municípios · IBGE",
+              },
+              {
+                label: "Sanções e transparência",
+                status: "Em desenvolvimento",
+                statusOk: false,
+                detail: "1.592 sanções · Portal da Transparência",
+              },
+            ].map(({ label, status, statusOk, detail }) => (
+              <div
+                key={label}
+                style={{
+                  padding: "14px 16px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span
+                    style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--t-hi)" }}
+                  >
+                    {label}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      letterSpacing: "0.06em",
+                      padding: "2px 8px",
+                      borderRadius: "20px",
+                      background: statusOk
+                        ? "color-mix(in srgb, var(--accent) 14%, var(--surface))"
+                        : "color-mix(in srgb, var(--t-low) 10%, var(--surface))",
+                      color: statusOk ? "var(--accent-ink)" : "var(--t-low)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {status}
+                  </span>
+                </div>
+                <span style={{ fontSize: "12px", color: "var(--t-low)" }}>{detail}</span>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -431,15 +555,16 @@ export function SobrePage() {
           >
             <Selo>
               <strong style={{ color: "var(--t-hi)" }}>Dados direto da fonte oficial</strong>
-              {" — "}coletados do Sistema de Leilão Eletrônico da Receita Federal e de portais
-              do governo.
+              {" — "}coletados de SLE/Receita Federal, PNCP, CNJ, IBAMA, Câmara dos Deputados,
+              Senado Federal e Portal da Transparência. Nenhum dado é gerado ou estimado pela
+              plataforma.
             </Selo>
             <Selo>
               <strong style={{ color: "var(--t-hi)" }}>
                 Lei de Acesso à Informação (12.527/2011)
               </strong>
-              {" — "}os dados dos leilões são públicos por lei. Não acessamos informações
-              restritas.
+              {" — "}todos os dados agregados são públicos por lei. Não acessamos informações
+              restritas ou sigilosas.
             </Selo>
             <Selo>
               <strong style={{ color: "var(--t-hi)" }}>LGPD — Lei 13.709/2018</strong>
@@ -451,6 +576,66 @@ export function SobrePage() {
               {" — "}CNPJ 65.361.266/0001-05 · Olli Inteligência Digital Sistemas LTDA · ativa
               na Receita Federal.
             </Selo>
+          </div>
+        </section>
+
+        {/* Preços */}
+        <section aria-labelledby="planos-heading" style={{ marginBottom: "56px" }}>
+          <SectionTitle id="planos-heading">Planos</SectionTitle>
+          <P>
+            Acesso a todos os módulos disponíveis em dois planos mensais, sem fidelidade. Todos
+            incluem 7 dias de teste gratuito, sem necessidade de cartão de crédito no cadastro.
+          </P>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "14px",
+            }}
+          >
+            {[
+              {
+                nome: "Individual",
+                preco: "R$ 197/mês",
+                desc: "Para pesquisadores, advogados autônomos e profissionais que trabalham por conta própria.",
+              },
+              {
+                nome: "Escritório",
+                preco: "R$ 597/mês",
+                desc: "Para equipes, escritórios e empresas que precisam de acesso compartilhado e volume maior de consultas.",
+              },
+            ].map(({ nome, preco, desc }) => (
+              <div
+                key={nome}
+                style={{
+                  padding: "22px 24px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <p style={{ fontWeight: 700, fontSize: "15px", color: "var(--t-hi)", margin: 0 }}>
+                  {nome}
+                </p>
+                <p
+                  style={{
+                    fontSize: "22px",
+                    fontWeight: 800,
+                    color: "var(--accent-ink)",
+                    margin: 0,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {preco}
+                </p>
+                <p style={{ fontSize: "13.5px", color: "var(--t-mid)", margin: 0, lineHeight: 1.6 }}>
+                  {desc}
+                </p>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -472,7 +657,7 @@ export function SobrePage() {
               marginBottom: "8px",
             }}
           >
-            Pronto para pesquisar com método?
+            Pronto para pesquisar dados públicos com método?
           </p>
           <p
             style={{
@@ -482,7 +667,8 @@ export function SobrePage() {
               lineHeight: 1.65,
             }}
           >
-            Experimente a plataforma gratuitamente. Sem cartão, sem compromisso.
+            7 dias grátis. Sem cartão, sem compromisso. Acesso imediato ao módulo de leilões
+            e aos demais à medida que forem liberados.
           </p>
           <a
             href="/entrar"
