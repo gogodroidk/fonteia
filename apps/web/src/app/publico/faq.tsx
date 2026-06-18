@@ -104,92 +104,124 @@ interface FaqData {
 
 const FAQ_SECOES: FaqData[] = [
   {
-    secao: "Participar do leilão da Receita Federal",
+    secao: "A plataforma Fonte.ia",
     itens: [
       {
-        pergunta: "Preciso de CNPJ para participar do leilão da Receita Federal?",
+        pergunta: "O que é a Fonte.ia e o que ela faz?",
         resposta: (
           <>
-            Não. Pessoa física com CPF pode participar da maioria dos lotes. Alguns lotes têm
-            restrição — por exemplo, apenas empresas com licença específica de importação ou de
-            determinado setor. Essa informação sempre consta no edital. Confirme no edital oficial
-            antes de se habilitar.
+            A Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Reunimos
+            registros de fontes oficiais do governo — Receita Federal, PNCP, CNJ, IBAMA, Câmara,
+            Senado, Portal Transparência, IBGE — em um painel único, organizado e rastreável. São
+            ~170 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051
+            licitações, 280 processos, 1.592 sanções e mais. A IA nunca inventa — cada dado tem
+            link direto à fonte oficial.
           </>
         ),
       },
       {
-        pergunta: "Qualquer pessoa pode participar ou precisa de autorização especial?",
+        pergunta: "Quanto custa a Fonte.ia? Existe plano gratuito?",
         resposta: (
           <>
-            Qualquer pessoa física com CPF e conta gov.br nível prata ou ouro pode participar dos
-            lotes sem restrição. Não é preciso ser revendedor, importador ou ter autorização
-            especial. O único pré-requisito é se habilitar no{" "}
-            <strong>Sistema de Leilão Eletrônico (SLE)</strong> antes do prazo indicado no edital.
+            Existem três camadas: (1) Acesso livre — consulta básica sem cadastro, para conhecer a
+            plataforma. (2) Profissional — R$ 197/mês, para indivíduos e pequenas equipes; acesso a
+            todos os módulos com análise de IA e alertas. (3) Corporativo — R$ 597/mês, para
+            escritórios e equipes maiores; múltiplos usuários, exportação e integrações. Os planos
+            pagos têm 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada.
+            Sem contrato de fidelidade.{" "}
+            <a href="/entrar" className="link">
+              Comece seu teste grátis.
+            </a>
           </>
         ),
       },
       {
-        pergunta: "O que é conta gov.br e como elevar para nível prata?",
+        pergunta: "A Fonte.ia garante resultados ou lucro?",
         resposta: (
           <>
-            A conta gov.br é o login unificado do governo federal. Para participar dos leilões é
-            necessário nível prata ou ouro (identidade verificada). Você eleva para prata pelo
-            app gov.br, usando reconhecimento facial comparado com a base da sua CNH (SENATRAN) ou
-            da Receita Federal. O processo é gratuito e leva alguns minutos. Acesse
-            gov.br/contagovbr para começar.
+            Não. Entregamos informação organizada e rastreável — não garantimos resultado financeiro
+            em nenhum módulo. A decisão é sempre sua. Qualquer plataforma que "garanta lucro" em
+            leilão, licitação ou negócio com dados públicos está mentindo.
           </>
         ),
       },
       {
-        pergunta: "Dá para parcelar o valor do arremate?",
+        pergunta: "A Fonte.ia funciona em celular?",
         resposta: (
           <>
-            Na maioria dos leilões da Receita Federal o pagamento é à vista via DARF, dentro do
-            prazo do edital (geralmente 5 a 10 dias úteis após o arremate). Parcelamento é raro e,
-            quando existe, está descrito explicitamente no edital. Não presuma que haverá
-            parcelamento — confirme no edital antes de dar o lance.
-          </>
-        ),
-      },
-      {
-        pergunta: "Posso ver o bem antes de dar o lance?",
-        resposta: (
-          <>
-            Depende do edital. Alguns leilões oferecem vistoria prévia em data e horário marcados
-            (o edital informa local e quando). Outros não permitem acesso ao bem antes do arremate.
-            Mesmo quando a visitação é permitida, você vê o estado aparente — sem garantia de
-            funcionamento. Confira a cláusula de visitação no edital antes de qualquer decisão.
-          </>
-        ),
-      },
-      {
-        pergunta: "O que acontece se eu ganhar o lance e não pagar?",
-        resposta: (
-          <>
-            O arrematante que não pagar dentro do prazo perde o direito ao lote e pode ser
-            impedido de participar de futuros leilões da Receita Federal, além de responder pelas
-            penalidades previstas no edital. Só dê o lance se tiver certeza de que pode pagar no
-            prazo. Os termos exatos estão no edital — leia antes de propor.
+            Sim. A interface é responsiva e mobile-first. Consultas, alertas e análises funcionam
+            bem em smartphones. Para dar lances em leilões ou assinar contratos, você precisará
+            acessar o site oficial do órgão — não intermediamos isso.
           </>
         ),
       },
     ],
   },
   {
-    secao: "Custos, pagamento e riscos",
+    secao: "Fontes de dados e rastreabilidade",
     itens: [
+      {
+        pergunta: "De onde vêm os dados da Fonte.ia?",
+        resposta: (
+          <>
+            De fontes oficiais do governo brasileiro, acessadas via APIs públicas e portais de dados
+            abertos: Receita Federal (SLE – leilões), PNCP (licitações e contratos), CNJ (processos
+            judiciais), IBAMA (autos ambientais), Câmara e Senado Federal (proposições e
+            parlamentares), Portal da Transparência (sanções), CNPJ.ws (dados de empresas), IBGE
+            (municípios). Todos os dados são públicos por força da Lei de Acesso à Informação
+            (12.527/2011).
+          </>
+        ),
+      },
+      {
+        pergunta: "Como garantem que os dados são corretos e atualizados?",
+        resposta: (
+          <>
+            Cada coleta registra URL de origem e timestamp. A IA não edita os dados — apresenta o
+            que o órgão publicou. Se a informação estiver desatualizada na fonte, estará
+            desatualizada na Fonte.ia também (e indicamos a data de atualização em cada registro). O
+            link para o documento original está sempre disponível para que você confira diretamente.
+          </>
+        ),
+      },
+      {
+        pergunta: "A IA inventa informações ou complementa dados ausentes?",
+        resposta: (
+          <>
+            Não. A IA resume e organiza o que consta na fonte — nunca preenche campos com
+            estimativas ou suposições. Quando a evidência é insuficiente, o sistema diz
+            explicitamente "evidência insuficiente". Não estimamos valor de mercado, previsão de
+            resultado ou qualquer dado que não esteja na fonte oficial.
+          </>
+        ),
+      },
+    ],
+  },
+  {
+    secao: "Módulo Leilões (Receita Federal)",
+    itens: [
+      {
+        pergunta: "Preciso de CNPJ para participar do leilão da Receita Federal?",
+        resposta: (
+          <>
+            Não. Pessoa física com CPF pode participar da maioria dos lotes. Alguns têm restrição
+            — por exemplo, apenas empresas com licença específica. Essa informação consta no edital.
+            A Fonte.ia exibe a elegibilidade (PF/PJ) de cada lote, mas confirme sempre no edital
+            oficial antes de se habilitar.
+          </>
+        ),
+      },
       {
         pergunta: "Quais são todos os custos além do lance?",
         resposta: (
           <>
             Além do valor arrematado (pago via DARF), considere: comissão do leiloeiro (geralmente
-            5% sobre o arremate), custos de transporte e logística para retirar o bem, eventual
-            armazenagem por atraso na retirada e, dependendo do bem, conserto ou regularização.
-            Use a{" "}
+            5%), transporte e logística, eventual armazenagem por atraso na retirada e, dependendo
+            do bem, conserto ou regularização. Use a{" "}
             <a href="/ferramentas/calculadora-lance" className="link">
-              calculadora de lance grátis
+              calculadora de lance gratuita
             </a>{" "}
-            para não perder esses custos de vista.
+            na plataforma para consolidar esses custos antes de propor.
           </>
         ),
       },
@@ -198,101 +230,65 @@ const FAQ_SECOES: FaqData[] = [
         resposta: (
           <>
             Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com
-            editais publicados no site oficial do governo. Os dados são públicos e rastreáveis. O
-            risco não está na idoneidade do órgão — está nas características do bem: vendido{" "}
-            <strong>“no estado em que se encontra”</strong>, sem garantia de funcionamento e sem
+            editais publicados no SLE oficial. O risco está nas características do bem: vendido{" "}
+            <strong>"no estado em que se encontra"</strong>, sem garantia de funcionamento e sem
             direito de devolução. Cuidado com sites não oficiais que simulam leilões da Receita —
-            acesse sempre pelo SLE oficial.
-          </>
-        ),
-      },
-      {
-        pergunta: "O que significa comprar um bem “no estado em que se encontra”?",
-        resposta: (
-          <>
-            Significa que você compra o risco. O bem não tem garantia de funcionamento, não vem
-            com nota fiscal do fabricante e não pode ser devolvido. Eletrônicos podem não ligar,
-            veículos podem ter vícios ocultos e mercadorias podem estar incompletas. Avalie as
-            fotos disponíveis no edital, leia a descrição do lote com atenção e, quando
-            permitido, faça a vistoria presencial antes de dar o lance.
+            acesse sempre pelo SLE oficial. A Fonte.ia só exibe dados do SLE e linka ao edital
+            original.
           </>
         ),
       },
     ],
   },
   {
-    secao: "Sobre a Fonte.ia",
+    secao: "Módulos Licitações, Empresas e Jurídico",
     itens: [
       {
-        pergunta: "O que é a Fonte.ia e o que ela faz?",
+        pergunta: "O módulo de licitações cobre quais órgãos?",
         resposta: (
           <>
-            A Fonte.ia é uma plataforma SaaS brasileira que reúne os lotes dos leilões da Receita
-            Federal em um único lugar organizado. Para cada lote, exibimos: lance mínimo, prazo,
-            elegibilidade PF/PJ, score de oportunidade por regra e link direto para o edital
-            oficial. Não inventamos dados, não prometemos lucro — entregamos informação rastreável
-            para você tomar a decisão com mais clareza.
+            Indexamos os dados do PNCP (Portal Nacional de Contratações Públicas), que agrega
+            licitações e contratos de órgãos federais, estaduais e municipais. São 153.945 contratos
+            e 1.051 licitações disponíveis. Editais de órgãos que não publicam no PNCP ainda não
+            são cobertos — verificamos as fontes disponíveis e informamos a cobertura de cada
+            pesquisa.
           </>
         ),
       },
       {
-        pergunta: "Quanto custa a Fonte.ia?",
+        pergunta: "Posso usar a Fonte.ia para fazer due diligence de fornecedores?",
         resposta: (
           <>
-            A Fonte.ia tem dois planos: Profissional (R$ 197/mês) e Corporativo (R$ 597/mês),
-            ambos com 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar
-            nada. Sem contrato de fidelidade.{" "}
-            <a href="/entrar" className="link">
-              Comece seu teste grátis.
-            </a>
+            Sim. O módulo Empresas (461 registros, via CNPJ.ws) e o módulo Sanções (1.592 registros
+            do Portal Transparência — CEIS, CNEP, CEPIM) permitem verificar se um CNPJ tem sanções
+            e seu histórico de contratos públicos. Cada dado tem link à fonte oficial para uso em
+            relatórios auditáveis.
           </>
         ),
       },
       {
-        pergunta: "A Fonte.ia garante que vou lucrar com os leilões?",
+        pergunta: "O módulo Jurídico cobre todo o Judiciário?",
         resposta: (
           <>
-            Não. A Fonte.ia entrega informação organizada e rastreável — não garante resultado
-            financeiro. A decisão de dar o lance e o risco associado são inteiramente seus. O que
-            fazemos é ajudar você a encontrar lotes relevantes mais rápido, entender as condições
-            do edital e calcular os custos antes de propor. Qualquer plataforma que “garanta lucro”
-            em leilão está mentindo.
+            Indexamos 280 processos do CNJ que são públicos e acessíveis via API. Processos em
+            segredo de Justiça ou de sistemas estaduais sem integração com o DataJud do CNJ não são
+            cobertos. Indicamos claramente a cobertura e o link ao tribunal original em cada
+            processo exibido.
           </>
         ),
       },
+    ],
+  },
+  {
+    secao: "Planos, pagamento e privacidade",
+    itens: [
       {
-        pergunta: "Os dados da Fonte.ia são oficiais? De onde vêm?",
+        pergunta: "Posso cancelar quando quiser? Tem fidelidade?",
         resposta: (
           <>
-            Sim. Os dados de lotes, editais, lances mínimos e prazos vêm do{" "}
-            <strong>Sistema de Leilão Eletrônico (SLE)</strong> da Receita Federal — a mesma
-            fonte que o governo disponibiliza publicamente. Cada lote na Fonte.ia tem link direto
-            para o edital original, para você conferir na fonte quando quiser. Atualizamos os dados
-            regularmente e indicamos a data de atualização em cada lote.
-          </>
-        ),
-      },
-      {
-        pergunta: "Preciso ter experiência com leilões para usar a Fonte.ia?",
-        resposta: (
-          <>
-            Não. A Fonte.ia foi desenhada para quem está participando do primeiro leilão da vida.
-            A interface mostra o que importa em linguagem simples, o glossário explica os termos
-            do edital e a calculadora ajuda a definir o lance máximo sem susto. Se você já tem
-            experiência, vai economizar tempo com alertas automáticos e busca filtrada por
-            categoria de bem.
-          </>
-        ),
-      },
-      {
-        pergunta: "A Fonte.ia funciona em celular?",
-        resposta: (
-          <>
-            Sim. A interface da Fonte.ia é mobile-first — projetada para funcionar bem em
-            smartphones. Você pode consultar lotes, ver editais e configurar alertas direto pelo
-            celular. O próprio SLE da Receita Federal (onde o lance é dado) também funciona em
-            navegador mobile, embora recomendemos confirmar a proposta final em tela maior para
-            não errar um dígito.
+            Sim, você cancela a qualquer momento pela plataforma, sem fidelidade, sem multa. Se
+            cancelar dentro dos 7 dias de teste dos planos pagos, não é cobrado nada. Após o
+            período, a cobrança é mensal — cancelar encerra na próxima data de renovação.
           </>
         ),
       },
@@ -300,10 +296,10 @@ const FAQ_SECOES: FaqData[] = [
         pergunta: "Como a Fonte.ia lida com meus dados pessoais?",
         resposta: (
           <>
-            A Fonte.ia coleta apenas os dados necessários para operar a conta (e-mail, nome e
-            dados de pagamento). Não vendemos dados para terceiros, não compartilhamos com
-            anunciantes. Seguimos a LGPD (Lei 13.709/2018). Você pode solicitar exclusão da conta
-            a qualquer momento pelo e-mail de suporte. Leia nossa{" "}
+            Coletamos apenas os dados necessários para operar a conta (e-mail, nome, dados de
+            pagamento via Stripe). Não vendemos dados para terceiros. Seguimos a LGPD (Lei
+            13.709/2018). Você pode solicitar exclusão a qualquer momento pelo e-mail
+            contato@olli.com.br. Leia a{" "}
             <a href="/privacidade" className="link">
               política de privacidade
             </a>{" "}
@@ -318,79 +314,79 @@ const FAQ_SECOES: FaqData[] = [
 /* ── Texto plano para JSON-LD (sem JSX) ─────────────────────────────────── */
 const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
-    question: "Preciso de CNPJ para participar do leilão da Receita Federal?",
-    answer:
-      "Não. Pessoa física com CPF pode participar da maioria dos lotes. Alguns lotes têm restrição de participação — essa informação consta no edital. Confirme no edital oficial antes de se habilitar.",
-  },
-  {
-    question: "Qualquer pessoa pode participar ou precisa de autorização especial?",
-    answer:
-      "Qualquer pessoa física com CPF e conta gov.br nível prata ou ouro pode participar dos lotes sem restrição. O único pré-requisito é se habilitar no Sistema de Leilão Eletrônico (SLE) antes do prazo do edital.",
-  },
-  {
-    question: "O que é conta gov.br e como elevar para nível prata?",
-    answer:
-      "A conta gov.br é o login unificado do governo federal. Você eleva para prata pelo app gov.br, usando reconhecimento facial comparado com a base da sua CNH (SENATRAN) ou da Receita Federal. O processo é gratuito e leva alguns minutos.",
-  },
-  {
-    question: "Dá para parcelar o valor do arremate?",
-    answer:
-      "Na maioria dos leilões da Receita Federal o pagamento é à vista via DARF, dentro do prazo do edital (geralmente 5 a 10 dias úteis). Parcelamento é raro e, quando existe, está descrito explicitamente no edital.",
-  },
-  {
-    question: "Posso ver o bem antes de dar o lance?",
-    answer:
-      "Depende do edital. Alguns leilões oferecem vistoria prévia em data e horário marcados. Outros não permitem acesso ao bem antes do arremate. Mesmo quando permitida, você vê o estado aparente — sem garantia de funcionamento.",
-  },
-  {
-    question: "O que acontece se eu ganhar o lance e não pagar?",
-    answer:
-      "O arrematante que não pagar dentro do prazo perde o direito ao lote e pode ser impedido de participar de futuros leilões da Receita Federal, além de responder pelas penalidades previstas no edital.",
-  },
-  {
-    question: "Quais são todos os custos além do lance?",
-    answer:
-      "Além do valor arrematado (pago via DARF), considere: comissão do leiloeiro (geralmente 5%), custos de transporte, eventual armazenagem por atraso na retirada e, dependendo do bem, conserto ou regularização.",
-  },
-  {
-    question: "Leilão da Receita Federal é confiável? Pode ser golpe?",
-    answer:
-      "Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no site oficial do governo. O risco está nas características do bem, vendido “no estado em que se encontra”, sem garantia. Cuidado com sites não oficiais — acesse sempre pelo SLE oficial.",
-  },
-  {
-    question: "O que significa comprar um bem “no estado em que se encontra”?",
-    answer:
-      "Significa que você compra o risco. O bem não tem garantia de funcionamento, não vem com nota fiscal do fabricante e não pode ser devolvido. Avalie as fotos, leia a descrição do lote e, quando permitido, faça a vistoria antes de dar o lance.",
-  },
-  {
     question: "O que é a Fonte.ia e o que ela faz?",
     answer:
-      "A Fonte.ia é uma plataforma SaaS brasileira que reúne os lotes dos leilões da Receita Federal com informações organizadas: lance mínimo, prazo, elegibilidade PF/PJ, score de oportunidade e link para o edital oficial. Não inventamos dados, não prometemos lucro.",
+      "A Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Reunimos registros de fontes oficiais do governo — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal Transparência, IBGE — em um painel único, organizado e rastreável. São ~170 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051 licitações, 280 processos, 1.592 sanções e mais. A IA nunca inventa — cada dado tem link direto à fonte oficial.",
   },
   {
-    question: "Quanto custa a Fonte.ia?",
+    question: "Quanto custa a Fonte.ia? Existe plano gratuito?",
     answer:
-      "A Fonte.ia tem dois planos: Profissional (R$ 197/mês) e Corporativo (R$ 597/mês), ambos com 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada.",
+      "Existem três camadas: (1) Acesso livre — consulta básica sem cadastro. (2) Profissional — R$ 197/mês, acesso a todos os módulos com análise de IA e alertas. (3) Corporativo — R$ 597/mês, múltiplos usuários, exportação e integrações. Os planos pagos têm 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada. Sem contrato de fidelidade.",
   },
   {
-    question: "A Fonte.ia garante que vou lucrar com os leilões?",
+    question: "A Fonte.ia garante resultados ou lucro?",
     answer:
-      "Não. A Fonte.ia entrega informação organizada e rastreável — não garante resultado financeiro. A decisão de dar o lance e o risco associado são inteiramente seus. Qualquer plataforma que “garanta lucro” em leilão está mentindo.",
-  },
-  {
-    question: "Os dados da Fonte.ia são oficiais? De onde vêm?",
-    answer:
-      "Sim. Os dados de lotes, editais, lances mínimos e prazos vêm do Sistema de Leilão Eletrônico (SLE) da Receita Federal. Cada lote tem link direto para o edital original. Atualizamos os dados regularmente e indicamos a data de atualização em cada lote.",
-  },
-  {
-    question: "Preciso ter experiência com leilões para usar a Fonte.ia?",
-    answer:
-      "Não. A Fonte.ia foi desenhada para quem está participando do primeiro leilão da vida. A interface mostra o que importa em linguagem simples, com glossário de termos e calculadora de lance.",
+      "Não. Entregamos informação organizada e rastreável — não garantimos resultado financeiro em nenhum módulo. A decisão é sempre sua. Qualquer plataforma que \"garanta lucro\" em leilão, licitação ou negócio com dados públicos está mentindo.",
   },
   {
     question: "A Fonte.ia funciona em celular?",
     answer:
-      "Sim. A interface da Fonte.ia é mobile-first — projetada para funcionar bem em smartphones. Você pode consultar lotes, ver editais e configurar alertas direto pelo celular.",
+      "Sim. A interface é responsiva e mobile-first. Consultas, alertas e análises funcionam bem em smartphones. Para dar lances em leilões ou assinar contratos, você precisará acessar o site oficial do órgão — não intermediamos isso.",
+  },
+  {
+    question: "De onde vêm os dados da Fonte.ia?",
+    answer:
+      "De fontes oficiais do governo brasileiro, acessadas via APIs públicas e portais de dados abertos: Receita Federal (SLE – leilões), PNCP (licitações e contratos), CNJ (processos judiciais), IBAMA (autos ambientais), Câmara e Senado Federal (proposições e parlamentares), Portal da Transparência (sanções), CNPJ.ws (dados de empresas), IBGE (municípios). Todos os dados são públicos por força da Lei de Acesso à Informação (12.527/2011).",
+  },
+  {
+    question: "Como garantem que os dados são corretos e atualizados?",
+    answer:
+      "Cada coleta registra URL de origem e timestamp. A IA não edita os dados — apresenta o que o órgão publicou. Se a informação estiver desatualizada na fonte, estará desatualizada na Fonte.ia também (e indicamos a data de atualização em cada registro). O link para o documento original está sempre disponível para que você confira diretamente.",
+  },
+  {
+    question: "A IA inventa informações ou complementa dados ausentes?",
+    answer:
+      "Não. A IA resume e organiza o que consta na fonte — nunca preenche campos com estimativas ou suposições. Quando a evidência é insuficiente, o sistema diz explicitamente \"evidência insuficiente\". Não estimamos valor de mercado, previsão de resultado ou qualquer dado que não esteja na fonte oficial.",
+  },
+  {
+    question: "Preciso de CNPJ para participar do leilão da Receita Federal?",
+    answer:
+      "Não. Pessoa física com CPF pode participar da maioria dos lotes. Alguns têm restrição — por exemplo, apenas empresas com licença específica. Essa informação consta no edital. A Fonte.ia exibe a elegibilidade (PF/PJ) de cada lote, mas confirme sempre no edital oficial antes de se habilitar.",
+  },
+  {
+    question: "Quais são todos os custos além do lance?",
+    answer:
+      "Além do valor arrematado (pago via DARF), considere: comissão do leiloeiro (geralmente 5%), transporte e logística, eventual armazenagem por atraso na retirada e, dependendo do bem, conserto ou regularização. Use a calculadora de lance gratuita na plataforma para consolidar esses custos antes de propor.",
+  },
+  {
+    question: "Leilão da Receita Federal é confiável? Pode ser golpe?",
+    answer:
+      "Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no SLE oficial. O risco está nas características do bem: vendido \"no estado em que se encontra\", sem garantia de funcionamento e sem direito de devolução. Cuidado com sites não oficiais que simulam leilões da Receita — acesse sempre pelo SLE oficial. A Fonte.ia só exibe dados do SLE e linka ao edital original.",
+  },
+  {
+    question: "O módulo de licitações cobre quais órgãos?",
+    answer:
+      "Indexamos os dados do PNCP (Portal Nacional de Contratações Públicas), que agrega licitações e contratos de órgãos federais, estaduais e municipais. São 153.945 contratos e 1.051 licitações disponíveis. Editais de órgãos que não publicam no PNCP ainda não são cobertos — verificamos as fontes disponíveis e informamos a cobertura de cada pesquisa.",
+  },
+  {
+    question: "Posso usar a Fonte.ia para fazer due diligence de fornecedores?",
+    answer:
+      "Sim. O módulo Empresas (461 registros, via CNPJ.ws) e o módulo Sanções (1.592 registros do Portal Transparência — CEIS, CNEP, CEPIM) permitem verificar se um CNPJ tem sanções e seu histórico de contratos públicos. Cada dado tem link à fonte oficial para uso em relatórios auditáveis.",
+  },
+  {
+    question: "O módulo Jurídico cobre todo o Judiciário?",
+    answer:
+      "Indexamos 280 processos do CNJ que são públicos e acessíveis via API. Processos em segredo de Justiça ou de sistemas estaduais sem integração com o DataJud do CNJ não são cobertos. Indicamos claramente a cobertura e o link ao tribunal original em cada processo exibido.",
+  },
+  {
+    question: "Posso cancelar quando quiser? Tem fidelidade?",
+    answer:
+      "Sim, você cancela a qualquer momento pela plataforma, sem fidelidade, sem multa. Se cancelar dentro dos 7 dias de teste dos planos pagos, não é cobrado nada. Após o período, a cobrança é mensal — cancelar encerra na próxima data de renovação.",
+  },
+  {
+    question: "Como a Fonte.ia lida com meus dados pessoais?",
+    answer:
+      "Coletamos apenas os dados necessários para operar a conta (e-mail, nome, dados de pagamento via Stripe). Não vendemos dados para terceiros. Seguimos a LGPD (Lei 13.709/2018). Você pode solicitar exclusão a qualquer momento pelo e-mail contato@olli.com.br. Leia a política de privacidade completa em /privacidade.",
   },
 ];
 
@@ -398,9 +394,9 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
 export function FaqPage() {
   useSeo({
     title:
-      "Perguntas frequentes sobre leilões da Receita Federal e Fonte.ia (2026) | Fonte.ia",
+      "Perguntas frequentes sobre a Fonte.ia — plataforma de dados públicos brasileiros (2026) | Fonte.ia",
     description:
-      "Tire suas dúvidas sobre leilões da Receita Federal: precisa de CNPJ? Dá para parcelar? Posso ver o bem antes? Quanto custa a Fonte.ia? Respostas diretas e honestas.",
+      "Tire suas dúvidas sobre a Fonte.ia: o que é, quanto custa, de onde vêm os dados, como funcionam os módulos de leilões, licitações, empresas, jurídico e ambiental. Respostas diretas e honestas.",
     canonicalPath: "/faq",
     jsonLd: [
       faqJsonLd(FAQ_JSON_LD_ITEMS),
@@ -483,8 +479,8 @@ export function FaqPage() {
           aria-label="Ações rápidas"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
-          <a href="/guias/como-comprar-leilao-receita" className="btn btn--ghost btn--sm faq-ghost-cta">
-            ← Guia de compra
+          <a href="/sobre" className="btn btn--ghost btn--sm faq-ghost-cta">
+            ← Sobre
           </a>
           <a href="/entrar" className="btn btn--accent btn--sm">
             Começar grátis
@@ -537,7 +533,7 @@ export function FaqPage() {
                 marginBottom: "20px",
               }}
             >
-              Perguntas frequentes sobre leilões da Receita Federal
+              Perguntas frequentes sobre a Fonte.ia e dados públicos brasileiros
             </h1>
 
             <p
@@ -548,17 +544,8 @@ export function FaqPage() {
                 marginBottom: "0",
               }}
             >
-              Respondemos as dúvidas mais comuns de quem está chegando nos leilões da Receita
-              Federal pela primeira vez — e as perguntas sobre como a Fonte.ia funciona. Respostas
-              diretas, sem enrolação. Se não achou o que procura, consulte o{" "}
-              <a href="/glossario-leiloes" className="link">
-                glossário de termos
-              </a>{" "}
-              ou o{" "}
-              <a href="/guias/como-comprar-leilao-receita" className="link">
-                guia passo a passo
-              </a>
-              .
+              Respondemos as dúvidas de quem está conhecendo a plataforma — sobre os módulos, as
+              fontes, os planos e como a IA funciona. Respostas diretas, sem enrolação.
             </p>
           </header>
 
@@ -611,7 +598,7 @@ export function FaqPage() {
                 marginBottom: "10px",
               }}
             >
-              Todos os lotes da Receita Federal, organizados para você decidir com clareza
+              ~170 mil registros de dados públicos, organizados para você decidir com clareza
             </p>
             <p
               style={{
@@ -624,8 +611,8 @@ export function FaqPage() {
                 marginRight: "auto",
               }}
             >
-              Lance mínimo, prazo, elegibilidade PF/PJ, score por regra e link direto para o
-              edital oficial. Sem inventar dado, sem prometer lucro — só informação rastreável.
+              Leilões, licitações, sanções, processos, empresas — cada dado rastreável à fonte
+              oficial. Sem inventar, sem prometer resultado.
             </p>
             <a
               href="/entrar"
@@ -666,7 +653,7 @@ export function FaqPage() {
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
               <a
-                href="/guias/como-comprar-leilao-receita"
+                href="/sobre"
                 className="card card--pad"
                 style={{
                   display: "inline-flex",
@@ -680,10 +667,10 @@ export function FaqPage() {
                 }}
               >
                 <BookOpen size={15} aria-hidden="true" />
-                Como comprar: guia passo a passo
+                Sobre a Fonte.ia
               </a>
               <a
-                href="/glossario-leiloes"
+                href="/para-quem"
                 className="card card--pad"
                 style={{
                   display: "inline-flex",
@@ -696,7 +683,7 @@ export function FaqPage() {
                   fontWeight: 600,
                 }}
               >
-                Glossário de termos
+                Para quem é a plataforma
               </a>
               <a
                 href="/ferramentas/calculadora-lance"
@@ -774,14 +761,14 @@ export function FaqPage() {
           <a href="/leiloes-receita-federal" className="link small">
             Leilões
           </a>
-          <a href="/guias/como-comprar-leilao-receita" className="link small">
-            Guia de compra
+          <a href="/sobre" className="link small">
+            Sobre
           </a>
           <a href="/ferramentas/calculadora-lance" className="link small">
             Calculadora
           </a>
-          <a href="/glossario-leiloes" className="link small">
-            Glossário
+          <a href="/para-quem" className="link small">
+            Para quem
           </a>
           <a href="/privacidade" className="link small" style={{ color: "var(--t-low)" }}>
             Privacidade
