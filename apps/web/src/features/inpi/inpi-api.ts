@@ -32,6 +32,7 @@ import {
   getSupabasePublicConfig,
   trimTrailingSlash,
 } from "../../lib/api-client";
+import { sanitizeCnpj as _sanitizeCnpj } from "../../lib/cnpj";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -117,11 +118,8 @@ interface CnpjErrResponse {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────────
 
-/** Mantém só os dígitos do CNPJ; "" se não restarem 14. */
-export function sanitizeCnpj(value: string): string {
-  const digits = value.replace(/\D/g, "");
-  return digits.length === 14 ? digits : "";
-}
+/** Mantém só os dígitos do CNPJ; "" se não restarem 14. Re-exporta de lib/cnpj.ts. */
+export const sanitizeCnpj: (value: string) => string = _sanitizeCnpj;
 
 /** Link para a busca oficial do INPI (pePI). Sem deep-link por CNPJ estável —
  * o pePI exige sessão — então levamos o usuário à pesquisa de marcas oficial. */

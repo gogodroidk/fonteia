@@ -698,21 +698,26 @@ function AppShell({ path, navigate }: AppShellProps) {
 
       {/* bottom nav mobile — 5 itens primários + "Mais" para o restante */}
       {(() => {
+        const navByRoute = (route: RouteKey) => {
+          const found = NAV.find((n) => n.route === route);
+          if (!found) throw new Error(`Nav item not found for route: ${route}`);
+          return found;
+        };
         const PRIMARY_NAV = [
-          NAV[0]!, // Painel
-          NAV[1]!, // Lotes
-          NAV[2]!, // Licitações
-          NAV[9]!, // Alertas
-          NAV[10]!, // Relatórios
+          navByRoute("painel"),
+          navByRoute("lotes"),
+          navByRoute("licitacoes"),
+          navByRoute("alertas"),
+          navByRoute("relatorios"),
         ];
         const MORE_NAV = [
-          NAV[3]!, // Política
-          NAV[4]!, // Municípios
-          NAV[5]!, // Empresas
-          NAV[6]!, // Ambiental
-          NAV[7]!, // Jurídico
-          NAV[8]!, // INPI
-          NAV[11]!, // Fontes
+          navByRoute("politica"),
+          navByRoute("municipios"),
+          navByRoute("empresas"),
+          navByRoute("ambiental"),
+          navByRoute("juridico"),
+          navByRoute("inpi"),
+          navByRoute("fontes"),
           { path: "/app/modules", route: "modules" as RouteKey, label: "Módulos", icon: LayoutGrid },
         ];
         const moreActive = MORE_NAV.some((item) => route === item.route);

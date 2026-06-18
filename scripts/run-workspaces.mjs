@@ -9,6 +9,13 @@ if (!scriptName) {
   process.exit(1);
 }
 
+// Validate script name to prevent shell injection via shell:true in spawnSync.
+// Only allow alphanumeric characters, colons, underscores, and hyphens.
+if (!/^[a-z:_-]+$/i.test(scriptName)) {
+  console.error(`Invalid script name: "${scriptName}". Only [a-zA-Z0-9:_-] characters are allowed.`);
+  process.exit(1);
+}
+
 const workspaceDirs = [
   "packages/domain",
   "packages/sources",

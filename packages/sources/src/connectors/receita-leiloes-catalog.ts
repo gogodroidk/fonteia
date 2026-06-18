@@ -13,16 +13,13 @@
 // e TODOS os lotes.
 
 import type { ReceitaLeilaoLot } from "./receita-leiloes";
+import { parseReceitaDate, RECEITA_DEFAULT_HEADERS } from "../internal/receita-shared";
+import { fetchWithRetry } from "../internal/http";
 
 export const RECEITA_SLE_BASE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 
 /** User-Agent honesto recomendado pelo contrato — não fingir navegador. */
 export const RECEITA_USER_AGENT = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
-
-const DEFAULT_HEADERS: Record<string, string> = {
-  accept: "application/json",
-  "user-agent": RECEITA_USER_AGENT,
-};
 
 // ---------------------------------------------------------------------------
 // edle = {unidade}/{numero}/{exercicio}  (ex.: "200100/1/2026")
@@ -199,49 +196,76 @@ export interface ReceitaCatalogLot extends Omit<ReceitaLeilaoLot, "raw"> {
 }
 
 // ---------------------------------------------------------------------------
-// Datas: "YYYY-MM-DD HH:mm" -> ISO com offset BRT (-03:00)
-// ---------------------------------------------------------------------------
-
-function parseReceitaDate(value: string | undefined): string {
-  if (!value) return "";
-  const [datePart, timePart = "00:00"] = value.split(" ");
-  const [year, month, day] = datePart?.split("-") ?? [];
-  if (!year || !month || !day) return value;
-  return `${year}-${month}-${day}T${timePart}:00-03:00`;
-}
-
-// ---------------------------------------------------------------------------
 // Fetch (somente Web `fetch`, como o conector existente)
 // ---------------------------------------------------------------------------
 
-async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
-  const response = await fetcher(url, { headers: DEFAULT_HEADERS });
+async function getJson<T>(
+  url: string,
+  fetcher: typeof fetch | undefined,
+  validate?: (raw: unknown) => T,
+): Promise<T> {
+  const response = await fetchWithRetry(url, {
+    init: { headers: RECEITA_DEFAULT_HEADERS },
+    fetcher,
+  });
   if (!response.ok) {
     throw new Error(`Receita SLE respondeu ${response.status} em ${url}`);
   }
-  return (await response.json()) as T;
+  const raw = (await response.json()) as unknown;
+  if (validate) return validate(raw);
+  return raw as T;
+}
+
+/** Guarda mínima: o payload de editais disponíveis deve ter `situacoes` array. */
+function validateEditaisDisponiveis(raw: unknown): ReceitaEditaisDisponiveisPayload {
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("situacoes" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).situacoes)
+  ) {
+    throw new Error(
+      "Receita SLE /editais-disponiveis: payload inesperado — esperado objeto com 'situacoes' (array).",
+    );
+  }
+  return raw as ReceitaEditaisDisponiveisPayload;
+}
+
+/** Guarda mínima: o edital completo deve ter `listaLotes` array. */
+function validateEditalCompleto(raw: unknown): ReceitaEditalCompletoRaw {
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("listaLotes" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).listaLotes)
+  ) {
+    throw new Error(
+      "Receita SLE /edital: payload inesperado — esperado objeto com 'listaLotes' (array).",
+    );
+  }
+  return raw as ReceitaEditalCompletoRaw;
 }
 
 /** #1 do contrato — catálogo completo de editais (porta de entrada da varredura). */
 export function fetchEditaisDisponiveis(
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<ReceitaEditaisDisponiveisPayload> {
-  return getJson(editaisDisponiveisUrl(), fetcher);
+  return getJson(editaisDisponiveisUrl(), fetcher, validateEditaisDisponiveis);
 }
 
 /** #3 do contrato — edital completo + todos os lotes (resumidos) em `listaLotes[]`. */
 export function fetchEditalCompleto(
   edle: string,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<ReceitaEditalCompletoRaw> {
-  return getJson(editalApiUrl(edle), fetcher);
+  return getJson(editalApiUrl(edle), fetcher, validateEditalCompleto);
 }
 
 /** #6 do contrato — detalhe rico de um lote (itens, recinto, fotos). */
 export function fetchLoteDetalhe(
   edle: string,
   lote: string | number,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<ReceitaLoteDetalheRaw> {
   return getJson(loteApiUrl(edle, lote), fetcher);
 }
@@ -249,7 +273,7 @@ export function fetchLoteDetalhe(
 /** #4 do contrato — envelope do PDF do edital (base64). Decodificar/hashear no job. */
 export function fetchEditalPdfEnvelope(
   edle: string,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<ReceitaPdfEnvelope> {
   return getJson(editalPdfApiUrl(edle), fetcher);
 }

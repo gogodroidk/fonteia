@@ -1,21 +1,24 @@
 import { BILLING_PLANS, getModuleEntitlement, type BillingPlanId } from "@fonteia/billing";
 import { PRODUCT_MODULES } from "@fonteia/domain";
-import { jsonResponse, type ApiResponse, type RouteRequest } from "./types";
+import { badRequest, jsonResponse, type ApiResponse, type RouteRequest } from "./types";
 
 const planIds = new Set<BillingPlanId>(BILLING_PLANS.map((plan) => plan.id));
 
-function parsePlanId(value: string | null): BillingPlanId | undefined {
-  if (value && planIds.has(value as BillingPlanId)) {
-    return value as BillingPlanId;
-  }
-
-  return undefined;
+function isBillingPlanId(value: string): value is BillingPlanId {
+  return planIds.has(value as BillingPlanId);
 }
 
-export function getModules(request?: RouteRequest): ApiResponse<typeof PRODUCT_MODULES | { modules: unknown[] }> {
-  const planId = request ? parsePlanId(request.query.get("plan")) : undefined;
+export function getModules(
+  request?: RouteRequest,
+): ApiResponse<typeof PRODUCT_MODULES | { modules: unknown[] } | { error: string }> {
+  const rawPlan = request?.query.get("plan") ?? null;
 
-  if (planId) {
+  if (rawPlan !== null && rawPlan !== "") {
+    if (!isBillingPlanId(rawPlan)) {
+      return badRequest("Invalid plan id", { allowed: [...planIds] });
+    }
+
+    const planId = rawPlan;
     return jsonResponse({
       modules: PRODUCT_MODULES.map((module) => ({
         ...module,

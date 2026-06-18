@@ -1,21 +1,21 @@
 // Supabase Edge Function: "ingest-cnj"
 // Ingestão de PROCESSOS JUDICIAIS da API Pública do DataJud/CNJ.
 //
-// Fonte: API Pública do DataJud (CNJ) — chave pública, sem segredo:
+// Fonte: API Pública do DataJud (CNJ):
 //   POST https://api-publica.datajud.cnj.jus.br/api_publica_<alias>/_search
-//   Header: Authorization: APIKey cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==
+//   Header: Authorization: APIKey <DATAJUD_API_KEY>
 //   Body: Elasticsearch DSL
 //
-// A chave é PÚBLICA e publicada pelo CNJ na wiki oficial:
-//   https://datajud-wiki.cnj.jus.br/api-publica/acesso
-// Pode ser trocada pelo CNJ a qualquer momento — se houver 401, atualizar aqui.
+// Documentação: https://datajud-wiki.cnj.jus.br/api-publica/acesso
 //
 // Fluxo: para cada tribunal configurado, busca processos atualizados na janela
 // de datas (padrão: últimos 2 dias) -> normaliza -> chama RPC public.ingest_cnj
 // em lotes de 100. Idempotente: dedup por numeroProcesso via índice único parcial.
 //
-// Secrets: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetados automaticamente
-// pelo Supabase nas Edge Functions.
+// Secrets requeridos:
+//   DATAJUD_API_KEY         — chave do DataJud/CNJ (definir como secret no Supabase)
+//   SUPABASE_URL            — injetado automaticamente pelo Supabase
+//   SUPABASE_SERVICE_ROLE_KEY — injetado automaticamente pelo Supabase
 //
 // Parâmetros de query (todos opcionais):
 //   ?dias=N              -> janela = [agora - N dias, agora] (default 2)
@@ -28,11 +28,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-// Chave PÚBLICA do DataJud — publicada pelo CNJ em:
-// https://datajud-wiki.cnj.jus.br/api-publica/acesso
-const DATAJUD_API_KEY =
-  "cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const DATAJUD_BASE = "https://api-publica.datajud.cnj.jus.br";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -62,8 +60,6 @@ interface EsResponse {
   };
   error?: unknown;
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function isoWindowFromDias(dias: number): { gte: string; lte: string } {
   const now = new Date();
@@ -105,10 +101,11 @@ async function searchTribunal(
   window: { gte: string; lte: string },
   size: number,
   maxPaginas: number,
+  apiKey: string,
 ): Promise<{ items: Record<string, unknown>[]; seen: number; errors: string[] }> {
   const url = `${DATAJUD_BASE}/api_publica_${alias}/_search`;
   const headers = {
-    "Authorization": `APIKey ${DATAJUD_API_KEY}`,
+    "Authorization": `APIKey ${apiKey}`,
     "Content-Type": "application/json",
     "User-Agent": UA,
   };
@@ -123,7 +120,12 @@ async function searchTribunal(
 
     let res: Response;
     try {
-      res = await fetch(url, { method: "POST", headers, body });
+      res = await fetchWithRetry(url, {
+        timeoutMs: 15000,
+        retries: 3,
+        backoffMs: 800,
+        init: { method: "POST", headers, body },
+      });
     } catch (e) {
       errors.push(`${alias} pág ${pagina + 1}: fetch error — ${String(e)}`);
       break;
@@ -131,8 +133,8 @@ async function searchTribunal(
 
     if (res.status === 401) {
       errors.push(
-        `${alias}: 401 Unauthorized — a chave pública do DataJud pode ter sido trocada pelo CNJ. ` +
-          `Verifique https://datajud-wiki.cnj.jus.br/api-publica/acesso`,
+        `${alias}: 401 Unauthorized — verifique a DATAJUD_API_KEY no Supabase secrets. ` +
+          `Consulte https://datajud-wiki.cnj.jus.br/api-publica/acesso`,
       );
       break;
     }
@@ -183,6 +185,28 @@ async function searchTribunal(
 }
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-cnj] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
+  const apiKey = Deno.env.get("DATAJUD_API_KEY");
+  if (!apiKey) {
+    return jsonResponse(
+      { ok: false, error: "DATAJUD_API_KEY não configurada. Defina como secret no Supabase." },
+      { status: 500 },
+      req,
+    );
+  }
+
   const url = new URL(req.url);
 
   const dias = Math.max(1, Number(url.searchParams.get("dias") ?? DEFAULT_DIAS));
@@ -211,7 +235,7 @@ Deno.serve(async (req) => {
     const tribunalStats: Record<string, number> = {};
 
     for (const alias of tribunais) {
-      const { items, seen, errors } = await searchTribunal(alias, window, size, maxPaginas);
+      const { items, seen, errors } = await searchTribunal(alias, window, size, maxPaginas, apiKey);
       allItems.push(...items);
       allErrors.push(...errors);
       tribunalStats[alias] = seen;
@@ -229,23 +253,17 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        janela: window,
-        dias,
-        tribunais,
-        tribunalStats,
-        coletados: allItems.length,
-        ingested,
-        errors: allErrors,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      janela: window,
+      dias,
+      tribunais,
+      tribunalStats,
+      coletados: allItems.length,
+      ingested,
+      errors: allErrors,
+    }, {}, req);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: String(e) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

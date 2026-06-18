@@ -1,5 +1,12 @@
+import { RECEITA_DEFAULT_HEADERS, parseReceitaDate } from "../internal/receita-shared";
+import { fetchWithRetry } from "../internal/http";
+
 export const RECEITA_LEILOES_DESTAQUES_URL =
   "https://www25.receita.fazenda.gov.br/sle-sociedade/api/portal/destaques";
+
+/** URL humana do portal (base para montar links clicáveis de lote/edital). */
+export const RECEITA_SLE_PORTAL_BASE =
+  "https://www25.receita.fazenda.gov.br/sle-sociedade";
 
 export interface ReceitaLeiloesDestaqueRaw {
   permitePF: boolean;
@@ -49,19 +56,22 @@ export interface ReceitaLeilaoLot {
   raw: ReceitaLeiloesDestaqueRaw;
 }
 
-function parseReceitaDate(value: string): string {
-  const [datePart, timePart = "00:00"] = value.split(" ");
-  const [year, month, day] = datePart?.split("-") ?? [];
-
-  if (!year || !month || !day) {
-    return value;
-  }
-
-  return `${year}-${month}-${day}T${timePart}:00-03:00`;
-}
-
 function buildLotId(raw: ReceitaLeiloesDestaqueRaw): string {
   return `${raw.edle.replaceAll("/", "-")}-${raw.lote}`;
+}
+
+/**
+ * URL humana do portal para um lote de destaque (fix #5: sourceUrl aponta para
+ * a página navegável, não para o endpoint JSON interno).
+ * edle = "unidade/numero/exercicio" → /portal/edital/unidade/numero/exercicio/lote/N
+ */
+function loteDestaquePortalUrl(edle: string, lote: number): string {
+  const parts = edle.split("/");
+  if (parts.length === 3) {
+    return `${RECEITA_SLE_PORTAL_BASE}/portal/edital/${parts[0]}/${parts[1]}/${parts[2]}/lote/${lote}`;
+  }
+  // Fallback: tela de editais disponíveis (nunca devolve link quebrado).
+  return `${RECEITA_SLE_PORTAL_BASE}/portal/editais-disponiveis`;
 }
 
 export function normalizeReceitaDestaque(raw: ReceitaLeiloesDestaqueRaw, collectedAt: string): ReceitaLeilaoLot {
@@ -77,7 +87,8 @@ export function normalizeReceitaDestaque(raw: ReceitaLeiloesDestaqueRaw, collect
     minimumBidCents: Math.round(raw.valor * 100),
     proposalDeadline: parseReceitaDate(raw.dtFimProposta),
     eligiblePersonTypes: raw.permitePF ? ["pf", "pj"] : ["pj"],
-    sourceUrl: RECEITA_LEILOES_DESTAQUES_URL,
+    // fix #5: URL humana do portal, não o endpoint JSON da API interna.
+    sourceUrl: loteDestaquePortalUrl(raw.edle, raw.lote),
     collectedAt,
     raw,
   };
@@ -94,24 +105,35 @@ export function normalizeReceitaDestaquesPayload(payload: ReceitaLeiloesDestaque
   return payload.destaques.map((raw) => normalizeReceitaDestaque(raw, collectedAt));
 }
 
-export async function fetchReceitaLeiloesDestaques(fetcher: typeof fetch = fetch): Promise<ReceitaLeilaoLot[]> {
-  const response = await fetcher(RECEITA_LEILOES_DESTAQUES_URL, {
-    headers: {
-      accept: "application/json",
-    },
+export async function fetchReceitaLeiloesDestaques(fetcher?: typeof fetch): Promise<ReceitaLeilaoLot[]> {
+  const response = await fetchWithRetry(RECEITA_LEILOES_DESTAQUES_URL, {
+    init: { headers: RECEITA_DEFAULT_HEADERS },
+    fetcher,
   });
 
   if (!response.ok) {
     throw new Error(`Receita Leiloes request failed with status ${response.status}`);
   }
 
-  const payload = (await response.json()) as ReceitaLeiloesDestaquesPayload;
+  const raw = (await response.json()) as unknown;
+  // Guarda mínima: verifica shape do envelope (fix #6).
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("destaques" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).destaques)
+  ) {
+    throw new Error(
+      "Receita Leiloes: payload inesperado — esperado objeto com 'destaques' (array).",
+    );
+  }
+  const payload = raw as ReceitaLeiloesDestaquesPayload;
   return normalizeReceitaDestaquesPayload(payload);
 }
 
 export async function fetchReceitaLeiloesDestaquesWithCache(
   cache: ReceitaCache,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<{ lots: ReceitaLeilaoLot[]; fromCache: boolean }> {
   const CACHE_KEY = "receita-leiloes:destaques";
   const TTL_SECONDS = 900; // 15 min
@@ -126,11 +148,25 @@ export async function fetchReceitaLeiloesDestaquesWithCache(
     }
   }
 
-  const response = await fetcher(RECEITA_LEILOES_DESTAQUES_URL, { headers: { accept: "application/json" } });
+  const response = await fetchWithRetry(RECEITA_LEILOES_DESTAQUES_URL, {
+    init: { headers: RECEITA_DEFAULT_HEADERS },
+    fetcher,
+  });
   if (!response.ok) {
     throw new Error(`Receita Leiloes request failed with status ${response.status}`);
   }
-  const payload = (await response.json()) as ReceitaLeiloesDestaquesPayload;
+  const raw = (await response.json()) as unknown;
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("destaques" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).destaques)
+  ) {
+    throw new Error(
+      "Receita Leiloes: payload inesperado — esperado objeto com 'destaques' (array).",
+    );
+  }
+  const payload = raw as ReceitaLeiloesDestaquesPayload;
   await cache.put(CACHE_KEY, JSON.stringify(payload), { expirationTtl: TTL_SECONDS });
   return { lots: normalizeReceitaDestaquesPayload(payload), fromCache: false };
 }

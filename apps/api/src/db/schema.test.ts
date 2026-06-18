@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CORE_TABLES, REQUIRED_EXTENSIONS, REQUIRED_INDEXES, SCHEMA_CONTRACT } from "./schema";
 
-const migrationSql = readFileSync(resolve(__dirname, "../../../../infra/migrations/0001_core_schema.sql"), "utf8");
+// Resolve relative to this module (ESM-safe) rather than relying on an injected __dirname.
+const here = dirname(fileURLToPath(import.meta.url));
+const migrationSql = readFileSync(resolve(here, "../../../../infra/migrations/0001_core_schema.sql"), "utf8");
 
 describe("core database schema", () => {
   it("creates every core table used by the intelligence platform", () => {

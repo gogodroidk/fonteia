@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageCircle, X, Send, Loader2, Sparkles } from "lucide-react";
 import { useAIChat } from "../../hooks/useAI";
+import type { AiChatMessage } from "../../lib/ai-client";
 
 export interface ContextChatProps {
   /** Contexto da tela/entidade atual, enviado à IA em cada mensagem. */
@@ -184,6 +185,19 @@ export function ContextChat({
   const [text, setText] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
 
+  // Stable key map: each message object gets a unique id assigned on first sight.
+  // Using WeakMap so entries are GC'd when messages are cleared via chat.reset().
+  const keyMapRef = useRef<WeakMap<AiChatMessage, string>>(new WeakMap());
+  const keyCounterRef = useRef(0);
+  function getMessageKey(msg: AiChatMessage): string {
+    let k = keyMapRef.current.get(msg);
+    if (k === undefined) {
+      k = `msg-${(keyCounterRef.current++).toString()}`;
+      keyMapRef.current.set(msg, k);
+    }
+    return k;
+  }
+
   const chat = useAIChat({
     ...(context ? { context } : {}),
     ...(accessToken ? { accessToken } : {}),
@@ -226,8 +240,8 @@ export function ContextChat({
           <p style={S.greeting}>{greeting}</p>
         ) : null}
 
-        {chat.messages.map((m, i) => (
-          <div key={i} style={m.role === "user" ? S.bubbleUser : S.bubbleAi}>
+        {chat.messages.map((m) => (
+          <div key={getMessageKey(m)} style={m.role === "user" ? S.bubbleUser : S.bubbleAi}>
             {m.content}
           </div>
         ))}

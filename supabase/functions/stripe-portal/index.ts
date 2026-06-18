@@ -15,6 +15,9 @@
 //   SUPABASE_URL               injetado automaticamente
 //   SUPABASE_SERVICE_ROLE_KEY  injetado automaticamente
 
+import { getVerifiedUserId } from "../_shared/auth.ts";
+import { fetchWithTimeout } from "../_shared/http.ts";
+
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
@@ -44,9 +47,9 @@ async function resolveUserEmail(token: string): Promise<string | null> {
   const base = Deno.env.get("SUPABASE_URL");
   if (!base) return null;
   try {
-    const res = await fetch(`${base}/auth/v1/user`, {
+    const res = await fetchWithTimeout(`${base}/auth/v1/user`, {
       headers: { apikey: PUBLISHABLE_KEY, authorization: `Bearer ${token}` },
-    });
+    }, 8000);
     if (!res.ok) return null;
     const data = (await res.json()) as { email?: string | null };
     const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
@@ -70,13 +73,13 @@ async function findStripeCustomerId(email: string): Promise<string | null> {
     url.searchParams.set("stripe_customer_id", "not.is.null");
     url.searchParams.set("order", "updated_at.desc");
     url.searchParams.set("limit", "1");
-    const res = await fetch(url.toString(), {
+    const res = await fetchWithTimeout(url.toString(), {
       headers: {
         apikey: serviceKey,
         authorization: `Bearer ${serviceKey}`,
         accept: "application/json",
       },
-    });
+    }, 8000);
     if (!res.ok) return null;
     const rows = (await res.json()) as Array<{ stripe_customer_id?: string | null }>;
     const id = rows[0]?.stripe_customer_id;
@@ -94,14 +97,14 @@ async function createPortalSession(
   const body = new URLSearchParams();
   body.set("customer", customerId);
   body.set("return_url", RETURN_URL);
-  const res = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+  const res = await fetchWithTimeout("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",
     headers: {
       authorization: `Bearer ${secretKey}`,
       "content-type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
-  });
+  }, 15000);
   const data = (await res.json()) as { url?: string; error?: { message?: string } };
   if (!res.ok || !data.url) {
     // Erro típico aqui: portal ainda não ativado no dashboard do Stripe.
@@ -140,6 +143,13 @@ Deno.serve(async (request: Request): Promise<Response> => {
       { error: "stripe_nao_configurado", message: "STRIPE_SECRET_KEY ausente nas Edge Functions." },
       503,
     );
+  }
+
+  // Verifica o token contra o Supabase Auth (defesa em profundidade: token forjado
+  // ou expirado é rejeitado aqui ANTES de qualquer consulta downstream).
+  const verifiedUserId = await getVerifiedUserId(request, Deno.env.get("SUPABASE_URL") ?? "", PUBLISHABLE_KEY);
+  if (!verifiedUserId) {
+    return json({ error: "nao_autenticado", message: "Sessão inválida ou expirada." }, 401);
   }
 
   const email = await resolveUserEmail(token);

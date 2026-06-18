@@ -1,0 +1,67 @@
+project_id = "pwiuiihsyazghdsrpshg"
+
+[functions.admin-api]
+verify_jwt = true
+
+[functions.send-alerts]
+verify_jwt = true
+
+[functions.embed-entities]
+verify_jwt = true
+
+[functions.stripe-portal]
+verify_jwt = true
+
+[functions.fonteia]
+verify_jwt = false
+
+[functions.d1-bridge]
+verify_jwt = false
+
+[functions.empresas-cnpj]
+verify_jwt = false
+
+[functions.edital-pdf]
+verify_jwt = false
+
+[functions.lote-detalhe]
+verify_jwt = false
+
+[functions.ingest-ambiental]
+verify_jwt = true
+
+[functions.ingest-cnj]
+verify_jwt = true
+
+[functions.ingest-juridico]
+verify_jwt = true
+
+[functions.ingest-municipios]
+verify_jwt = true
+
+[functions.ingest-orgaos]
+verify_jwt = true
+
+[functions.ingest-pncp]
+verify_jwt = true
+
+[functions.ingest-pncp-contratos]
+verify_jwt = true
+
+[functions.ingest-politica]
+verify_jwt = true
+
+[functions.ingest-portal-transparencia]
+verify_jwt = true
+
+[functions.ingest-receita-catalog]
+verify_jwt = true
+
+[functions.ingest-senado]
+verify_jwt = true
+
+[functions.ingest-sp-capital-contratos]
+verify_jwt = true
+
+[functions.ingest-tce-sp]
+verify_jwt = true

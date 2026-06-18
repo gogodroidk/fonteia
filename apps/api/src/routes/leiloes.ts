@@ -1,7 +1,12 @@
 import type { LeilaoOpportunityScore } from "@fonteia/scoring";
 import { normalizeReceitaDestaquesPayload, type ReceitaLeilaoLot, type ReceitaLeiloesDestaquesPayload } from "@fonteia/sources";
-import { createMemoryLeiloesRepository, type LeiloesRepository } from "../repositories/leiloes-repository";
-import { jsonResponse, notFound, type ApiResponse } from "./types";
+import {
+  createMemoryLeiloesRepository,
+  normalizeListLotsOptions,
+  type LeiloesRepository,
+  type ListLotsOptions,
+} from "../repositories/leiloes-repository";
+import { jsonResponse, notFound, type ApiResponse, type RouteRequest } from "./types";
 
 const samplePayload: ReceitaLeiloesDestaquesPayload = {
   agora: "2026-06-10 02:40",
@@ -38,12 +43,39 @@ const samplePayload: ReceitaLeiloesDestaquesPayload = {
 export const SAMPLE_LEILAO_LOTS: ReceitaLeilaoLot[] = normalizeReceitaDestaquesPayload(samplePayload);
 const defaultRepository = createMemoryLeiloesRepository(SAMPLE_LEILAO_LOTS);
 
+function parsePaginationQuery(request?: RouteRequest): ListLotsOptions {
+  if (!request) {
+    return {};
+  }
+
+  const options: ListLotsOptions = {};
+  const limit = Number(request.query.get("limit"));
+  const offset = Number(request.query.get("offset"));
+
+  if (Number.isFinite(limit) && limit > 0) {
+    options.limit = limit;
+  }
+
+  if (Number.isFinite(offset) && offset > 0) {
+    options.offset = offset;
+  }
+
+  return options;
+}
+
 export async function getLeilaoLots(
   repository: LeiloesRepository = defaultRepository,
-): Promise<ApiResponse<{ sourceStatus: "fragile_operational"; lots: ReceitaLeilaoLot[] }>> {
+  request?: RouteRequest,
+): Promise<
+  ApiResponse<{ sourceStatus: "fragile_operational"; pagination: { limit: number; offset: number }; lots: ReceitaLeilaoLot[] }>
+> {
+  const options = parsePaginationQuery(request);
+  const pagination = normalizeListLotsOptions(options);
+
   return jsonResponse({
     sourceStatus: "fragile_operational",
-    lots: await repository.listLots(),
+    pagination,
+    lots: await repository.listLots(options),
   });
 }
 

@@ -29,6 +29,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const BASE = "https://pncp.gov.br/api/consulta";
 const PORTAL = "https://pncp.gov.br";
@@ -212,15 +215,31 @@ function buildUrl(
 }
 
 async function getJson(url: string): Promise<PncpPage> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (res.status === 204) return { data: [], totalPaginas: 0, empty: true };
   if (!res.ok) throw new Error(`${res.status} em ${url}`);
   return (await res.json()) as PncpPage;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-pncp] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
 
   // Janela de datas.
@@ -290,22 +309,16 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        janela: { dataInicial, dataFinal },
-        modalidades,
-        uf: uf ?? null,
-        coletadas: items.length,
-        ingested,
-        errors,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      janela: { dataInicial, dataFinal },
+      modalidades,
+      uf: uf ?? null,
+      coletadas: items.length,
+      ingested,
+      errors,
+    }, {}, req);
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

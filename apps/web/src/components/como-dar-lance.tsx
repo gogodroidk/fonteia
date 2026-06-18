@@ -8,7 +8,7 @@
  * e retirada. Não inventa exigências específicas — fala em termos gerais.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertTriangle, CheckSquare, ChevronDown, ChevronUp, ExternalLink, X } from "lucide-react";
 import { useFocusTrap } from "../hooks/use-focus-trap";
 
@@ -189,8 +189,9 @@ function Conteudo({ sourceUrl, onClose }: { sourceUrl: string; onClose?: (() => 
 
 function InlinePanel({ sourceUrl }: { sourceUrl: string }) {
   const [expanded, setExpanded] = useState(false);
-  const panelId = "como-dar-lance-panel";
-  const triggerId = "como-dar-lance-trigger";
+  const uid = useId();
+  const panelId = `${uid}-panel`;
+  const triggerId = `${uid}-trigger`;
 
   return (
     <section className="lot-detail-header" style={{ display: "flex", flexDirection: "column", gap: 0 }}>

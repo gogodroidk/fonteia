@@ -6,8 +6,8 @@
  *   header: x-goog-api-key: <GEMINI_API_KEY>
  *
  * Modelos:
- *   - gemini-2.0-flash  (rápido/barato — default, p/ intent e chat)
- *   - gemini-2.0-pro... (pro — p/ tarefas pesadas; configurável via GEMINI_MODEL_PRO)
+ *   - gemini-2.5-flash  (rápido/barato — default, p/ intent e chat)
+ *   - gemini-2.5-pro    (pro — p/ tarefas pesadas; configurável via GEMINI_MODEL_PRO)
  *
  * Erros e timeout são encapsulados em AiProviderError para o roteador tratar.
  */
@@ -18,9 +18,9 @@ import { AiProviderError } from "../types";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Modelo rápido padrão (barato). Sobrescreva com GEMINI_MODEL. */
-export const GEMINI_FLASH_DEFAULT = "gemini-2.0-flash";
+export const GEMINI_FLASH_DEFAULT = "gemini-2.5-flash";
 /** Modelo "pro" para tarefas pesadas. Sobrescreva com GEMINI_MODEL_PRO. */
-export const GEMINI_PRO_DEFAULT = "gemini-2.0-pro-exp";
+export const GEMINI_PRO_DEFAULT = "gemini-2.5-pro";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_TOKENS = 1500;
@@ -141,14 +141,29 @@ export class GeminiProvider implements AiProvider {
       throw new AiProviderError("gemini", `Conteudo bloqueado: ${data.promptFeedback.blockReason}`);
     }
 
-    const text = (data.candidates ?? [])
+    const candidates = data.candidates ?? [];
+
+    // Trata terminações anômalas do candidato (MAX_TOKENS/SAFETY/RECITATION/...).
+    // "STOP" é a terminação normal; qualquer outra com texto vazio seria mascarada
+    // como "nao retornou texto" — preferimos um erro específico para o roteador.
+    const finishReason = candidates[0]?.finishReason;
+    if (finishReason === "SAFETY" || finishReason === "RECITATION" || finishReason === "BLOCKLIST" || finishReason === "PROHIBITED_CONTENT") {
+      throw new AiProviderError("gemini", `Conteudo bloqueado pelo Gemini (finishReason: ${finishReason}).`, undefined, true);
+    }
+    if (finishReason === "MAX_TOKENS") {
+      throw new AiProviderError("gemini", "Resposta truncada pelo limite de tokens (finishReason: MAX_TOKENS).");
+    }
+
+    const text = candidates
       .flatMap((candidate) => candidate.content?.parts ?? [])
       .map((part) => part.text ?? "")
       .join("")
       .trim();
 
     if (!text) {
-      throw new AiProviderError("gemini", "A IA nao retornou texto utilizavel.");
+      // Sem texto e sem finishReason conhecido: inclui o motivo (se houver) p/ diagnóstico.
+      const reasonHint = finishReason ? ` (finishReason: ${finishReason})` : "";
+      throw new AiProviderError("gemini", `A IA nao retornou texto utilizavel${reasonHint}.`);
     }
 
     return { text, provider: "gemini", model };

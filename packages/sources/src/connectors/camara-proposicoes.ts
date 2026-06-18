@@ -21,6 +21,8 @@
 // Estratégia JSON-first, igual ao conector da Câmara/deputados e do PNCP: a fonte
 // oficial entrega tudo estruturado; só achatamos e normalizamos.
 
+import { fetchWithRetry } from "../internal/http";
+
 export const CAMARA_PROPOSICOES_API_BASE = "https://dadosabertos.camara.leg.br/api/v2";
 
 /** User-Agent honesto — não fingir navegador (espelha "camara-deputados"). */
@@ -116,18 +118,33 @@ export function proposicoesUrl(params: FetchProposicoesParams = {}): string {
 // Fetch
 // ---------------------------------------------------------------------------
 
-async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
-  const response = await fetcher(url, { headers: DEFAULT_HEADERS });
+async function getJson<T>(url: string, fetcher: typeof fetch | undefined): Promise<T> {
+  const response = await fetchWithRetry(url, {
+    init: { headers: DEFAULT_HEADERS },
+    fetcher,
+  });
   if (!response.ok) {
     throw new Error(`Câmara respondeu ${response.status} em ${url}`);
   }
-  return (await response.json()) as T;
+  const raw = (await response.json()) as unknown;
+  // Guarda mínima: o envelope deve ter `dados` array (fix #6).
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("dados" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).dados)
+  ) {
+    throw new Error(
+      "Câmara Proposições: payload inesperado — esperado objeto com 'dados' (array).",
+    );
+  }
+  return raw as T;
 }
 
 /** Uma página de proposições. */
 export function fetchProposicoesPagina(
   params: FetchProposicoesParams = {},
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<CamaraProposicoesResponse<CamaraProposicaoRaw>> {
   return getJson(proposicoesUrl(params), fetcher);
 }
@@ -141,14 +158,20 @@ export function nextProposicoesLink(links: CamaraProposicaoLink[] | undefined): 
 /**
  * Varre TODAS as páginas de proposições de um (ou mais) ano(s) seguindo o link
  * `rel="next"`. Devolve os itens crus deduplicados por id. Para na primeira
- * página sem `next` ou sem dados. `maxPaginas` é um teto de segurança contra
- * loop infinito (0 = sem teto), aplicado por ano.
+ * página sem `next` ou sem dados.
+ *
+ * `maxPaginas` é um teto de segurança contra loop infinito. O default é 50
+ * (cobertura generosa por ano). Valores ≤0 são tratados como o default seguro
+ * (fix #7: evita loop sem teto). Passe Infinity apenas quando necessário.
  */
 export async function fetchTodasProposicoes(
   params: FetchProposicoesParams = {},
-  fetcher: typeof fetch = fetch,
-  maxPaginas = 0,
+  fetcher?: typeof fetch,
+  maxPaginas = 50,
 ): Promise<CamaraProposicaoRaw[]> {
+  // fix #7: maxPaginas=0 seria loop sem teto; normaliza para o default seguro.
+  const limit = maxPaginas > 0 ? maxPaginas : 50;
+
   const out: CamaraProposicaoRaw[] = [];
   const seen = new Set<number>();
   let url: string | null = proposicoesUrl(params);
@@ -162,7 +185,7 @@ export async function fetchTodasProposicoes(
       out.push(raw);
     }
     paginas += 1;
-    if (maxPaginas > 0 && paginas >= maxPaginas) break;
+    if (paginas >= limit) break;
     if ((page.dados ?? []).length === 0) break;
     url = nextProposicoesLink(page.links);
   }

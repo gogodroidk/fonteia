@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Cookie } from "lucide-react";
 import { getConsent, hasConsent, saveConsent } from "../lib/consent";
+import { useFocusTrap } from "../hooks/use-focus-trap";
 
 interface CookieBannerProps {
   onOpenPolicy?: () => void;
@@ -13,6 +14,13 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
   const [analiticos, setAnaliticos] = useState(false);
   const [publicidade, setPublicidade] = useState(false);
   const innerRef = useRef<HTMLDivElement | null>(null);
+  // Prende o foco dentro da barra enquanto estiver aberta (LGPD/WCAG 2.5.3).
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
+  // Callback ref: atribui o nó tanto ao innerRef (medição) quanto ao trapRef (foco).
+  const setInnerRef = useCallback((node: HTMLDivElement | null) => {
+    innerRef.current = node;
+    (trapRef as MutableRefObject<HTMLDivElement | null>).current = node;
+  }, [trapRef]);
 
   useEffect(() => {
     // Barra de consentimento (NÃO é modal): aparece com um atraso curto pra não
@@ -99,7 +107,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
 
   return (
     <div className="cookie-banner" role="region" aria-label="Preferências de cookies">
-      <div className="cookie-banner-inner" ref={innerRef}>
+      <div className="cookie-banner-inner" ref={setInnerRef}>
         <div className="cookie-banner-head">
           <Cookie size={20} aria-hidden="true" />
           <strong>Sua privacidade</strong>

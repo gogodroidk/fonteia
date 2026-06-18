@@ -29,6 +29,12 @@ compatibility_date = "2026-06-10"
 # GEMINI_MODEL = "gemini-2.0-flash"
 # ANTHROPIC_MODEL = "claude-opus-4-8"
 
+# Gate das rotas /d1/* — chave publishable PUBLICA do Supabase (a mesma do bundle web).
+# As rotas /d1/* exigem o header `apikey` igual a este valor (gate basico fail-closed:
+# sem esta var, /d1/* responde 401). Configure com:
+#   wrangler secret put SUPABASE_PUBLISHABLE_KEY   # cole o sb_publishable_...
+# (pode ir em [vars] por ser publica, mas secret tambem serve.)
+
 # Banco de dados público em massa migrado do Supabase — contém a tabela `entities`
 # (pessoas jurídicas, órgãos públicos, leiloeiros e demais entidades indexadas).
 # NOTA: a tabela `auction_lot` permanece no Supabase (dados transacionais / RLS).

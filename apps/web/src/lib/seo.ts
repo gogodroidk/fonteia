@@ -170,6 +170,20 @@ export interface UseSeoInput {
   title: string;
   description: string;
   canonicalPath?: string;
+  /**
+   * URL da imagem de pré-visualização (og:image / twitter:image).
+   * Use caminho absoluto (https://…) ou relativo ao SITE_URL.
+   */
+  image?: string;
+  /**
+   * Blocos JSON-LD (schema.org) a injetar.
+   *
+   * ATENÇÃO: passe sempre como referência estável (useMemo / constante de módulo).
+   * Este array é uma dep do useEffect; uma nova referência a cada render causa
+   * re-injeção desnecessária dos scripts. Exemplo correto:
+   *   const ld = useMemo(() => [organizationJsonLd()], []);
+   *   useSeo({ ..., jsonLd: ld });
+   */
   jsonLd?: ReadonlyArray<Record<string, unknown>>;
 }
 
@@ -181,11 +195,12 @@ export interface UseSeoInput {
  *   • document.title
  *   • <meta name="description">
  *   • <link rel="canonical">
- *   • og:title, og:description, og:url
+ *   • og:title, og:description, og:url, og:image
+ *   • twitter:card, twitter:image
  *   • Remove scripts data-seo="1" antigos e injeta os novos JSON-LD
  */
 export function useSeo(input: UseSeoInput): void {
-  const { title, description, canonicalPath, jsonLd } = input;
+  const { title, description, canonicalPath, image, jsonLd } = input;
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -210,6 +225,14 @@ export function useSeo(input: UseSeoInput): void {
     upsertMeta(head, "property", "og:site_name", SITE_NAME);
     upsertMeta(head, "property", "og:type", "website");
 
+    // --- og:image / twitter ---
+    if (image !== undefined && image.trim() !== "") {
+      const imageHref = image.startsWith("http") ? image : `${SITE_URL}${image}`;
+      upsertMeta(head, "property", "og:image", imageHref);
+      upsertMeta(head, "name", "twitter:card", "summary_large_image");
+      upsertMeta(head, "name", "twitter:image", imageHref);
+    }
+
     // --- JSON-LD: remove anteriores e injeta os novos ---
     head
       .querySelectorAll<HTMLScriptElement>('script[data-seo="1"]')
@@ -224,7 +247,7 @@ export function useSeo(input: UseSeoInput): void {
         head.appendChild(script);
       }
     }
-  }, [title, description, canonicalPath, jsonLd]);
+  }, [title, description, canonicalPath, image, jsonLd]);
 }
 
 // ---------------------------------------------------------------------------

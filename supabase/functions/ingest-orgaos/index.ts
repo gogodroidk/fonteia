@@ -21,6 +21,8 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const SOURCE_ID = "orgaos-publicos";
 // Itens por chamada de RPC (evita payload gigante).
@@ -67,6 +69,19 @@ function slugifyOrgao(nome: string): string {
 }
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-orgaos] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
   const ufFilter = (url.searchParams.get("uf") ?? "").trim().toUpperCase();
 
@@ -81,6 +96,7 @@ Deno.serve(async (req) => {
     let totalLidas = 0;
     for (let page = 0; page < MAX_READ_PAGES; page++) {
       const offset = page * READ_PAGE;
+      // ingest-orgaos não chama API externa — sem fetchWithRetry necessário aqui.
       const res = await fetch(
         `${supabaseUrl}/rest/v1/entities?kind=eq.bidding_opportunity&select=attributes`,
         {
@@ -147,20 +163,14 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        uf: ufFilter || null,
-        licitacoesLidas: totalLidas,
-        orgaosDistintos: items.length,
-        ingested,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      uf: ufFilter || null,
+      licitacoesLidas: totalLidas,
+      orgaosDistintos: items.length,
+      ingested,
+    }, {}, req);
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

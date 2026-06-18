@@ -1,10 +1,28 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createDatabasePool, getDatabaseConfigFromEnv } from "./client";
+
+/** Migration files must look like `0001_description.sql`. */
+const MIGRATION_FILE_PATTERN = /^\d{4}_.*\.sql$/;
+
+export function isValidMigrationFilename(file: string): boolean {
+  return MIGRATION_FILE_PATTERN.test(file);
+}
+
+/**
+ * Resolve the migrations directory relative to this module rather than the
+ * process working directory, so `db:migrate` works regardless of where it runs.
+ */
+export function defaultMigrationsDir(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // src/db -> repo: ../../../../infra/migrations
+  return resolve(here, "..", "..", "..", "..", "infra", "migrations");
+}
 
 export function readMigrationFiles(migrationsDir: string): Array<{ name: string; sql: string }> {
   return readdirSync(migrationsDir)
-    .filter((file) => file.endsWith(".sql"))
+    .filter((file) => isValidMigrationFilename(file))
     .sort()
     .map((file) => ({
       name: file,
@@ -12,7 +30,7 @@ export function readMigrationFiles(migrationsDir: string): Array<{ name: string;
     }));
 }
 
-export async function runMigrations(migrationsDir = join(process.cwd(), "..", "..", "infra", "migrations")): Promise<void> {
+export async function runMigrations(migrationsDir = defaultMigrationsDir()): Promise<void> {
   const pool = createDatabasePool(getDatabaseConfigFromEnv());
 
   try {
@@ -52,4 +70,3 @@ if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
     process.exit(1);
   });
 }
-

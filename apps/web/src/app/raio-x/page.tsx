@@ -595,7 +595,9 @@ function BarraExportacao({ data }: { data: RaioXReportData }) {
     const a = document.createElement("a");
     a.href = url;
     a.download = `raio-x-${sanitizeCnpj(data.empresa.cnpj)}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 
@@ -802,16 +804,67 @@ export default function RaioXPage() {
   const digits = sanitizeCnpj(input);
   const canSearch = digits !== "" && status !== "loading";
 
-  // Auto-search quando a URL traz ?cnpj= com valor válido
+  // Auto-search quando a URL traz ?cnpj= com valor válido.
+  // Lê window.location.search diretamente para evitar stale-closure sobre `input`.
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const urlCnpj = params.get("cnpj") ?? "";
-      if (sanitizeCnpj(urlCnpj) !== "") {
-        void handleSearch();
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const urlCnpj = params.get("cnpj") ?? "";
+    if (sanitizeCnpj(urlCnpj) === "") return;
+
+    // Dispara a busca com o CNPJ da URL em vez de depender do state `input`.
+    const cnpj = sanitizeCnpj(urlCnpj);
+    setStatus("loading");
+    setErrorMsg(null);
+    setReport(null);
+
+    const now = new Date().toISOString();
+    void Promise.allSettled([
+      lookupCnpj(cnpj),
+      fetchSancoesByCnpj(cnpj),
+      fetchContratosByCnpj(cnpj),
+    ]).then(([empresaResult, sancoesResult, contratosResult]) => {
+      if (empresaResult.status === "rejected") {
+        setErrorMsg(
+          empresaResult.reason instanceof Error
+            ? empresaResult.reason.message
+            : "Falha ao consultar dados cadastrais.",
+        );
+        setStatus("error");
+        return;
       }
-    }
-    // Só executa na montagem inicial — eslint-disable-next-line é intencional
+
+      const empresa = empresaResult.value;
+      const sancoesData =
+        sancoesResult.status === "fulfilled"
+          ? sancoesResult.value
+          : { sancoes: [] as SancaoItem[], lastSyncedAt: undefined };
+      const contratosData =
+        contratosResult.status === "fulfilled"
+          ? contratosResult.value
+          : { contratos: [], lastSyncedAt: undefined };
+
+      const reportData: RaioXReportData = {
+        empresa,
+        sancoes: sancoesData.sancoes,
+        cadastralFetchedAt: now,
+        sancoesFetchedAt: now,
+        contratos: contratosData.contratos,
+        contratosFetchedAt: now,
+      };
+      if (sancoesData.lastSyncedAt !== undefined) {
+        reportData.sancoesSyncedAt = sancoesData.lastSyncedAt;
+      }
+      if (contratosData.lastSyncedAt !== undefined) {
+        reportData.contratosSyncedAt = contratosData.lastSyncedAt;
+      }
+      setReport(reportData);
+      setStatus("done");
+    }).catch((err: unknown) => {
+      setErrorMsg(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
+      setStatus("error");
+    });
+    // Runs only on mount — no reactive deps needed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

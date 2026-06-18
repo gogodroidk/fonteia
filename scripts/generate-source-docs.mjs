@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const { SOURCE_CATALOG } = await import("../packages/sources/src/catalog.ts");
 
@@ -46,7 +47,11 @@ ${rows.join("\n")}
 - O produto deve guardar evidencia, data de coleta e link original para cada resposta factual.
 `;
 
-const outputPath = join(process.cwd(), "docs", "sources", "source-catalog.md");
+// Anchor to this script's own directory (one level up from scripts/ → project root)
+// rather than process.cwd(), so it works regardless of where the script is invoked from.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = join(__dirname, "..");
+const outputPath = join(projectRoot, "docs", "sources", "source-catalog.md");
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, markdown, "utf8");
 console.log(`Generated ${outputPath}`);

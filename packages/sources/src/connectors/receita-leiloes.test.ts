@@ -49,7 +49,8 @@ describe("Receita Leiloes connector", () => {
     const lots = await fetchReceitaLeiloesDestaques(fakeFetch as typeof fetch);
 
     expect(lots).toHaveLength(1);
-    expect(lots[0]?.sourceUrl).toContain("/api/portal/destaques");
+    // fix #5: sourceUrl agora aponta para a URL humana do portal, não para o endpoint JSON.
+    expect(lots[0]?.sourceUrl).toContain("/portal/edital/");
   });
 });
 

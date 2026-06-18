@@ -43,7 +43,13 @@ export interface PlanoUso {
 
 const KEY_PERFIL = "fonteia.perfil";
 
+/** Guard SSR/prerender — mesmo padrão de watchlist.ts. */
+function hasStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
 export function salvarPerfil(perfil: PerfilOnboarding): void {
+  if (!hasStorage()) return;
   try {
     window.localStorage.setItem(KEY_PERFIL, JSON.stringify(perfil));
     // marca onboarding genérico como feito também
@@ -54,6 +60,7 @@ export function salvarPerfil(perfil: PerfilOnboarding): void {
 }
 
 export function lerPerfil(): PerfilOnboarding | null {
+  if (!hasStorage()) return null;
   try {
     const raw = window.localStorage.getItem(KEY_PERFIL);
     return raw ? (JSON.parse(raw) as PerfilOnboarding) : null;

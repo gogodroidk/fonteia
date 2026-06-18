@@ -20,6 +20,8 @@
 // Estratégia JSON-first, igual ao conector da Receita (receita-leiloes-catalog.ts):
 // a fonte oficial entrega tudo estruturado; só achatamos e normalizamos.
 
+import { fetchWithRetry } from "../internal/http";
+
 export const PNCP_CONSULTA_BASE = "https://pncp.gov.br/api/consulta";
 
 /** Base humana do portal (para montar `sourceUrl` clicável). */
@@ -292,7 +294,15 @@ export function reaisToCents(value: number | string | null | undefined): number 
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 }
 
-/** AAAAMMDD a partir de um Date (UTC), para os parâmetros de data da API. */
+/**
+ * AAAAMMDD a partir de um Date, para os parâmetros de data da API do PNCP.
+ *
+ * ATENÇÃO: o PNCP opera em BRT (UTC-3). Este helper lê os campos UTC do Date
+ * (getUTCFullYear/Month/Date). Para datas corretas, passe um Date que já
+ * represente a data desejada em BRT — ou converta antes de chamar.
+ * Exemplo correto: `toPncpDateParam(new Date("2026-01-02T00:00:00-03:00"))`
+ * produz "20260102" (BRT), não "20260101" (erro se usar UTC puro).
+ */
 export function toPncpDateParam(date: Date): string {
   const y = date.getUTCFullYear();
   const m = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -304,24 +314,60 @@ export function toPncpDateParam(date: Date): string {
 // Fetch
 // ---------------------------------------------------------------------------
 
-async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
-  const response = await fetcher(url, { headers: DEFAULT_HEADERS });
+async function getJson<T>(
+  url: string,
+  fetcher: typeof fetch | undefined,
+  validate?: (raw: unknown) => T,
+): Promise<T> {
+  const response = await fetchWithRetry(url, {
+    init: { headers: DEFAULT_HEADERS },
+    fetcher,
+  });
   // 204 = sem conteúdo na página (o PNCP usa isso quando não há registros).
   if (response.status === 204) {
-    return { data: [], totalRegistros: 0, totalPaginas: 0, numeroPagina: 1, paginasRestantes: 0, empty: true } as T;
+    const empty = {
+      data: [],
+      totalRegistros: 0,
+      totalPaginas: 0,
+      numeroPagina: 1,
+      paginasRestantes: 0,
+      empty: true,
+    } as T;
+    return empty;
   }
   if (!response.ok) {
     throw new Error(`PNCP respondeu ${response.status} em ${url}`);
   }
-  return (await response.json()) as T;
+  const raw = (await response.json()) as unknown;
+  if (validate) return validate(raw);
+  return raw as T;
+}
+
+/** Guarda mínima: o envelope paginado deve ter `data` array. */
+function validatePaginatedResponse<T>(raw: unknown): PncpPaginatedResponse<T> {
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("data" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).data)
+  ) {
+    throw new Error(
+      "PNCP /contratacoes/publicacao: payload inesperado — esperado envelope com 'data' (array).",
+    );
+  }
+  return raw as PncpPaginatedResponse<T>;
 }
 
 /** Uma página de contratações publicadas para uma modalidade. */
 export function fetchContratacoesPublicacao(
   params: FetchContratacoesParams,
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<PncpPaginatedResponse<PncpContratacaoRaw>> {
-  return getJson(contratacoesPublicacaoUrl(params), fetcher);
+  return getJson(
+    contratacoesPublicacaoUrl(params),
+    fetcher,
+    validatePaginatedResponse<PncpContratacaoRaw>,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -336,10 +382,12 @@ export function normalizeContratacao(
   const unidade = raw.unidadeOrgao ?? {};
   const modalidade = raw.modalidadeNome ?? (raw.modalidadeId !== undefined ? modalidadeNome(raw.modalidadeId) : "Não informado");
 
-  const sourceUrl =
-    raw.linkSistemaOrigem && raw.linkSistemaOrigem.trim() !== ""
-      ? raw.linkSistemaOrigem.trim()
-      : contratacaoPortalUrl(raw.numeroControlePNCP);
+  // fix #3: só aceitar linkSistemaOrigem se começar com "https://" (protege contra
+  // valores malformados, relativos ou vazios vindos da API).
+  const linkOrigem = raw.linkSistemaOrigem?.trim() ?? "";
+  const sourceUrl = linkOrigem.startsWith("https://")
+    ? linkOrigem
+    : contratacaoPortalUrl(raw.numeroControlePNCP);
 
   const licitacao: PncpLicitacao = {
     id: raw.numeroControlePNCP,

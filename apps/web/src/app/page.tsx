@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Landmark, SearchX } from "lucide-react";
+import { navigateSpa } from "./_nav";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import { Bar, CountUp, FonteDots, ScoreRing } from "../components/ui";
@@ -383,20 +384,25 @@ function ModuleCard({
         >
           {config.badge}
         </span>
-        <a
-          href={config.route}
+        <button
+          type="button"
+          onClick={() => navigateSpa(`/app${config.route}`)}
           style={{
             fontSize: 12.5,
             fontWeight: 600,
             color: "var(--brand-ink)",
-            textDecoration: "none",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
             display: "inline-flex",
             alignItems: "center",
             gap: 3,
+            fontFamily: "inherit",
           }}
         >
           Ver todos →
-        </a>
+        </button>
       </div>
     </div>
   );

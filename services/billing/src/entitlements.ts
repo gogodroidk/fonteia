@@ -47,13 +47,13 @@ export function getModuleEntitlement(planId: BillingPlanId, moduleId: ModuleId):
     return {
       moduleId,
       moduleLabel: module.label,
-      access: planId === "enterprise" ? "custom" : "included",
+      access: "included",
       currentPlanId: planId,
       reason: "Modulo incluido no plano atual.",
     };
   }
 
-  const recommendedPlanId = findRecommendedPlan(moduleId) ?? "enterprise";
+  const recommendedPlanId = findRecommendedPlan(moduleId) ?? "corporativo";
 
   return {
     moduleId,

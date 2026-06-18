@@ -22,6 +22,8 @@
 // Estratégia JSON-first, igual ao conector do PNCP (pncp-licitacoes.ts): a fonte
 // oficial entrega tudo estruturado; só achatamos e normalizamos.
 
+import { fetchWithRetry } from "../internal/http";
+
 export const CAMARA_API_BASE = "https://dadosabertos.camara.leg.br/api/v2";
 
 /** User-Agent honesto — não fingir navegador. */
@@ -112,18 +114,33 @@ export function deputadosUrl(params: FetchDeputadosParams = {}): string {
 // Fetch
 // ---------------------------------------------------------------------------
 
-async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
-  const response = await fetcher(url, { headers: DEFAULT_HEADERS });
+async function getJson<T>(url: string, fetcher: typeof fetch | undefined): Promise<T> {
+  const response = await fetchWithRetry(url, {
+    init: { headers: DEFAULT_HEADERS },
+    fetcher,
+  });
   if (!response.ok) {
     throw new Error(`Câmara respondeu ${response.status} em ${url}`);
   }
-  return (await response.json()) as T;
+  const raw = (await response.json()) as unknown;
+  // Guarda mínima: o envelope deve ter `dados` array (fix #6).
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("dados" in raw) ||
+    !Array.isArray((raw as Record<string, unknown>).dados)
+  ) {
+    throw new Error(
+      "Câmara Deputados: payload inesperado — esperado objeto com 'dados' (array).",
+    );
+  }
+  return raw as T;
 }
 
 /** Uma página de deputados. */
 export function fetchDeputadosPagina(
   params: FetchDeputadosParams = {},
-  fetcher: typeof fetch = fetch,
+  fetcher?: typeof fetch,
 ): Promise<CamaraPaginatedResponse<CamaraDeputadoRaw>> {
   return getJson(deputadosUrl(params), fetcher);
 }
@@ -137,12 +154,18 @@ export function nextLink(links: CamaraLink[] | undefined): string | null {
 /**
  * Varre TODAS as páginas de deputados seguindo o link `rel="next"`. Devolve os
  * itens crus deduplicados por id. Para na primeira página sem `next` ou sem dados.
- * `maxPaginas` é um teto de segurança contra loop (0 = sem teto).
+ *
+ * `maxPaginas` é um teto de segurança contra loop infinito. O default é 20, que
+ * cobre a lista completa de deputados com folga (fix #7: evita loop sem teto
+ * quando maxPaginas=0 era passado). Passe Infinity apenas quando necessário.
  */
 export async function fetchTodosDeputados(
-  fetcher: typeof fetch = fetch,
-  maxPaginas = 0,
+  fetcher?: typeof fetch,
+  maxPaginas = 20,
 ): Promise<CamaraDeputadoRaw[]> {
+  // fix #7: maxPaginas=0 seria loop sem teto; normaliza para o default seguro.
+  const limit = maxPaginas > 0 ? maxPaginas : 20;
+
   const out: CamaraDeputadoRaw[] = [];
   const seen = new Set<number>();
   let url: string | null = deputadosUrl();
@@ -156,7 +179,7 @@ export async function fetchTodosDeputados(
       out.push(raw);
     }
     paginas += 1;
-    if (maxPaginas > 0 && paginas >= maxPaginas) break;
+    if (paginas >= limit) break;
     if ((page.dados ?? []).length === 0) break;
     url = nextLink(page.links);
   }

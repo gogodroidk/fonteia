@@ -2,17 +2,20 @@
 // (supabase/functions/fonteia) — mesmo projeto onde fica a chave da Anthropic.
 // Sobrescreva com VITE_API_URL para apontar para outro backend
 // (ex.: http://localhost:4000 em dev, ou o Worker Cloudflare services/api).
-const SUPABASE_FALLBACK_URL = "https://pwiuiihsyazghdsrpshg.supabase.co";
-// Chave publishable do projeto FONTE.IA — pública por design (vai no bundle; o RLS
-// protege os dados). Fallback embutido para quando o build não injeta as env vars,
-// senão o app não carrega lote nenhum ("não aparece nada").
-const SUPABASE_FALLBACK_PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
+//
+// Segredos NÃO são embutidos aqui. As variáveis VITE_SUPABASE_URL e
+// VITE_SUPABASE_PUBLISHABLE_KEY devem ser injetadas pelo ambiente de build
+// (.env.local em dev, variáveis de ambiente na CI/Cloudflare Pages).
+// Sem elas o app opera em modo degradado (sem dados) — não crasha.
 
-/** URL + chave pública do Supabase, com fallback embutido (sempre funcional). */
+/** URL + chave pública do Supabase, lidos das env vars de build. */
 export function getSupabasePublicConfig(): { url: string; key: string } {
+  // Acesso estático (não bracket-notation) para que o bundler substitua em build time.
+  const url = import.meta.env.VITE_SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   return {
-    url: getPublicEnv("VITE_SUPABASE_URL") ?? SUPABASE_FALLBACK_URL,
-    key: getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ?? SUPABASE_FALLBACK_PUBLISHABLE_KEY,
+    url: typeof url === "string" && url.trim().length > 0 ? url.trim() : "",
+    key: typeof key === "string" && key.trim().length > 0 ? key.trim() : "",
   };
 }
 
@@ -32,7 +35,11 @@ export function getConfiguredApiUrl(): string | undefined {
     return explicit;
   }
 
-  const supabaseUrl = getPublicEnv("VITE_SUPABASE_URL") ?? SUPABASE_FALLBACK_URL;
+  const supabaseUrl = getPublicEnv("VITE_SUPABASE_URL");
+  if (!supabaseUrl) {
+    // Sem env vars configuradas — modo degradado, sem dados.
+    return undefined;
+  }
   return `${trimTrailingSlash(supabaseUrl)}/functions/v1/fonteia`;
 }
 

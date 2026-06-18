@@ -23,6 +23,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 const BASE = "https://servicodados.ibge.gov.br/api/v1/localidades";
 const PORTAL = "https://www.ibge.gov.br/cidades-e-estados";
@@ -82,12 +85,30 @@ function normalize(raw: RawMunicipio): Record<string, unknown> {
 }
 
 async function getJson(url: string): Promise<RawMunicipio[]> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (!res.ok) throw new Error(`${res.status} em ${url}`);
   return (await res.json()) as RawMunicipio[];
 }
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-municipios] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
   const ufFilter = (url.searchParams.get("uf") ?? "").trim().toUpperCase();
 
@@ -123,20 +144,14 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        fonte: PORTAL,
-        uf: ufFilter || null,
-        coletados: items.length,
-        ingested,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      fonte: PORTAL,
+      uf: ufFilter || null,
+      coletados: items.length,
+      ingested,
+    }, {}, req);
   } catch (e) {
-    return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });

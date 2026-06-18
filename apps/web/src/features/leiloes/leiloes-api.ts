@@ -72,8 +72,11 @@ async function fetchSupabaseLots(fetcher: typeof fetch): Promise<{ lots: Receita
       throw new Error(`Supabase REST returned ${response.status}`);
     }
 
-    const batch = (await response.json()) as SupabaseEntityRow[];
-    rows.push(...batch);
+    const batch = (await response.json()) as unknown;
+    if (!Array.isArray(batch)) {
+      throw new Error(`Supabase REST: resposta da página ${page} não é uma lista`);
+    }
+    rows.push(...(batch as SupabaseEntityRow[]));
     if (batch.length < pageSize) break;
 
     if (page === MAX_SUPABASE_PAGES - 1) {

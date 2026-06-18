@@ -1,6 +1,19 @@
 import type { ModuleId } from "@fonteia/domain";
 
-export type BillingPlanId = "free" | "individual" | "pro" | "business" | "enterprise" | "api";
+/**
+ * Modelo de planos CANONICO (fonte de verdade unica do produto).
+ *
+ * Alinhado com: apps/web/src/config/stripe.ts, apps/web/src/lib/use-plan.ts,
+ * services/stripe-webhook, infra/migrations/0002 e a RPC `my_plan`.
+ *
+ *   free        -> R$ 0
+ *   pro         -> R$ 197/mes  (Individual/Profissional)  price_1ThjWB4zjAI9pGd7GOAfQwBT
+ *   corporativo -> R$ 597/mes  (Escritorio)               price_1ThjhR4zjAI9pGd7UyBOlctV
+ *
+ * NAO reintroduzir tiers "individual/business/enterprise/api": o webhook so grava
+ * free|pro|corporativo, e qualquer outro valor quebraria getBillingPlan().
+ */
+export type BillingPlanId = "free" | "pro" | "corporativo";
 export type BillingInterval = "monthly" | "custom";
 
 export interface PlanQuotas {
@@ -18,6 +31,8 @@ export interface BillingPlan {
   audience: string;
   priceLabel: string;
   interval: BillingInterval;
+  /** price_id do Stripe (quando ha checkout direto). */
+  stripePriceId?: string;
   includedModules: ModuleId[];
   highlightedModules: ModuleId[];
   quotas: PlanQuotas;
@@ -46,12 +61,13 @@ export const BILLING_PLANS: BillingPlan[] = [
     cta: "Comecar gratis",
   },
   {
-    id: "individual",
-    name: "Individual",
+    id: "pro",
+    name: "Profissional",
     audience: "Revendedores, empreendedores e compradores solo",
     priceLabel: "R$ 197",
     interval: "monthly",
-    includedModules: ["leiloes", "inpi"],
+    stripePriceId: "price_1ThjWB4zjAI9pGd7GOAfQwBT",
+    includedModules: ["leiloes", "inpi", "empresas"],
     highlightedModules: ["leiloes", "inpi", "empresas"],
     quotas: {
       searchesPerMonth: 500,
@@ -61,84 +77,28 @@ export const BILLING_PLANS: BillingPlan[] = [
       apiCallsPerMonth: 0,
       seats: 1,
     },
-    promises: ["Leiloes com alertas", "INPI para marca e prazo", "Relatorios com fonte rastreavel"],
-    cta: "Assinar Individual",
+    promises: ["Leiloes com alertas", "INPI para marca e prazo", "Dossies CNPJ com fonte rastreavel"],
+    cta: "Assinar Profissional",
   },
   {
-    id: "pro",
+    id: "corporativo",
     name: "Escritorio",
-    audience: "Advogados, consultores, analistas e operadores B2G",
+    audience: "Advogados, consultores, analistas, compliance e operadores B2G",
     priceLabel: "R$ 597",
     interval: "monthly",
-    includedModules: ["leiloes", "inpi", "empresas", "licitacoes", "juridico"],
+    stripePriceId: "price_1ThjhR4zjAI9pGd7UyBOlctV",
+    includedModules: ["leiloes", "inpi", "empresas", "licitacoes", "juridico", "ambiental", "politica", "municipios"],
     highlightedModules: ["licitacoes", "empresas", "juridico"],
     quotas: {
-      searchesPerMonth: 3_000,
-      aiAnswersPerMonth: 600,
-      dossiersPerMonth: 100,
-      alerts: 200,
+      searchesPerMonth: 5_000,
+      aiAnswersPerMonth: 1_000,
+      dossiersPerMonth: 200,
+      alerts: 500,
       apiCallsPerMonth: 0,
       seats: 5,
     },
-    promises: ["Dossies CNPJ", "Licitacoes e editais", "Monitoramento juridico basico"],
+    promises: ["Todos os modulos", "Licitacoes, juridico e ambiental", "Equipe e monitoramento continuo"],
     cta: "Liberar Escritorio",
-  },
-  {
-    id: "business",
-    name: "Corporativo",
-    audience: "Equipes comerciais, compliance, agro, bancos e seguradoras",
-    priceLabel: "R$ 1.499",
-    interval: "monthly",
-    includedModules: ["leiloes", "licitacoes", "empresas", "juridico", "inpi", "ambiental", "politica", "municipios"],
-    highlightedModules: ["empresas", "ambiental", "municipios"],
-    quotas: {
-      searchesPerMonth: 15_000,
-      aiAnswersPerMonth: 3_000,
-      dossiersPerMonth: 500,
-      alerts: 1_000,
-      apiCallsPerMonth: 0,
-      seats: 15,
-    },
-    promises: ["Equipe e compliance", "Ambiental/ESG", "Municipios e fornecedores publicos"],
-    cta: "Falar com vendas",
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    audience: "Grandes empresas, midias, govtechs e operacoes com SLA",
-    priceLabel: "Sob consulta",
-    interval: "custom",
-    includedModules: ["leiloes", "licitacoes", "empresas", "juridico", "inpi", "ambiental", "politica", "municipios", "api"],
-    highlightedModules: ["api", "empresas", "ambiental"],
-    quotas: {
-      searchesPerMonth: "custom",
-      aiAnswersPerMonth: "custom",
-      dossiersPerMonth: "custom",
-      alerts: "custom",
-      apiCallsPerMonth: "custom",
-      seats: "custom",
-    },
-    promises: ["SLA e volume", "Integracoes e webhooks", "Retencao e governanca customizadas"],
-    cta: "Desenhar contrato",
-  },
-  {
-    id: "api",
-    name: "API",
-    audience: "Desenvolvedores, ERPs, fintechs, consultorias e dados embarcados",
-    priceLabel: "A partir de R$ 499",
-    interval: "monthly",
-    includedModules: ["api"],
-    highlightedModules: ["api", "empresas", "licitacoes"],
-    quotas: {
-      searchesPerMonth: 0,
-      aiAnswersPerMonth: 0,
-      dossiersPerMonth: 0,
-      alerts: 50,
-      apiCallsPerMonth: 25_000,
-      seats: 2,
-    },
-    promises: ["Endpoints normalizados", "Historico e evidencia", "Webhooks por fonte e entidade"],
-    cta: "Criar chave API",
   },
 ];
 
