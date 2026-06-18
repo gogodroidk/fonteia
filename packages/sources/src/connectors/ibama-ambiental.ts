@@ -232,7 +232,9 @@ export async function inflatePartial(compressed: Uint8Array): Promise<Uint8Array
   })();
 
   try {
-    await writer.write(compressed);
+    // Cópia para garantir buffer ArrayBuffer (não SharedArrayBuffer) exigido por
+    // BufferSource — evita o erro de variância de Uint8Array<ArrayBufferLike> no TS 5.9.
+    await writer.write(new Uint8Array(compressed));
     await writer.close();
   } catch {
     // close() pode reclamar do stream truncado — ignorável.

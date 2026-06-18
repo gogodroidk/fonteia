@@ -29,7 +29,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry, sleep } from "../_shared/http.ts";
 import { hasValidBearerSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
-import { digitsOnly, extractCnpj } from "../_shared/br.ts";
+import { extractCnpj } from "../_shared/br.ts";
 
 const BASE  = "https://pncp.gov.br/api/consulta";
 const PORTAL = "https://pncp.gov.br";
@@ -93,8 +93,6 @@ interface PncpPage {
 }
 
 // ---- Helpers ------------------------------------------------------------------
-
-// digitsOnly e extractCnpj importados de _shared/br.ts
 
 function parseDate(value: string | null | undefined): string {
   if (!value) return "";
@@ -297,6 +295,3 @@ Deno.serve(async (req) => {
   }
 });
 
-// Re-export para satisfazer possíveis imports de utilitários (não é necessário
-// mas documenta que digitsOnly vem de _shared/br.ts).
-export { digitsOnly };

@@ -93,7 +93,11 @@ export function authorizeRequest(request: RouteRequest, expectedToken: string | 
   return undefined;
 }
 
-export function createRouteRequest(method: string, rawUrl: string, options: { authorization?: string } = {}): RouteRequest {
+export function createRouteRequest(
+  method: string,
+  rawUrl: string,
+  options: { authorization?: string | undefined } = {},
+): RouteRequest {
   const url = new URL(rawUrl, "http://localhost");
 
   const request: RouteRequest = {

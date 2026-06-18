@@ -17,7 +17,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry, sleep } from "../_shared/http.ts";
 import { hasValidBearerSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
-import { digitsOnly, extractCnpj, brMoneyToNumber, parseDateBrt } from "../_shared/br.ts";
+import { extractCnpj, brMoneyToNumber, parseDateBrt } from "../_shared/br.ts";
 
 const CKAN = "https://dados.prefeitura.sp.gov.br/api/3/action/datastore_search";
 const DATASET_URL = "https://dados.prefeitura.sp.gov.br/dataset/base-de-compras-e-licitacoes";
@@ -47,8 +47,6 @@ const RESOURCES: Record<string, string> = {
 interface CkanRecord { _id: number; [k: string]: unknown; }
 interface CkanResult { total?: number; records?: CkanRecord[]; fields?: Array<{ id: string; type: string }>; }
 interface CkanResponse { success?: boolean; result?: CkanResult; error?: unknown; }
-
-// digitsOnly, extractCnpj, brMoneyToNumber e parseDateBrt importados de _shared/br.ts
 
 function pick(rec: CkanRecord, keys: string[]): string {
   for (const k of keys) {
@@ -235,5 +233,3 @@ Deno.serve(async (req) => {
   }
 });
 
-// Re-exports para documentar origem dos utilitários
-export { digitsOnly };

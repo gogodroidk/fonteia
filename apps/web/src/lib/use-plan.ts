@@ -28,7 +28,9 @@ export function usePlan(): PlanInfo {
       setInfo(FREE);
       return;
     }
-    void supabase.rpc("my_plan").then(({ data, error }) => {
+    // Promise.resolve adota o thenable do Supabase (PostgrestBuilder e PromiseLike,
+    // nao tem .catch) -> vira Promise real com .then/.catch.
+    void Promise.resolve(supabase.rpc("my_plan")).then(({ data, error }) => {
       if (cancelled) return;
       if (error || data === null || typeof data !== "object") {
         setInfo(FREE);

@@ -32,6 +32,10 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { fetchWithRetry, sleep } from "../_shared/http.ts";
+import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { extractCnpj, brMoneyToNumber, parseDateBrt } from "../_shared/br.ts";
 
 const API = "https://transparencia.tce.sp.gov.br/api/json";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -67,42 +71,7 @@ interface MunicipioRec {
   municipio_extenso?: string;  // nome legível
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-function digitsOnly(v: unknown): string {
-  return String(v ?? "").replace(/\D/g, "");
-}
-
-/** Extrai CNPJ (14 dígitos) de "CNPJ - PESSOA JURÍDICA - <14digits>"; CPF/outros -> null. */
-function extractCnpj(v: unknown): string | null {
-  const m = /(\d{14})/.exec(String(v ?? ""));
-  if (m) return m[1];
-  const d = digitsOnly(v);
-  return d.length === 14 ? d : null;
-}
-
-/** BR money string -> number. "100,00" -> 100 ; "43.571,08" -> 43571.08 */
-function brMoneyToNumber(v: unknown): number | null {
-  if (v === null || v === undefined) return null;
-  const s = String(v).replace(/[^\d.,-]/g, "").trim();
-  if (s === "") return null;
-  const norm = s.replace(/\./g, "").replace(",", ".");
-  const n = Number(norm);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** "DD/MM/YYYY" -> ISO "YYYY-MM-DDT00:00:00-03:00". Vazio -> "". */
-function parseDateBr(v: unknown): string {
-  const t = String(v ?? "").trim();
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(t);
-  if (m) {
-    const [, dd, mm, yyyy] = m;
-    return `${yyyy}-${mm}-${dd}T00:00:00-03:00`;
-  }
-  // já ISO?
-  if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t;
-  return "";
-}
+// extractCnpj, brMoneyToNumber e parseDateBrt importados de _shared/br.ts
 
 /** Um empenho -> item normalizado (shape esperado pela RPC ingest_tce_sp). */
 function normalize(
@@ -127,14 +96,12 @@ function normalize(
   const objeto = `${orgao} — ${evento ?? "Empenho"} ${nrEmpenho}`.trim();
 
   return {
-    // chaves usadas pela RPC
     id,
     sourceId: SOURCE_ID,
     cnpj: extractCnpj(fornecedorIdRaw),
 
-    // mapeadas para entities.attributes
-    municipio: null, // resolvido in-DB (nome IBGE) — placeholder; RPC injeta
-    codigoIbge: null, // resolvido in-DB
+    municipio: null,
+    codigoIbge: null,
     uf: "SP",
     ufNome: "São Paulo",
     esfera: "M",
@@ -143,10 +110,10 @@ function normalize(
     valorGlobal: brMoneyToNumber(valorTexto),
     valorTexto: valorTexto ?? null,
     fornecedorNome,
-    fornecedorCnpj: fornecedorIdRaw || null, // raw id_fornecedor
+    fornecedorCnpj: fornecedorIdRaw || null,
     orgao,
     numeroEmpenho: nrEmpenho,
-    dataEmissao: parseDateBr(rec.dt_emissao_despesa),
+    dataEmissao: parseDateBrt(rec.dt_emissao_despesa),
     evento,
     ano,
     mes: mesNome,
@@ -154,13 +121,17 @@ function normalize(
     municipioSlug: slug,
     collectedAt,
 
-    // raw completo (RPC grava em raw_records.payload via v_item->'raw')
     raw: rec,
   };
 }
 
 async function getJsonArray<T>(url: string): Promise<T[]> {
-  const res = await fetch(url, { headers: HEADERS });
+  const res = await fetchWithRetry(url, {
+    timeoutMs: 15000,
+    retries: 3,
+    backoffMs: 800,
+    init: { headers: HEADERS },
+  });
   if (res.status === 204 || res.status === 404) return [];
   if (!res.ok) throw new Error(`HTTP ${res.status} em ${url}`);
   const body = await res.json();
@@ -176,6 +147,19 @@ async function fetchAllMunicipioSlugs(): Promise<string[]> {
 }
 
 Deno.serve(async (req) => {
+  const preflight = handlePreflight(req);
+  if (preflight) return preflight;
+
+  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
+  if (cronSecret) {
+    if (!hasValidBearerSecret(req, cronSecret)) {
+      return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
+    }
+  } else {
+    console.warn("[ingest-tce-sp] INGEST_CRON_SECRET não definido — função sem segredo de cron.");
+  }
+
   const url = new URL(req.url);
 
   const ano = Number(url.searchParams.get("ano") ?? String(DEFAULT_ANO)) || DEFAULT_ANO;
@@ -199,10 +183,17 @@ Deno.serve(async (req) => {
 
     // Lista de slugs: CSV explícito OU todos da API.
     let allSlugs: string[];
+    let slugFetchError: string | null = null;
     if (municipiosParam) {
       allSlugs = municipiosParam.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
     } else {
-      allSlugs = await fetchAllMunicipiosSlugsSafe(fetchAllMunicipioSlugs);
+      // Erro de fetch da lista de municípios NÃO derruba a função — é registrado no response.
+      try {
+        allSlugs = await fetchAllMunicipioSlugs();
+      } catch (e) {
+        slugFetchError = String(e);
+        allSlugs = [];
+      }
     }
 
     const totalSlugs = allSlugs.length;
@@ -212,6 +203,10 @@ Deno.serve(async (req) => {
       : allSlugs.slice(offset);
 
     const errors: Array<{ municipio: string; mes: number; error: string }> = [];
+    if (slugFetchError) {
+      // Expõe o erro de listagem de municípios como um erro visível na resposta.
+      errors.push({ municipio: "_municipios_list", mes: 0, error: slugFetchError });
+    }
     const porMunicipio: Record<string, number> = {};
     let coletadas = 0;
     let ingested = 0;
@@ -266,34 +261,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        ok: true,
-        fonte: SOURCE_ID,
-        ano,
-        meses,
-        janela: { offset, maxMunicipios, totalSlugs, processadosNestaFatia: slugs.length },
-        municipiosProcessados: slugs.length,
-        coletadas,
-        ingested,
-        porMunicipio,
-        errors: errors.length > 0 ? errors : undefined,
-      }),
-      { headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({
+      ok: true,
+      fonte: SOURCE_ID,
+      ano,
+      meses,
+      janela: { offset, maxMunicipios, totalSlugs, processadosNestaFatia: slugs.length },
+      municipiosProcessados: slugs.length,
+      coletadas,
+      ingested,
+      porMunicipio,
+      errors: errors.length > 0 ? errors : undefined,
+    }, {}, req);
   } catch (e) {
-    return new Response(
-      JSON.stringify({ ok: false, error: String(e) }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
-    );
+    return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);
   }
 });
-
-// Pequeno wrapper para isolar erro de fetch da lista de municípios (não derruba a função).
-async function fetchAllMunicipiosSlugsSafe(fn: () => Promise<string[]>): Promise<string[]> {
-  try {
-    return await fn();
-  } catch (_e) {
-    return [];
-  }
-}

@@ -138,7 +138,7 @@ async function inflatePartial(compressed: Uint8Array): Promise<Uint8Array> {
   })();
 
   try {
-    await writer.write(compressed);
+    await writer.write(compressed.buffer as ArrayBuffer);
     await writer.close();
   } catch {
     // close() pode reclamar do stream truncado — ignorável
