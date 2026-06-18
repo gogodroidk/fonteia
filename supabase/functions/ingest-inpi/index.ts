@@ -486,12 +486,10 @@ Deno.serve(async (req) => {
       ingested += typeof data === "number" ? data : batch.length;
     }
 
-    // 6) Sinaliza retomada: se a janela encheu de bytes comprimidos (==window),
-    // provavelmente ha mais stream. Avanca a janela por ~90% para garantir
-    // sobreposicao de um <processo> truncado na borda (deduplicado por id no
-    // proximo passo via upsert idempotente).
-    const filledWindow = compressed.length >= window;
-    const nextStartByte = filledWindow ? startByte + Math.floor(window * 0.9) : null;
+    // 6) Sinaliza retomada por CONTAGEM: se paramos por `limit` antes do fim do
+    // arquivo, a proxima chamada deve usar ?skip=<sawProcessos> (re-infla do
+    // inicio — barato — e pula os ja processados). Senao, terminamos o arquivo.
+    const nextSkip = reachedEnd ? null : sawProcessos;
 
     return jsonResponse({
       ok: true,
@@ -500,12 +498,13 @@ Deno.serve(async (req) => {
       revista,
       uf: ufFilter || null,
       janelaBytes: compressed.length,
-      processosNaJanela: sawProcessos,
+      processosVistos: sawProcessos,
       coletados: items.length,
       ingested,
       cnpjExtraidos: items.filter((i) => i.titularCnpj).length,
-      startByte,
-      nextStartByte,
+      skip,
+      nextSkip,
+      concluido: reachedEnd,
     }, {}, req);
   } catch (e) {
     // Degradacao elegante: INPI inacessivel/instavel -> 502, pipeline segue.
