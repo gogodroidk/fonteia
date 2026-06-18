@@ -720,7 +720,6 @@ export function LotDetailPage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lot.id, lot.category, detalhe?.titulo]);
 
   // Lotes parecidos — reusa o embedding salvo do próprio lote (RPC similar_entities_by_external).

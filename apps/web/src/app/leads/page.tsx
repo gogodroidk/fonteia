@@ -70,17 +70,6 @@ function normalizeForSearch(value: string): string {
     .trim();
 }
 
-function formatBRL(n: number): string {
-  if (n <= 0) return "Valor não informado";
-  if (n >= 1_000_000) {
-    return `R$ ${(n / 1_000_000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`;
-  }
-  if (n >= 1_000) {
-    return `R$ ${(n / 1_000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })} mil`;
-  }
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-}
-
 function formatBRLFull(n: number): string {
   if (n <= 0) return "";
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
@@ -293,7 +282,6 @@ function LeadCard({ lead }: LeadCardProps) {
           : "Brasil";
 
   const cnpjDisplay = lead.cnpj ? formatCnpj(lead.cnpj) : null;
-  const valorDisplay = formatBRL(lead.valorGlobal);
   const dataDisplay = formatDataCurta(lead.dataVigenciaInicio);
 
   // Para a mensagem usamos o primeiro serviço sugerido como padrão

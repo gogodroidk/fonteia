@@ -865,7 +865,6 @@ export default function RaioXPage() {
       setStatus("error");
     });
     // Runs only on mount — no reactive deps needed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleSearch() {
