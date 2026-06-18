@@ -27,7 +27,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { ReceitaLeilaoLot } from "@fonteia/sources";
+import type { CamaraDeputado, IbamaInfracao, ReceitaLeilaoLot } from "@fonteia/sources";
+import type { MunicipioWithStats } from "./features/municipios/municipios-api";
 import { useAuth } from "./auth/auth-context";
 import { useIsAdmin } from "./components/admin/use-is-admin";
 import { usePathname } from "./lib/use-pathname";
@@ -221,6 +222,15 @@ const EmpresaPage = lazy(() => import("./app/publico/empresa-page").then((m) => 
 const CerebroPage = lazy(() =>
   import("./app/cerebro/page").then((m) => ({ default: m.CerebroPage })),
 );
+const MunicipioDetailPage = lazy(() =>
+  import("./app/municipios/municipio-detail-page").then((m) => ({ default: m.MunicipioDetailPage })),
+);
+const DeputadoDetailPage = lazy(() =>
+  import("./app/politica/deputado-detail-page").then((m) => ({ default: m.DeputadoDetailPage })),
+);
+const InfracaoDetailPage = lazy(() =>
+  import("./app/ambiental/infracao-detail-page").then((m) => ({ default: m.InfracaoDetailPage })),
+);
 
 type RouteKey =
   | "painel"
@@ -236,9 +246,12 @@ type RouteKey =
   | "modules"
   | "admin"
   | "municipios"
+  | "municipio-detail"
   | "politica"
+  | "deputado-detail"
   | "empresas"
   | "ambiental"
+  | "infracao-detail"
   | "juridico"
   | "inpi"
   | "raio-x"
@@ -286,9 +299,12 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   modules: "Módulos",
   admin: "Administração",
   municipios: "Municípios",
+  "municipio-detail": "Município",
   politica: "Política",
+  "deputado-detail": "Deputado",
   empresas: "Empresas",
   ambiental: "Ambiental",
+  "infracao-detail": "Auto de Infração",
   juridico: "Jurídico",
   inpi: "INPI",
   "raio-x": "Raio-X de Empresa",
@@ -299,6 +315,9 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
 
 function pathToRoute(path: string): RouteKey {
   if (/^\/app\/(?:lotes|leiloes)\/[^/]+/.test(path)) return "lot-detail";
+  if (/^\/app\/municipios\/[^/]+/.test(path)) return "municipio-detail";
+  if (/^\/app\/politica\/[^/]+/.test(path)) return "deputado-detail";
+  if (/^\/app\/ambiental\/[^/]+/.test(path)) return "infracao-detail";
   if (path.startsWith("/app/lotes")) return "lotes";
   if (path.startsWith("/app/licitacoes")) return "licitacoes";
   if (path.startsWith("/app/politica")) return "politica";
@@ -322,6 +341,7 @@ function pathToRoute(path: string): RouteKey {
   return "painel";
 }
 
+
 function getLotIdFromPath(path: string): string | null {
   const match = path.match(/^\/app\/(?:lotes|leiloes)\/([^/?#]+)/);
   return match?.[1] ? decodeURIComponent(match[1]) : null;
@@ -343,6 +363,9 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
   const [isLoadingLot, setIsLoadingLot] = useState(false);
   const [lotLoadMessage, setLotLoadMessage] = useState<string | null>(null);
+  const [selectedMunicipio, setSelectedMunicipio] = useState<MunicipioWithStats | null>(null);
+  const [selectedDeputado, setSelectedDeputado] = useState<CamaraDeputado | null>(null);
+  const [selectedInfracao, setSelectedInfracao] = useState<IbamaInfracao | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -402,6 +425,21 @@ function AppShell({ path, navigate }: AppShellProps) {
     go(`/app/lotes/${encodeURIComponent(lot.id)}`);
   }
 
+  function handleSelectMunicipio(municipio: MunicipioWithStats) {
+    setSelectedMunicipio(municipio);
+    go(`/app/municipios/${encodeURIComponent(municipio.id)}`);
+  }
+
+  function handleSelectDeputado(deputado: CamaraDeputado) {
+    setSelectedDeputado(deputado);
+    go(`/app/politica/${encodeURIComponent(deputado.id)}`);
+  }
+
+  function handleSelectInfracao(infracao: IbamaInfracao) {
+    setSelectedInfracao(infracao);
+    go(`/app/ambiental/${encodeURIComponent(infracao.id)}`);
+  }
+
   const displayName =
     (user?.user_metadata?.["full_name"] as string | undefined) ?? user?.email?.split("@")[0] ?? "Você";
   const avatarUrl = user?.user_metadata?.["avatar_url"] as string | undefined;
@@ -417,11 +455,24 @@ function AppShell({ path, navigate }: AppShellProps) {
         `Lote aberto: ${selectedLot.lotNumber} em ${selectedLot.city}, órgão ${selectedLot.agency}, edital ${selectedLot.edital}.`,
       );
     }
+    if (route === "municipio-detail" && selectedMunicipio) {
+      parts.push(`Município aberto: ${selectedMunicipio.nome}/${selectedMunicipio.uf}, IBGE ${selectedMunicipio.codigoIbge}.`);
+    }
+    if (route === "deputado-detail" && selectedDeputado) {
+      parts.push(`Deputado aberto: ${selectedDeputado.nome}, ${selectedDeputado.partido}/${selectedDeputado.uf}.`);
+    }
+    if (route === "infracao-detail" && selectedInfracao) {
+      parts.push(`Auto de infração aberto: ${selectedInfracao.infrator}, ${selectedInfracao.tipoInfracao}, ${selectedInfracao.uf}.`);
+    }
     return parts.join(" ");
   })();
 
   const navItem = (item: (typeof NAV)[number], inDrawer: boolean): ReactNode => {
-    const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
+    const active = route === item.route
+      || (item.route === "lotes" && route === "lot-detail")
+      || (item.route === "municipios" && route === "municipio-detail")
+      || (item.route === "politica" && route === "deputado-detail")
+      || (item.route === "ambiental" && route === "infracao-detail");
     const Icon = item.icon;
     const style: CSSProperties = {
       display: "flex",
@@ -642,10 +693,52 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
                 {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
                 {route === "licitacoes" && <LicitacoesPage />}
-                {route === "politica" && <PoliticaPage />}
-                {route === "municipios" && <MunicipiosPage />}
+                {route === "politica" && <PoliticaPage onSelectDeputado={handleSelectDeputado} />}
+                {route === "municipios" && <MunicipiosPage onSelectMunicipio={handleSelectMunicipio} />}
                 {route === "empresas" && <EmpresasPage />}
-                {route === "ambiental" && <AmbientalPage />}
+                {route === "ambiental" && <AmbientalPage onSelectInfracao={handleSelectInfracao} />}
+                {route === "municipio-detail" && (
+                  selectedMunicipio
+                    ? <MunicipioDetailPage municipio={selectedMunicipio} onBack={() => go("/app/municipios")} />
+                    : (
+                      <section className="panel" style={{ padding: 28 }}>
+                        <span className="eyebrow">Município não encontrado</span>
+                        <h2 className="h2" style={{ margin: "8px 0 10px" }}>Este município não está carregado</h2>
+                        <p className="muted">Navegue pela lista de municípios e clique em um card para ver os detalhes.</p>
+                        <button className="btn btn--primary" type="button" onClick={() => go("/app/municipios")} style={{ marginTop: 12 }}>
+                          Ir para Municípios
+                        </button>
+                      </section>
+                    )
+                )}
+                {route === "deputado-detail" && (
+                  selectedDeputado
+                    ? <DeputadoDetailPage deputado={selectedDeputado} onBack={() => go("/app/politica")} />
+                    : (
+                      <section className="panel" style={{ padding: 28 }}>
+                        <span className="eyebrow">Deputado não encontrado</span>
+                        <h2 className="h2" style={{ margin: "8px 0 10px" }}>Este deputado não está carregado</h2>
+                        <p className="muted">Navegue pela lista de deputados e clique em um card para ver os detalhes.</p>
+                        <button className="btn btn--primary" type="button" onClick={() => go("/app/politica")} style={{ marginTop: 12 }}>
+                          Ir para Política
+                        </button>
+                      </section>
+                    )
+                )}
+                {route === "infracao-detail" && (
+                  selectedInfracao
+                    ? <InfracaoDetailPage infracao={selectedInfracao} onBack={() => go("/app/ambiental")} />
+                    : (
+                      <section className="panel" style={{ padding: 28 }}>
+                        <span className="eyebrow">Auto de infração não encontrado</span>
+                        <h2 className="h2" style={{ margin: "8px 0 10px" }}>Este auto não está carregado</h2>
+                        <p className="muted">Navegue pela lista de autos de infração e clique em um card para ver os detalhes.</p>
+                        <button className="btn btn--primary" type="button" onClick={() => go("/app/ambiental")} style={{ marginTop: 12 }}>
+                          Ir para Ambiental
+                        </button>
+                      </section>
+                    )
+                )}
                 {route === "juridico" && <JuridicoPage />}
                 {route === "inpi" && <InpiPage />}
                 {route === "raio-x" && <RaioXPage />}
@@ -732,7 +825,11 @@ function AppShell({ path, navigate }: AppShellProps) {
           <>
             <nav className="shell-bottomnav no-print" aria-label="Navegação rápida">
               {PRIMARY_NAV.map((item) => {
-                const active = route === item.route || (item.route === "lotes" && route === "lot-detail");
+                const active = route === item.route
+                  || (item.route === "lotes" && route === "lot-detail")
+                  || (item.route === "municipios" && route === "municipio-detail")
+                  || (item.route === "politica" && route === "deputado-detail")
+                  || (item.route === "ambiental" && route === "infracao-detail");
                 const Icon = item.icon;
                 return (
                   <button

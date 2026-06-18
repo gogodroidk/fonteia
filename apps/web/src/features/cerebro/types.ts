@@ -2,15 +2,21 @@
  * Cérebro — tipos do grafo de conhecimento + paleta por módulo.
  *
  * O "Cérebro" é um grafo interativo (estilo Obsidian) que liga uma entidade
- * central (empresa/CNPJ) a tudo que existe sobre ela nos módulos da Fonte.ia:
- * sanções, contratos, licitações, infrações ambientais, processos judiciais,
- * marcas (INPI) etc.
+ * central (empresa / pessoa / marca) a tudo que existe sobre ela nos módulos da
+ * Fonte.ia: sanções, contratos, licitações, infrações ambientais, processos
+ * judiciais, marcas (INPI), municípios, políticos e proposições legislativas.
  *
  * Estes tipos são puros (sem React, sem DOM) e servem tanto o motor de força
  * (`force-graph.ts`) quanto a camada de dados (`cerebro-api.ts`) e a página.
  */
 
-/** Kinds de entidade do BULK que servem de conexão por CNPJ. */
+// ─── Kinds & nós ─────────────────────────────────────────────────────────────────
+
+/**
+ * Kinds de entidade do BULK (D1) que viram NÓS no grafo. Todos têm dados reais
+ * no D1 hoje (exceto `trademark`, que depende da RPI ingerida / consulta premium
+ * InfoSimples — degrada sem quebrar quando vazio).
+ */
 export type GraphKind =
   | "organization"
   | "sanction"
@@ -18,10 +24,25 @@ export type GraphKind =
   | "legal_process"
   | "public_contract"
   | "bidding_opportunity"
+  | "municipality"
+  | "politician"
+  | "legal_proposition"
   | "trademark";
 
-/** Tipo lógico de um nó no grafo. `entity` é o nó central (empresa). */
+/** Tipo lógico de um nó no grafo. `entity` é o nó central (empresa/pessoa). */
 export type NodeKind = GraphKind | "entity";
+
+/**
+ * Como dois nós ficaram ligados — define a COR e o RÓTULO do fio (legenda de
+ * relações). Não confundir com `NodeKind` (cor do nó): aqui é a SEMÂNTICA da
+ * aresta. Mantém o grafo legível quando há muitos tipos de conexão.
+ */
+export type EdgeKind =
+  | "cnpj" // mesma empresa (CNPJ) — sanção, contrato, licitação, marca…
+  | "name" // mesmo nome/razão social (processos e contratos sem CNPJ casado)
+  | "municipio" // mesmo município (código IBGE) — licitações/contratos ↔ município
+  | "orgao" // órgão público ligado ao contrato/licitação
+  | "derived"; // expansão a partir de um nó-folha (recentralização leve)
 
 /**
  * Nó do grafo. As coordenadas/velocidade são mutadas pelo motor de força
@@ -36,9 +57,21 @@ export interface GraphNode {
   label: string;
   /** Subtítulo/segunda linha (ex.: tipo da sanção, órgão, valor). */
   sublabel?: string | undefined;
-  /** CNPJ (14 dígitos) deste nó, quando ele próprio for expansível. */
+  /** CNPJ (14 dígitos) deste nó, quando ele próprio for expansível por CNPJ. */
   cnpj?: string | undefined;
-  /** true para o nó central (empresa pesquisada/recentralizada). */
+  /** Código IBGE (7 dígitos) quando o nó for um município — habilita cruzamento. */
+  codigoIbge?: string | undefined;
+  /**
+   * Termo de busca textual para expandir este nó por NOME (ex.: razão social de
+   * um fornecedor sem CNPJ, ou nome de um político). Habilita expandir nós que
+   * não têm CNPJ próprio.
+   */
+  searchTerm?: string | undefined;
+  /** Link para a fonte oficial deste registro (quando houver). */
+  sourceUrl?: string | undefined;
+  /** Pares rótulo→valor com os dados completos do registro (painel de detalhe). */
+  details?: DetailField[] | undefined;
+  /** true para o nó central (entidade pesquisada/recentralizada). */
   isCenter: boolean;
   /** true depois que este nó já teve suas conexões puxadas (expandido). */
   expanded: boolean;
@@ -56,12 +89,14 @@ export interface GraphNode {
   fixed: boolean;
 }
 
-/** Aresta (fio) entre dois nós, por id. */
+/** Aresta (fio) entre dois nós, por id, com a semântica da relação. */
 export interface GraphEdge {
   source: string;
   target: string;
   /** Comprimento de repouso da mola (px). */
   length: number;
+  /** Semântica da relação — define a cor/rótulo do fio. */
+  rel: EdgeKind;
 }
 
 /** O grafo inteiro: nós + arestas. */
@@ -70,7 +105,15 @@ export interface GraphData {
   edges: GraphEdge[];
 }
 
-/** Metadados visuais de um módulo/kind: cor (via var CSS), rótulo, descrição. */
+/** Par rótulo→valor para o painel de detalhe (já formatado para exibição). */
+export interface DetailField {
+  label: string;
+  value: string;
+}
+
+// ─── Paleta por módulo (cor do NÓ) ───────────────────────────────────────────────
+
+/** Metadados visuais de um módulo/kind: cor (HEX p/ canvas), rótulo, fonte. */
 export interface ModuleMeta {
   kind: NodeKind;
   /** Rótulo curto para a legenda (PT-BR). */
@@ -93,7 +136,7 @@ export interface ModuleMeta {
 export const MODULE_META: Record<NodeKind, ModuleMeta> = {
   entity: {
     kind: "entity",
-    label: "Empresa (centro)",
+    label: "Empresa / pessoa (centro)",
     color: "#1D5FE0", // --brand
     fonte: "Receita Federal (Minha Receita)",
   },
@@ -125,7 +168,7 @@ export const MODULE_META: Record<NodeKind, ModuleMeta> = {
     kind: "public_contract",
     label: "Contrato público",
     color: "#3D8BFF", // --brand-2
-    fonte: "PNCP — contratos",
+    fonte: "PNCP / portais de transparência",
   },
   bidding_opportunity: {
     kind: "bidding_opportunity",
@@ -133,15 +176,33 @@ export const MODULE_META: Record<NodeKind, ModuleMeta> = {
     color: "#F59E0B", // --warn (laranja)
     fonte: "PNCP — contratações",
   },
+  municipality: {
+    kind: "municipality",
+    label: "Município",
+    color: "#22A7F0", // azul claro (IBGE)
+    fonte: "IBGE — Localidades",
+  },
+  politician: {
+    kind: "politician",
+    label: "Político (deputado)",
+    color: "#D946EF", // magenta (Câmara)
+    fonte: "Câmara dos Deputados — Dados Abertos",
+  },
+  legal_proposition: {
+    kind: "legal_proposition",
+    label: "Proposição legislativa",
+    color: "#A855F7", // roxo (Câmara)
+    fonte: "Câmara dos Deputados — Dados Abertos",
+  },
   trademark: {
     kind: "trademark",
     label: "Marca (INPI)",
     color: "#14CBB1", // --accent-2
-    fonte: "INPI",
+    fonte: "INPI (RPI / InfoSimples premium)",
   },
 };
 
-/** Ordem de exibição na legenda (centro primeiro, depois por relevância). */
+/** Ordem de exibição na legenda / lista (centro primeiro, depois por relevância). */
 export const LEGEND_ORDER: NodeKind[] = [
   "entity",
   "sanction",
@@ -149,9 +210,17 @@ export const LEGEND_ORDER: NodeKind[] = [
   "bidding_opportunity",
   "legal_process",
   "environmental_infraction",
-  "organization",
   "trademark",
+  "organization",
+  "municipality",
+  "politician",
+  "legal_proposition",
 ];
+
+/** Todos os kinds-folha que servem de CAMADA filtrável (sem o centro). */
+export const FILTERABLE_KINDS: GraphKind[] = LEGEND_ORDER.filter(
+  (k): k is GraphKind => k !== "entity",
+);
 
 /** Cor de um kind (fallback para o azul de marca se faltar). */
 export function colorOf(kind: NodeKind): string {
@@ -161,4 +230,38 @@ export function colorOf(kind: NodeKind): string {
 /** Rótulo PT-BR de um kind. */
 export function labelOf(kind: NodeKind): string {
   return MODULE_META[kind]?.label ?? kind;
+}
+
+// ─── Paleta/rótulos por TIPO DE RELAÇÃO (cor do FIO) ──────────────────────────────
+
+/** Metadados visuais de um tipo de relação (cor da aresta + rótulo na legenda). */
+export interface RelationMeta {
+  rel: EdgeKind;
+  label: string;
+  color: string;
+}
+
+/**
+ * Cor por tipo de relação — propositalmente NEUTRA/distinta das cores de nó, para
+ * o olho separar "tipo de coisa" (nó) de "por que está ligado" (fio).
+ */
+export const RELATION_META: Record<EdgeKind, RelationMeta> = {
+  cnpj: { rel: "cnpj", label: "Mesmo CNPJ", color: "#3D8BFF" },
+  name: { rel: "name", label: "Mesmo nome/razão social", color: "#94A3B8" },
+  municipio: { rel: "municipio", label: "Mesmo município (IBGE)", color: "#22A7F0" },
+  orgao: { rel: "orgao", label: "Órgão contratante", color: "#7C5CFF" },
+  derived: { rel: "derived", label: "Conexão derivada", color: "#94A3B8" },
+};
+
+/** Ordem das relações na legenda. */
+export const RELATION_ORDER: EdgeKind[] = ["cnpj", "name", "municipio", "orgao", "derived"];
+
+/** Cor de um tipo de relação (fallback cinza neutro). */
+export function relColorOf(rel: EdgeKind): string {
+  return RELATION_META[rel]?.color ?? "#94A3B8";
+}
+
+/** Rótulo PT-BR de um tipo de relação. */
+export function relLabelOf(rel: EdgeKind): string {
+  return RELATION_META[rel]?.label ?? rel;
 }

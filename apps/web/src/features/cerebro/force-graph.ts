@@ -12,7 +12,7 @@
  * integrados, mas continuam empurrando os vizinhos.
  */
 
-import type { GraphData, GraphNode } from "./types";
+import type { EdgeKind, GraphData, GraphNode } from "./types";
 
 export interface SimParams {
   /** Força de repulsão (quanto maior, mais espaçado). */
@@ -175,8 +175,31 @@ export function radiusFor(isCenter: boolean): number {
   return isCenter ? 22 : 8.5;
 }
 
-/** Comprimento de repouso da aresta centro→folha. */
+/** Comprimento de repouso padrão da aresta centro→folha. */
 export const EDGE_LENGTH = 150;
+
+/**
+ * Comprimento de repouso por TIPO de relação. Relações "fortes" (mesmo CNPJ)
+ * ficam mais curtas (cluster apertado em volta do centro); relações de contexto
+ * (município, órgão, nome) ficam mais longas para o grafo respirar e separar
+ * visualmente os agrupamentos.
+ */
+export function edgeLengthFor(rel: EdgeKind): number {
+  switch (rel) {
+    case "cnpj":
+      return 140;
+    case "name":
+      return 175;
+    case "municipio":
+      return 210;
+    case "orgao":
+      return 190;
+    case "derived":
+      return 160;
+    default:
+      return EDGE_LENGTH;
+  }
+}
 
 /**
  * Distribui novos nós-folha numa coroa ao redor de um nó-pai, dando posições
