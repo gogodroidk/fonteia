@@ -36,6 +36,13 @@ import { SobrePage } from "../src/app/publico/sobre";
 import { SegurancaPage } from "../src/app/publico/seguranca";
 import { ParaQuemPage } from "../src/app/publico/para-quem";
 import { ContatoPage } from "../src/app/publico/contato";
+import { LegalPage } from "../src/app/legal/page";
+import { PrivacidadeCentralPage } from "../src/app/privacidade/page";
+
+// Wrappers sem props para as páginas legais (LegalPage requer kind + onHome).
+function PrivacidadeLegalPage() { return <LegalPage kind="privacidade" onHome={() => {}} />; }
+function TermosLegalPage() { return <LegalPage kind="termos" onHome={() => {}} />; }
+function CookiesLegalPage() { return <LegalPage kind="cookies" onHome={() => {}} />; }
 
 export interface PrerenderRoute {
   /** Caminho da rota, exatamente como em App.tsx (sem barra final). */
@@ -207,6 +214,34 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     description:
       "Fale com a Fonte.ia: contato@olli.com.br. Dados da empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05) e canais de atendimento.",
     Component: ContatoPage,
+  },
+  {
+    path: "/privacidade",
+    title: "Política de Privacidade — Fonte.ia",
+    description:
+      "Política de privacidade da Fonte.ia (Olli Inteligência Digital Sistemas LTDA). Quais dados coletamos, como usamos e seus direitos pela LGPD.",
+    Component: PrivacidadeLegalPage,
+  },
+  {
+    path: "/termos",
+    title: "Termos de Uso — Fonte.ia",
+    description:
+      "Termos de uso da Fonte.ia: regras para uso da plataforma, responsabilidades e condições do serviço.",
+    Component: TermosLegalPage,
+  },
+  {
+    path: "/cookies",
+    title: "Política de Cookies — Fonte.ia",
+    description:
+      "Como a Fonte.ia usa cookies e tecnologias de rastreamento. Saiba quais cookies usamos e como gerenciar suas preferências.",
+    Component: CookiesLegalPage,
+  },
+  {
+    path: "/central-privacidade",
+    title: "Central de Privacidade — Fonte.ia",
+    description:
+      "Central de privacidade da Fonte.ia: exerça seus direitos pela LGPD, solicite exclusão de dados e gerencie consentimentos.",
+    Component: PrivacidadeCentralPage,
   },
 ];
 

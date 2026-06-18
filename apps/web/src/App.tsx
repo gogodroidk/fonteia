@@ -699,8 +699,7 @@ function AppShell({ path, navigate }: AppShellProps) {
       {(() => {
         const navByRoute = (route: RouteKey) => {
           const found = NAV.find((n) => n.route === route);
-          if (!found) throw new Error(`Nav item not found for route: ${route}`);
-          return found;
+          return found ?? NAV[0]!;
         };
         const PRIMARY_NAV = [
           navByRoute("painel"),

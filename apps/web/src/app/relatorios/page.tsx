@@ -8,6 +8,7 @@ import {
   Info,
   ShieldCheck,
 } from "lucide-react";
+import { navigateSpa } from "../_nav";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,8 +157,7 @@ function EmptyState({ onExplore }: { onExplore?: (() => void) | undefined }) {
 
 function ReportsTable({ reports }: { reports: ReportEntry[] }) {
   function goToLot(lotId: string) {
-    window.history.pushState(null, "", `/app/lotes/${encodeURIComponent(lotId)}`);
-    window.dispatchEvent(new PopStateEvent("popstate"));
+    navigateSpa(`/app/lotes/${encodeURIComponent(lotId)}`);
   }
 
   return (

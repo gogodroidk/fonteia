@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ArrowRight, BookOpen } from "lucide-react";
 import { useSeo, faqJsonLd, breadcrumbJsonLd, SITE_URL } from "../../lib/seo";
 import { LogoMark } from "../../components/ui/logo-mark";
+import { ThemeToggle } from "../../components/ui/ThemeToggle";
 /* ── Accordion de pergunta ───────────────────────────────────────────────── */
 interface FaqItemProps {
   pergunta: string;
@@ -123,12 +124,11 @@ const FAQ_SECOES: FaqData[] = [
         pergunta: "Quanto custa a Fonte.ia? Existe plano gratuito?",
         resposta: (
           <>
-            Existem três camadas: (1) Acesso livre — consulta básica sem cadastro, para conhecer a
-            plataforma. (2) Profissional — R$ 197/mês, para indivíduos e pequenas equipes; acesso a
-            todos os módulos com análise de IA e alertas. (3) Corporativo — R$ 597/mês, para
-            escritórios e equipes maiores; múltiplos usuários, exportação e integrações. Os planos
-            pagos têm 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada.
-            Sem contrato de fidelidade.{" "}
+            Existem dois planos pagos: (1) Profissional — R$ 197/mês, para indivíduos e pequenas
+            equipes; acesso a todos os módulos com análise de IA e alertas. (2) Corporativo —
+            R$ 597/mês, para escritórios e equipes maiores; múltiplos usuários, exportação e
+            integrações. Ambos incluem 7 dias grátis — você só é cobrado depois e pode cancelar
+            antes sem pagar nada. Não há plano gratuito ou consulta sem cadastro.{" "}
             <a href="/entrar" className="link">
               Comece seu teste grátis.
             </a>
@@ -321,7 +321,7 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "Quanto custa a Fonte.ia? Existe plano gratuito?",
     answer:
-      "Existem três camadas: (1) Acesso livre — consulta básica sem cadastro. (2) Profissional — R$ 197/mês, acesso a todos os módulos com análise de IA e alertas. (3) Corporativo — R$ 597/mês, múltiplos usuários, exportação e integrações. Os planos pagos têm 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada. Sem contrato de fidelidade.",
+      "Existem dois planos pagos: Profissional — R$ 197/mês, acesso a todos os módulos com análise de IA e alertas; Corporativo — R$ 597/mês, múltiplos usuários, exportação e integrações. Ambos incluem 7 dias grátis — você só é cobrado depois e pode cancelar antes sem pagar nada. Não há plano gratuito ou consulta sem cadastro.",
   },
   {
     question: "A Fonte.ia garante resultados ou lucro?",
@@ -479,6 +479,7 @@ export function FaqPage() {
           aria-label="Ações rápidas"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
+          <ThemeToggle />
           <a href="/sobre" className="btn btn--ghost btn--sm faq-ghost-cta">
             ← Sobre
           </a>

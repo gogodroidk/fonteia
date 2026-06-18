@@ -1,31 +1,22 @@
 // Módulo INPI — Propriedade Industrial (marcas / patentes).
 //
 // REALIDADE DA FONTE (honesta, junho/2026):
-// O INPI NÃO oferece uma API REST pública e gratuita de busca de marcas. O que
-// existe oficialmente é:
-//   1. Dados Abertos (https://dadosabertos.inpi.gov.br): só a RPI — Revista da
-//      Propriedade Industrial — em XML, publicada SEMANALMENTE. É um boletim das
-//      movimentações da semana (não uma base consultável), em arquivos grandes
-//      que precisariam ser baixados e acumulados por semanas. Sem consulta por
-//      CNPJ/processo. Inviável como espelho limpo dos outros módulos hoje.
-//   2. Busca oficial humana (https://busca.inpi.gov.br/pePI) — exige sessão/
-//      captcha, sem API.
-// As únicas APIs que consultam marca por CNPJ/processo são de TERCEIROS PAGOS
+// O INPI NÃO oferece uma API REST pública de busca de marcas por CNPJ. A fonte
+// gratuita oficial é a RPI — Revista da Propriedade Industrial — em XML, semanal
+// (https://revistas.inpi.gov.br/rpi/, arquivo RM<n>.zip por edição). É um boletim
+// das movimentações da semana. A Edge Function "ingest-inpi" faz streaming dessa
+// RPI, normaliza para kind='trademark' e grava em `entities` (espelhada no D1),
+// então AQUI lemos as marcas já ingeridas via `fetchAllD1Entities`.
+//
+// LIMITAÇÃO REAL da fonte: o XML da RPI NÃO traz CPF/CNPJ estruturado do titular
+// (só razão social, país e UF). A ingestão extrai o CNPJ best-effort quando ele
+// vem embutido no nome (caso comum de MEI/EI). Por isso a busca POR CNPJ só acha
+// as marcas cujo titular trouxe o CNPJ no nome; as demais ficam sem CNPJ ligado
+// (mas continuam na base). Para os CNPJs sem marca ligada, mantemos o estado
+// honesto + link para a busca oficial do INPI. Nenhuma marca falsa é fabricada.
+//
+// As APIs que consultam marca por CNPJ de forma completa são de TERCEIROS PAGOS
 // (Infosimples, Netrin, Apify) que raspam o pePI. Decisão do dono pendente.
-//
-// O QUE ESTE MÓDULO FAZ (sem inventar dado):
-// Oferece uma busca por CNPJ que reúne o CONTEXTO REAL da empresa titular (via a
-// Edge Function "empresas-cnpj" → Receita Federal/Minha Receita) e exibe um
-// estado honesto para a parte de marcas — "Integração de marcas do INPI em
-// andamento — fonte oficial sem API pública" — com link direto para a busca
-// oficial do INPI por aquele CNPJ. Nenhuma marca falsa é fabricada.
-//
-// COMO PLUGAR A FONTE DEPOIS (estrutura pronta):
-// Quando houver uma fonte viável (paga ou um conector próprio de RPI XML),
-// implemente `fetchTrademarksByCnpj` para devolver `InpiTrademark[]` populado;
-// o restante (tipos, estado da tela) já está preparado. Se a fonte virar uma
-// base ingerível, espelhe os outros módulos: conector em @fonteia/sources +
-// RPC `ingest_inpi` + Edge `ingest-inpi`, gravando entities kind='trademark'.
 
 import {
   getConfiguredApiUrl,
@@ -33,6 +24,7 @@ import {
   trimTrailingSlash,
 } from "../../lib/api-client";
 import { sanitizeCnpj as _sanitizeCnpj } from "../../lib/cnpj";
+import { fetchAllD1Entities } from "../../lib/d1-client";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -134,15 +126,71 @@ function toErrorMessage(error: unknown): string {
 // ─── Consulta de marcas por CNPJ ─────────────────────────────────────────────────
 
 /**
- * Ponto de extensão: hoje devolve [] porque NÃO há fonte gratuita de marcas do
- * INPI. Implemente aqui quando uma fonte (paga ou conector próprio) existir.
+ * Forma de `entities.attributes` para kind='trademark', como a RPC
+ * `public.ingest_inpi` grava (espelha o payload da Edge ingest-inpi). Todos os
+ * campos além de processNumber são opcionais — a RPI varia por movimentação.
+ */
+interface TrademarkAttributes {
+  sourceId?: string;
+  processNumber?: string;
+  nome?: string;
+  niceClasses?: unknown;
+  status?: string;
+  titularNome?: string;
+  titularCnpj?: string;
+  titularUf?: string;
+}
+
+/** Normaliza niceClasses (pode vir array, string única, ou ausente) → string[]. */
+function toNiceClasses(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim()).filter((v) => v !== "");
+  }
+  if (typeof value === "string" && value.trim() !== "") return [value.trim()];
+  return [];
+}
+
+/**
+ * Lê as marcas do titular já ingeridas (kind='trademark') do D1 (com fallback
+ * Supabase), filtrando por CNPJ. Mapeia `attributes` → `InpiTrademark`.
+ *
+ * Observação honesta: como a RPI não traz CNPJ estruturado, só retornam marcas
+ * cujo titular trouxe o CNPJ embutido no nome (extraído na ingestão). Para os
+ * demais CNPJs a lista vem vazia e a tela mostra o estado pendente + link oficial.
  */
 async function fetchTrademarksByCnpj(
-  _cnpj: string,
-  _fetcher: typeof fetch,
+  cnpj: string,
+  fetcher: typeof fetch,
 ): Promise<InpiTrademark[]> {
-  // Sem fonte oficial com API pública gratuita → sem dados. Nunca fabricar.
-  return [];
+  const { rows } = await fetchAllD1Entities<TrademarkAttributes>(
+    { kind: "trademark", cnpj },
+    { maxPages: 10, fetcher },
+  );
+
+  const out: InpiTrademark[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    // Garante a fonte certa (entities mistura kinds/fontes) e o CNPJ casado.
+    const a = row.attributes ?? ({} as TrademarkAttributes);
+    if (a.sourceId !== undefined && a.sourceId !== INPI_SOURCE_ID) continue;
+    if (row.cnpj != null && row.cnpj !== "" && row.cnpj !== cnpj) continue;
+
+    const processNumber = a.processNumber ?? row.id;
+    if (seen.has(processNumber)) continue;
+    seen.add(processNumber);
+
+    out.push({
+      id: processNumber,
+      sourceId: a.sourceId ?? INPI_SOURCE_ID,
+      nome: a.nome ?? row.name ?? "",
+      processNumber,
+      niceClasses: toNiceClasses(a.niceClasses),
+      status: a.status ?? "",
+      titularCnpj: a.titularCnpj ?? (row.cnpj ?? cnpj),
+      titularNome: a.titularNome ?? "",
+    });
+  }
+  return out;
 }
 
 /**
@@ -202,7 +250,9 @@ export async function searchInpiByCnpj(
     sourceUrl: e.sourceUrl,
   };
 
-  // 2) Marcas do titular — vazio enquanto não houver fonte. Não inventar.
+  // 2) Marcas do titular — lidas da base ingerida da RPI (kind='trademark') por
+  // CNPJ. Pode vir vazio: a RPI não traz CNPJ estruturado, então só casam as
+  // marcas cujo titular trouxe o CNPJ no nome. Nunca inventar.
   let trademarks: InpiTrademark[] = [];
   try {
     trademarks = await fetchTrademarksByCnpj(cnpj, fetcher);
@@ -220,7 +270,7 @@ export async function searchInpiByCnpj(
     trademarksPending,
     inpiBuscaUrl: buscaUrl,
     message: trademarksPending
-      ? "Empresa identificada na Receita Federal. Integração de marcas do INPI em andamento — fonte oficial sem API pública gratuita."
-      : "Marcas encontradas para o titular.",
+      ? "Empresa identificada na Receita Federal. Sem marcas ligadas a este CNPJ na RPI do INPI — a fonte oficial não vincula CNPJ ao titular. Consulte a busca oficial do INPI."
+      : "Marcas encontradas para o titular na RPI do INPI.",
   };
 }

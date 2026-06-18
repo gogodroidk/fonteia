@@ -10,6 +10,7 @@ import {
   LEILAO_SEED,
   formatBRL,
 } from "../../data/leiloes-seed";
+import { navigateSpa } from "../_nav";
 
 // ─── Reveal on scroll ───────────────────────────────────────────────────────
 
@@ -146,6 +147,7 @@ function MiniRing({ score, size = 52 }: { score: number; size?: number }) {
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
+  const panelId = `faq-landing-${q.slice(0, 32).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return (
     <div
       className="card"
@@ -175,6 +177,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
           lineHeight: 1.4,
         }}
         aria-expanded={open}
+        aria-controls={panelId}
       >
         <span>{q}</span>
         <ChevronDown
@@ -190,6 +193,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       </button>
       {open && (
         <div
+          id={panelId}
           style={{
             padding: "0 22px 18px",
             color: "var(--t-mid)",
@@ -1494,7 +1498,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   <button
                     type="button"
                     className={`btn ${plano.destaque ? "btn--accent" : "btn--ghost"} btn--block btn--lg`}
-                    onClick={onLogin}
+                    onClick={() => plano.id === "corporativo" ? navigateSpa("/contato") : onLogin()}
                   >
                     {plano.cta}
                   </button>
@@ -1506,7 +1510,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           <Reveal delay={0.1}>
             <p style={{ textAlign: "center", marginTop: 28, fontSize: 13, color: "var(--t-mid)" }}>
               Precisa de API, white-label ou mais usuários?{" "}
-              <button type="button" className="link" onClick={onLogin} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
+              <button type="button" className="link" onClick={() => navigateSpa("/contato")} style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}>
                 Fale com a gente
               </button>
             </p>

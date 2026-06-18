@@ -38,8 +38,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+// Padrão inerte usado quando o hook roda FORA de um ThemeProvider — acontece no
+// pré-render/SSG das páginas públicas (que agora têm ThemeToggle). Em vez de
+// lançar e derrubar o build, devolvemos dark + no-ops; no cliente o provider real
+// hidrata e o tema volta a funcionar normalmente.
+const SSR_THEME_FALLBACK: ThemeContextValue = {
+  theme: "dark",
+  setTheme: () => {},
+  toggleTheme: () => {},
+};
+
 export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within a ThemeProvider");
-  return ctx;
+  return useContext(ThemeContext) ?? SSR_THEME_FALLBACK;
 }
