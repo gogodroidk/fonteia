@@ -6,14 +6,14 @@
 // (https://revistas.inpi.gov.br/rpi/, arquivo RM<n>.zip por edição). É um boletim
 // das movimentações da semana. A Edge Function "ingest-inpi" faz streaming dessa
 // RPI, normaliza para kind='trademark' e grava em `entities` (espelhada no D1),
-// então AQUI lemos as marcas já ingeridas via `fetchAllD1Entities`.
+// então AQUI lemos as marcas já ingeridas via fetchD1Entities / fetchAllD1Entities.
 //
 // LIMITAÇÃO REAL da fonte: o XML da RPI NÃO traz CPF/CNPJ estruturado do titular
 // (só razão social, país e UF). A ingestão extrai o CNPJ best-effort quando ele
 // vem embutido no nome (caso comum de MEI/EI). Por isso a busca POR CNPJ só acha
 // as marcas cujo titular trouxe o CNPJ no nome; as demais ficam sem CNPJ ligado
-// (mas continuam na base). Para os CNPJs sem marca ligada, mantemos o estado
-// honesto + link para a busca oficial do INPI. Nenhuma marca falsa é fabricada.
+// (mas continuam na base). A busca por NOME/titular/classe é a principal — cobre
+// todos os registros ingeridos da RPI. Nenhuma marca falsa é fabricada.
 //
 // As APIs que consultam marca por CNPJ de forma completa são de TERCEIROS PAGOS
 // (Infosimples, Netrin, Apify) que raspam o pePI. Decisão do dono pendente.
@@ -24,7 +24,7 @@ import {
   trimTrailingSlash,
 } from "../../lib/api-client";
 import { sanitizeCnpj as _sanitizeCnpj } from "../../lib/cnpj";
-import { fetchAllD1Entities } from "../../lib/d1-client";
+import { fetchAllD1Entities, fetchD1Entities } from "../../lib/d1-client";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -33,14 +33,13 @@ export type InpiSearchSource = "empresas-cnpj" | "empty";
 
 /**
  * Marca normalizada (kind='trademark', espelha TrademarkEntity do @fonteia/domain).
- * Hoje a lista vem SEMPRE vazia (sem fonte gratuita); o tipo existe para quando
- * uma fonte for plugada.
+ * Campos vindos do XML da RPI via Edge Function ingest-inpi.
  */
 export interface InpiTrademark {
   /** Id estável — número do processo do INPI quando houver. */
   id: string;
   sourceId: string;
-  /** Marca (nome). */
+  /** Marca (nome / elemento nominativo). */
   nome: string;
   /** Número do processo no INPI (ex.: "900000000"). */
   processNumber: string;
@@ -48,10 +47,12 @@ export interface InpiTrademark {
   niceClasses: string[];
   /** Situação/status do processo (ex.: "Registro em vigor"). */
   status: string;
-  /** CNPJ do titular (14 dígitos). */
+  /** CNPJ do titular (14 dígitos) — preenchido só quando embutido no nome na RPI. */
   titularCnpj: string;
-  /** Razão social do titular, quando conhecida. */
+  /** Razão social / nome do titular. */
   titularNome: string;
+  /** UF do titular (ex.: "SP") — vem da RPI quando presente. */
+  titularUf: string;
 }
 
 /** Contexto da empresa titular (subset do perfil da Receita via empresas-cnpj). */
@@ -133,12 +134,20 @@ function toErrorMessage(error: unknown): string {
 interface TrademarkAttributes {
   sourceId?: string;
   processNumber?: string;
+  /** Nome / elemento nominativo da marca. */
   nome?: string;
   niceClasses?: unknown;
   status?: string;
   titularNome?: string;
   titularCnpj?: string;
+  /** UF do titular, conforme publicado na RPI. */
   titularUf?: string;
+  /** Apresentação da marca (ex.: "Nominativa", "Mista"). */
+  apresentacao?: string;
+  /** Natureza do registro (ex.: "Produto", "Serviço"). */
+  natureza?: string;
+  /** Data do depósito no formato "DD/MM/AAAA". */
+  dataDeposito?: string;
 }
 
 /** Normaliza niceClasses (pode vir array, string única, ou ausente) → string[]. */
@@ -148,6 +157,30 @@ function toNiceClasses(value: unknown): string[] {
   }
   if (typeof value === "string" && value.trim() !== "") return [value.trim()];
   return [];
+}
+
+/**
+ * Converte uma linha D1 (kind='trademark') para `InpiTrademark`.
+ * `cnpjFallback` é o CNPJ do contexto de busca (quando buscamos por CNPJ);
+ * na busca por nome não há fallback, então passamos "".
+ */
+function rowToTrademark(
+  row: { id: string; name: string; cnpj: string | null; attributes: TrademarkAttributes },
+  cnpjFallback: string,
+): InpiTrademark {
+  const a = row.attributes;
+  const processNumber = a.processNumber ?? row.id;
+  return {
+    id: processNumber,
+    sourceId: a.sourceId ?? INPI_SOURCE_ID,
+    nome: a.nome ?? row.name ?? "",
+    processNumber,
+    niceClasses: toNiceClasses(a.niceClasses),
+    status: a.status ?? "",
+    titularCnpj: a.titularCnpj ?? (row.cnpj ?? cnpjFallback),
+    titularNome: a.titularNome ?? "",
+    titularUf: a.titularUf ?? "",
+  };
 }
 
 /**
@@ -179,16 +212,45 @@ async function fetchTrademarksByCnpj(
     if (seen.has(processNumber)) continue;
     seen.add(processNumber);
 
-    out.push({
-      id: processNumber,
-      sourceId: a.sourceId ?? INPI_SOURCE_ID,
-      nome: a.nome ?? row.name ?? "",
-      processNumber,
-      niceClasses: toNiceClasses(a.niceClasses),
-      status: a.status ?? "",
-      titularCnpj: a.titularCnpj ?? (row.cnpj ?? cnpj),
-      titularNome: a.titularNome ?? "",
-    });
+    out.push(rowToTrademark(row, cnpj));
+  }
+  return out;
+}
+
+/**
+ * Busca marcas por NOME, titular ou classe NICE — a forma principal de busca.
+ *
+ * O servidor faz `name LIKE %q%` (busca textual no `d1-bridge`). Com `limit: 100`
+ * pedimos uma página ampla; o retorno pode ser vazio se ainda não houver edições
+ * da RPI ingeridas — a tela trata esse estado com mensagem honesta.
+ *
+ * @param termo - Nome da marca, nome do titular ou número de classe NICE.
+ * @param fetcher - Implementação de fetch (padrão: global fetch).
+ */
+export async function fetchTrademarksByQuery(
+  termo: string,
+  fetcher: typeof fetch = fetch,
+): Promise<InpiTrademark[]> {
+  const q = termo.trim();
+  if (q === "") return [];
+
+  const { rows } = await fetchD1Entities<TrademarkAttributes>(
+    { kind: "trademark", q, limit: 100 },
+    fetcher,
+  );
+
+  const out: InpiTrademark[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const a = row.attributes ?? ({} as TrademarkAttributes);
+    // Descarta outras fontes que possam ter sido misturadas no mesmo kind.
+    if (a.sourceId !== undefined && a.sourceId !== INPI_SOURCE_ID) continue;
+
+    const processNumber = a.processNumber ?? row.id;
+    if (seen.has(processNumber)) continue;
+    seen.add(processNumber);
+
+    out.push(rowToTrademark(row, ""));
   }
   return out;
 }
