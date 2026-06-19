@@ -161,7 +161,7 @@ const MODULE_CARDS: ModuleCardConfig[] = [
     icone: "🏛",
     badge: "RFB",
     badgeColor: "#1D5FE0",
-    route: "/leiloes",
+    route: "/lotes",
     descricao: "Lotes da Receita Federal",
   },
   {
@@ -248,13 +248,13 @@ function QuickActionIcon({ children }: { children: ReactNode }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         borderRadius: "var(--r-lg)",
         background: "var(--surface-2)",
         border: "1px solid var(--border)",
         flexShrink: 0,
-        fontSize: 20,
+        fontSize: 22,
         transition: "background .2s, border-color .2s",
       }}
     >
@@ -295,11 +295,12 @@ function QuickActionCard({
         <div
           style={{
             fontWeight: 700,
-            fontSize: 14,
+            fontSize: 14.5,
             color: "var(--t-hi)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            lineHeight: 1.3,
           }}
         >
           {action.title}
@@ -308,10 +309,11 @@ function QuickActionCard({
           style={{
             fontSize: 12.5,
             color: "var(--t-mid)",
-            marginTop: 2,
+            marginTop: 3,
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            lineHeight: 1.4,
           }}
         >
           {action.description}
@@ -860,11 +862,11 @@ export function DashboardPage(props: {
         </svg>
       ),
       title: "Ver leilões da Receita",
-      description: "Lotes com score e economia mapeada",
-      route: "/app/leiloes",
+      description: "Lotes com score de oportunidade e economia mapeada",
+      route: "/app/lotes",
     },
     {
-      id: "empresas",
+      id: "dossie",
       icon: (
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
           <rect x="3" y="7" width="14" height="10" rx="1.5" stroke="var(--accent-ink)" strokeWidth="1.5" fill="none" />
@@ -872,9 +874,9 @@ export function DashboardPage(props: {
           <circle cx="10" cy="12" r="1.5" fill="var(--accent-ink)" />
         </svg>
       ),
-      title: "Investigar uma empresa",
-      description: "Busque pelo CNPJ, razão social ou CPF do sócio",
-      route: "/app/empresas",
+      title: "Dossi\xea de empresa",
+      description: "CNPJ, s\xf3cios, san\xe7\xf5es e contratos p\xfablicos",
+      route: "/app/dossie",
     },
     {
       id: "cerebro",
@@ -891,8 +893,8 @@ export function DashboardPage(props: {
           <line x1="10" y1="10" x2="16" y2="14" stroke="var(--brand-ink)" strokeWidth="1" opacity=".4" />
         </svg>
       ),
-      title: "Explorar o Cérebro",
-      description: "Veja conexões entre empresas, políticos e contratos",
+      title: "Explorar o C\xe9rebro",
+      description: "Conex\xf5es entre empresas, pol\xedticos e contratos",
       route: "/app/cerebro",
     },
     {
@@ -903,8 +905,8 @@ export function DashboardPage(props: {
           <path d="M4 17c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round" fill="none" />
         </svg>
       ),
-      title: "Acompanhar um político",
-      description: "Despesas, votações e gastos com a cota parlamentar",
+      title: "Acompanhar pol\xedtico",
+      description: "Despesas, vota\xe7\xf5es e gastos com a cota parlamentar",
       route: "/app/politica",
     },
   ];
@@ -938,8 +940,16 @@ export function DashboardPage(props: {
           ZONA 1b — Comece por aqui
       ════════════════════════════════════════════════════════════ */}
       <section className="dash-section-enter" aria-label="Ações rápidas">
-        <div className="section-label" style={{ marginBottom: 10 }}>
-          Comece por aqui
+        <div style={{ marginBottom: 12 }}>
+          <div
+            className="section-label"
+            style={{ fontSize: 16, marginBottom: 2 }}
+          >
+            Comece por aqui
+          </div>
+          <div className="section-sub" style={{ marginBottom: 0 }}>
+            Escolha uma ação — os dados est\xe3o indexados e prontos.
+          </div>
         </div>
         <div className="quick-actions-grid">
           {QUICK_ACTIONS.map((action) => (

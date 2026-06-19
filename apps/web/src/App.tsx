@@ -326,7 +326,7 @@ function pathToRoute(path: string): RouteKey {
   if (/^\/app\/municipios\/[^/]+/.test(path)) return "municipio-detail";
   if (/^\/app\/politica\/[^/]+/.test(path)) return "deputado-detail";
   if (/^\/app\/ambiental\/[^/]+/.test(path)) return "infracao-detail";
-  if (path.startsWith("/app/lotes")) return "lotes";
+  if (path.startsWith("/app/lotes") || path.startsWith("/app/leiloes")) return "lotes";
   if (path.startsWith("/app/licitacoes")) return "licitacoes";
   if (path.startsWith("/app/politica")) return "politica";
   if (path.startsWith("/app/municipios")) return "municipios";
