@@ -20,6 +20,9 @@ import {
   type DespesaItem,
   type VotacaoItem,
 } from "../../features/politica/politica-api";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -71,13 +74,6 @@ function mesLabel(mes: number): string {
     "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
     "Jul", "Ago", "Set", "Out", "Nov", "Dez",
   ][mes - 1] ?? String(mes);
-}
-
-function votoColor(voto: string): string {
-  const v = voto.toLowerCase();
-  if (v === "sim") return "var(--accent, #16a34a)";
-  if (v === "não" || v === "nao") return "var(--danger)";
-  return "var(--t-mid)";
 }
 
 function votoLabel(voto: string): { label: string; color: string } {
@@ -743,6 +739,29 @@ function TabVotacoes({ deputadoId }: { deputadoId: string }) {
   );
 }
 
+// ─── Report builder ────────────────────────────────────────────────────────────
+
+function buildDeputadoReport(deputado: CamaraDeputado): SavedReport {
+  const camaraPerfilUrl = `https://www.camara.leg.br/deputados/${deputado.id}`;
+  const fields: SavedReport["fields"] = [
+    { label: "ID na Câmara", value: deputado.id },
+    ...(deputado.partido ? [{ label: "Partido", value: deputado.partido }] : []),
+    ...(deputado.uf ? [{ label: "UF", value: deputado.uf }] : []),
+    ...(deputado.email ? [{ label: "E-mail", value: deputado.email }] : []),
+  ];
+  const subtitleParts = [deputado.partido, deputado.uf].filter(Boolean);
+  return {
+    id: `parlamentar:${deputado.id}`,
+    kind: "parlamentar",
+    kindLabel: "Parlamentar",
+    title: deputado.nome || "Deputado",
+    ...(subtitleParts.length > 0 ? { subtitle: subtitleParts.join("/") } : {}),
+    fields,
+    sources: [{ label: "Câmara dos Deputados — Dados Abertos", url: camaraPerfilUrl }],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function DeputadoDetailPage({ deputado, onBack }: DeputadoDetailPageProps) {
@@ -752,6 +771,7 @@ export function DeputadoDetailPage({ deputado, onBack }: DeputadoDetailPageProps
   const hasPhoto = deputado.foto !== "" && !imgError;
   const hasPartido = deputado.partido !== "";
   const hasUf = deputado.uf !== "";
+  const report = buildDeputadoReport(deputado);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 800 }}>
@@ -838,6 +858,18 @@ export function DeputadoDetailPage({ deputado, onBack }: DeputadoDetailPageProps
               {hasUf && (
                 <span className="badge badge--neutral">{deputado.uf}</span>
               )}
+            </div>
+
+            {/* Ações */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+              <CreateAlertButton
+                kind="parlamentar"
+                entityRef={deputado.id}
+                entityLabel={[deputado.nome, deputado.partido, deputado.uf].filter(Boolean).join(" — ")}
+                size="sm"
+                variant="soft"
+              />
+              <ReportButton report={report} />
             </div>
           </div>
         </div>

@@ -2,6 +2,45 @@ import { Building2, CalendarDays, ChevronLeft, ExternalLink, MapPin, User } from
 import type { IbamaInfracao } from "@fonteia/sources";
 import { formatDataInfracao, formatMultaCents } from "../../features/ambiental/ambiental-api";
 import { FonteDots } from "../../components/ui";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
+
+// ─── Report builder ────────────────────────────────────────────────────────────
+
+const IBAMA_DATASET_URL =
+  "https://dadosabertos.ibama.gov.br/dataset/fiscalizacao-auto-de-infracao";
+
+function buildInfracaoReport(infracao: IbamaInfracao): SavedReport {
+  const multaFormatada = formatMultaCents(infracao.valorMultaCents);
+  const dataFormatada = formatDataInfracao(infracao.data);
+  const digits = (infracao.cpfCnpj ?? "").replace(/\D/g, "");
+  const isPj = digits.length > 11;
+
+  const fields: SavedReport["fields"] = [
+    { label: "Número do auto", value: infracao.id },
+    ...(infracao.numProcesso ? [{ label: "Número do processo", value: infracao.numProcesso }] : []),
+    { label: "Tipo de infração", value: infracao.tipoInfracao },
+    ...(infracao.cpfCnpj ? [{ label: isPj ? "CNPJ" : "CPF", value: infracao.cpfCnpj }] : []),
+    ...(infracao.municipio ? [{ label: "Município", value: infracao.municipio }] : []),
+    ...(infracao.uf ? [{ label: "UF", value: infracao.uf }] : []),
+    ...(infracao.codigoIbge ? [{ label: "Código IBGE do município", value: infracao.codigoIbge }] : []),
+    { label: "Valor da multa", value: multaFormatada },
+    { label: "Data", value: dataFormatada },
+  ];
+
+  const locationParts = [infracao.municipio, infracao.uf].filter(Boolean);
+  return {
+    id: `ambiental:${infracao.id}`,
+    kind: "ambiental",
+    kindLabel: "Infração Ambiental",
+    title: infracao.infrator || "Infrator não informado",
+    ...(locationParts.length > 0 ? { subtitle: locationParts.join(" — ") } : {}),
+    fields,
+    sources: [{ label: "IBAMA — Dados Abertos (autos de infração)", url: IBAMA_DATASET_URL }],
+    createdAt: new Date().toISOString(),
+  };
+}
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +86,7 @@ export function InfracaoDetailPage({ infracao, onBack }: InfracaoDetailPageProps
   const multaFormatada = formatMultaCents(infracao.valorMultaCents);
   const dataFormatada = formatDataInfracao(infracao.data);
   const nomeInfrator = infracao.infrator || "Infrator não informado";
+  const report = buildInfracaoReport(infracao);
 
   return (
     <div
@@ -143,6 +183,18 @@ export function InfracaoDetailPage({ infracao, onBack }: InfracaoDetailPageProps
         >
           <CalendarDays size={14} style={{ flexShrink: 0, color: "var(--t-low)" }} />
           <span>{dataFormatada}</span>
+        </div>
+
+        {/* Ações */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+          <CreateAlertButton
+            kind="ambiental"
+            entityRef={infracao.id}
+            entityLabel={`${nomeInfrator} — ${infracao.tipoInfracao}`}
+            size="sm"
+            variant="soft"
+          />
+          <ReportButton report={report} />
         </div>
       </div>
 

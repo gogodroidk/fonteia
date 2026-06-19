@@ -26,6 +26,9 @@ import {
   sanitizeCnpj,
 } from "../../features/empresas/empresas-api";
 import { FonteDots } from "../../components/ui";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
 
 // Quantos órgãos/sanções renderizar por vez (o scroll carrega mais sozinho).
 const PAGE_SIZE = 36;
@@ -103,6 +106,40 @@ function formatDate(value: string): string {
 /** Heurística leve: situação ativa para colorir o badge de verde. */
 function isSituacaoAtiva(situacao: string): boolean {
   return normalizeForSearch(situacao).includes("ativa");
+}
+
+/** Build a SavedReport for the looked-up empresa. */
+function buildEmpresaReport(empresa: EmpresaCnpj): SavedReport {
+  const cnpjDigits = sanitizeCnpj(empresa.cnpj);
+  const fields: SavedReport["fields"] = [
+    { label: "CNPJ", value: empresa.cnpj },
+    { label: "Situação", value: empresa.situacao },
+    ...(empresa.cnaePrincipal !== ""
+      ? [{ label: "Atividade principal (CNAE)", value: empresa.cnaePrincipal }]
+      : []),
+    ...((empresa.municipio !== "" || empresa.uf !== "")
+      ? [{ label: "Localização", value: [empresa.municipio, empresa.uf].filter(Boolean).join("/") }]
+      : []),
+    ...(empresa.abertura !== "" ? [{ label: "Abertura", value: formatDate(empresa.abertura) }] : []),
+    ...(empresa.naturezaJuridica !== ""
+      ? [{ label: "Natureza jurídica", value: empresa.naturezaJuridica }]
+      : []),
+    ...(empresa.porte !== "" ? [{ label: "Porte", value: empresa.porte }] : []),
+    ...(empresa.endereco !== "" ? [{ label: "Endereço", value: empresa.endereco }] : []),
+    ...(empresa.nomeFantasia !== ""
+      ? [{ label: "Nome fantasia", value: empresa.nomeFantasia }]
+      : []),
+  ];
+  return {
+    id: `empresa:${cnpjDigits}`,
+    kind: "empresa",
+    kindLabel: "Empresa (CNPJ)",
+    title: empresa.razaoSocial,
+    subtitle: empresa.cnpj,
+    fields,
+    sources: [{ label: "Receita Federal — cadastro de CNPJ (via Minha Receita)", url: empresa.sourceUrl }],
+    createdAt: new Date().toISOString(),
+  };
 }
 
 // ─── Caixa de busca de CNPJ + perfil ───────────────────────────────────────────
@@ -353,6 +390,18 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
             )}
             {empresa.porte !== "" && <FactItem label="Porte" value={empresa.porte} />}
             {empresa.endereco !== "" && <FactItem label="Endereço" value={empresa.endereco} />}
+          </div>
+
+          {/* Ações */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <CreateAlertButton
+              kind="empresa"
+              entityRef={sanitizeCnpj(empresa.cnpj)}
+              entityLabel={empresa.razaoSocial}
+              size="sm"
+              variant="soft"
+            />
+            <ReportButton report={buildEmpresaReport(empresa)} />
           </div>
 
           {/* Sócios (QSA) */}
