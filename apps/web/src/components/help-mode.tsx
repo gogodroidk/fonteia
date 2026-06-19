@@ -109,6 +109,11 @@ export function HelpHint({ id, children }: HelpHintProps) {
 
 /* ─── HelpHintActive — sub-componente com estado ──────────────────────── */
 
+type Placement = "above" | "below";
+
+/** Estimated popover height used to decide if there's room above the trigger. */
+const POPOVER_HEIGHT_ESTIMATE = 140;
+
 const S = {
   wrap: {
     display: "inline-flex",
@@ -123,25 +128,33 @@ const S = {
     borderRadius: "6px",
   } satisfies React.CSSProperties,
 
-  popover: (visible: boolean): React.CSSProperties => ({
-    position: "absolute",
-    zIndex: 9999,
-    bottom: "calc(100% + 10px)",
-    left: "50%",
-    width: "min(280px, 90vw)",
-    background: "var(--elevated, #fff)",
-    border: "1px solid var(--border, #E4EAF2)",
-    borderRadius: "var(--r-md, 12px)",
-    boxShadow: "var(--shadow-lg, 0 18px 44px rgba(11,34,64,.12))",
-    padding: "11px 13px",
-    pointerEvents: visible ? "auto" : "none",
-    opacity: visible ? 1 : 0,
-    transform: visible
-      ? "translateX(-50%) translateY(0)"
-      : "translateX(-50%) translateY(4px)",
-    transition: "opacity 0.15s ease, transform 0.15s ease",
-    isolation: "isolate",
-  }),
+  popover: (visible: boolean, placement: Placement): React.CSSProperties => {
+    const isAbove = placement === "above";
+    return {
+      position: "absolute",
+      zIndex: 9999,
+      // vertical positioning: above anchors to bottom edge, below anchors to top edge
+      ...(isAbove
+        ? { bottom: "calc(100% + 10px)" }
+        : { top: "calc(100% + 10px)" }),
+      left: "50%",
+      width: "min(280px, 90vw)",
+      background: "var(--elevated, #fff)",
+      border: "1px solid var(--border, #E4EAF2)",
+      borderRadius: "var(--r-md, 12px)",
+      boxShadow: "var(--shadow-lg, 0 18px 44px rgba(11,34,64,.12))",
+      padding: "11px 13px",
+      pointerEvents: visible ? "auto" : "none",
+      opacity: visible ? 1 : 0,
+      transform: visible
+        ? "translateX(-50%) translateY(0)"
+        : isAbove
+          ? "translateX(-50%) translateY(4px)"
+          : "translateX(-50%) translateY(-4px)",
+      transition: "opacity 0.15s ease, transform 0.15s ease",
+      isolation: "isolate",
+    };
+  },
 
   label: {
     display: "block",
@@ -161,23 +174,37 @@ const S = {
     margin: 0,
   } satisfies React.CSSProperties,
 
-  arrow: {
-    position: "absolute" as const,
-    bottom: "-5px",
-    left: "50%",
-    transform: "translateX(-50%) rotate(45deg)",
-    width: "9px",
-    height: "9px",
-    background: "var(--elevated, #fff)",
-    border: "1px solid var(--border, #E4EAF2)",
-    borderTop: "none",
-    borderLeft: "none",
-  } satisfies React.CSSProperties,
+  arrow: (placement: Placement): React.CSSProperties => {
+    const isAbove = placement === "above";
+    return {
+      position: "absolute" as const,
+      left: "50%",
+      // above → arrow points down (bottom of popover); below → arrow points up (top of popover)
+      ...(isAbove
+        ? {
+            bottom: "-5px",
+            transform: "translateX(-50%) rotate(45deg)",
+            borderTop: "none",
+            borderLeft: "none",
+          }
+        : {
+            top: "-5px",
+            transform: "translateX(-50%) rotate(225deg)",
+            borderBottom: "none",
+            borderRight: "none",
+          }),
+      width: "9px",
+      height: "9px",
+      background: "var(--elevated, #fff)",
+      border: "1px solid var(--border, #E4EAF2)",
+    };
+  },
 } as const;
 
 function HelpHintActive({ id, children }: HelpHintProps) {
   const hint = HELP_HINTS[id]; // may be undefined (noUncheckedIndexedAccess)
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<Placement>("above");
   const wrapRef = useRef<HTMLSpanElement>(null);
   const popoverRef = useRef<HTMLSpanElement>(null);
   const descId = useId();
@@ -220,6 +247,17 @@ function HelpHintActive({ id, children }: HelpHintProps) {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [hint, open]);
+
+  /* auto-flip placement: measure available space above when popover opens */
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined") return;
+    if (!wrapRef.current) return;
+
+    const rect = wrapRef.current.getBoundingClientRect();
+    const spaceAbove = rect.top;
+    setPlacement(spaceAbove < POPOVER_HEIGHT_ESTIMATE ? "below" : "above");
+  }, [open]);
 
   // All hooks are called above; now safe to bail out if no hint registered.
   if (hint === undefined) return <>{children}</>;
@@ -267,11 +305,11 @@ function HelpHintActive({ id, children }: HelpHintProps) {
         id={descId}
         role="tooltip"
         aria-hidden={!open}
-        style={S.popover(open)}
+        style={S.popover(open, placement)}
       >
         <span style={S.label}>Ajuda</span>
         <p style={S.text}>{hint}</p>
-        <span aria-hidden="true" style={S.arrow} />
+        <span aria-hidden="true" style={S.arrow(placement)} />
       </span>
     </span>
   );

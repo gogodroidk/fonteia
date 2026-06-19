@@ -32,7 +32,24 @@ import type { DetailField, EdgeKind, GraphKind, NodeKind } from "./types";
 
 export { sanitizeCnpj, formatCnpj };
 
-/** Kinds que buscamos POR CNPJ para montar as conexões diretas de uma empresa. */
+/**
+ * Marcador de origem usado em `crossEdges` quando a aresta deve partir do NÓ
+ * CENTRAL (cujo id só a página conhece). A página (`mergeExpansion`) troca este
+ * sentinela pelo id real do centro ao fundir a expansão. Ex.: sócios do QSA, que
+ * ligam ao centro-empresa, não a um nó `company` solto.
+ */
+export const CENTER_SENTINEL = "__center__";
+
+/**
+ * Kinds que buscamos POR CNPJ para montar as conexões diretas de uma empresa.
+ *
+ * `company` (BrasilAPI) e `parliamentary_expense` casam pela coluna `cnpj`:
+ *   • `company`               → o registro cadastral da PRÓPRIA empresa-centro
+ *     (CNAE, capital, QSA…). Não vira nó solto: enriquece o centro e expõe sócios.
+ *   • `parliamentary_expense` → despesas em que a empresa-centro foi FORNECEDORA
+ *     (a coluna `cnpj` da despesa é o `cnpjFornecedor`). É a ponta empresa→político
+ *     do "siga o dinheiro": cada despesa também abre o nó do deputado pagador.
+ */
 const CNPJ_KINDS: GraphKind[] = [
   "sanction",
   "public_contract",
@@ -40,6 +57,8 @@ const CNPJ_KINDS: GraphKind[] = [
   "environmental_infraction",
   "organization",
   "trademark",
+  "parliamentary_expense",
+  "company",
 ];
 
 /**
@@ -56,6 +75,7 @@ const NAME_KINDS: GraphKind[] = ["legal_process"];
 
 /** Kinds que a busca textual `searchEntities` varre (para começar por nome). */
 const SEARCH_KINDS: GraphKind[] = [
+  "company",
   "organization",
   "public_contract",
   "trademark",
@@ -69,6 +89,36 @@ const MAX_PER_KIND = 50;
 
 /** Teto de municípios distintos abertos a partir de contratos/licitações. */
 const MAX_MUNICIPIOS = 12;
+
+/**
+ * Teto de DEPUTADOS distintos abertos a partir das despesas de uma empresa
+ * (ponta empresa→político do "siga o dinheiro"). Mantém o leque legível.
+ */
+const MAX_DEPUTADOS = 16;
+
+/**
+ * Teto de FORNECEDORES distintos abertos a partir das despesas de um político
+ * (ponta político→empresa). Cada CNPJ vira um nó-empresa por baixo.
+ */
+const MAX_FORNECEDORES = 24;
+
+/**
+ * Teto de SÓCIOS (QSA) abertos a partir do cadastro de uma empresa. O QSA da
+ * Receita costuma ter poucos sócios, mas grandes grupos podem ter dezenas.
+ */
+const MAX_SOCIOS = 20;
+
+/**
+ * Página varrida ao caçar votações de um deputado. As votações NÃO têm o nome do
+ * deputado no texto (só nos `attributes.votos[]`), então não dá para filtrar por
+ * `q`: pegamos as mais recentes e filtramos no cliente por `deputadoId`. Cap
+ * deliberadamente modesto — é melhor mostrar as votações recentes do que varrer
+ * dezenas de milhares de registros e travar o canvas.
+ */
+const VOTE_SCAN_LIMIT = 400;
+
+/** Teto de votações ligadas a um deputado (depois do filtro client-side). */
+const MAX_VOTES = 24;
 
 /** Página pedida ao servidor por kind. O d1-bridge tem teto próprio; pedimos amplo. */
 const PAGE_LIMIT = 1000;
@@ -91,6 +141,8 @@ export interface RawLeaf {
   codigoIbge?: string | undefined;
   /** Termo de busca para expandir por NOME (fornecedor sem CNPJ, político…). */
   searchTerm?: string | undefined;
+  /** Id do deputado na Câmara (quando o nó é `politician`) — cruza despesas/votos. */
+  deputadoId?: string | undefined;
   /** Link para a fonte oficial deste registro. */
   sourceUrl?: string | undefined;
   /** Dados completos do registro (painel de detalhe). */
@@ -107,6 +159,14 @@ export interface ExpandResult {
   centerLabel: string;
   /** CNPJ descoberto da entidade (quando achado por nome). */
   centerCnpj?: string | undefined;
+  /**
+   * Detalhes cadastrais do CENTRO (do registro `company` BrasilAPI, quando houver):
+   * CNAE, capital social, natureza jurídica, situação, nº de sócios… A página os
+   * funde no nó central para enriquecer o painel de detalhe da empresa pesquisada.
+   */
+  centerDetails?: DetailField[] | undefined;
+  /** Link da fonte do CENTRO (cadastro CNPJ na BrasilAPI), quando houver. */
+  centerSourceUrl?: string | undefined;
   /** Nós conectados encontrados (já com teto por kind aplicado). */
   leaves: RawLeaf[];
   /** Contagem por kind (para a UI mostrar resumo/legenda). */
@@ -120,6 +180,16 @@ export interface ExpandResult {
    * adiciona ao grafo ligando cada contrato/licitação ao seu nó-município.
    */
   municipalityEdges?: Array<{ from: string; to: string }> | undefined;
+  /**
+   * Arestas extra TIPADAS entre folhas (não passam pelo centro). Servem para os
+   * cruzamentos do "siga o dinheiro" e da atividade legislativa:
+   *   • despesa → empresa fornecedora (rel `fornecedor`)
+   *   • despesa → deputado pagador     (rel `despesa`)
+   *   • votação → proposição           (rel `voto`)
+   *   • empresa → sócio do QSA         (rel `socio`)
+   * A página liga `from`↔`to` com o `rel` informado (cor/comprimento do fio).
+   */
+  crossEdges?: Array<{ from: string; to: string; rel: EdgeKind }> | undefined;
 }
 
 /** Item da busca textual de entidades (para escolher o centro do grafo). */
@@ -133,6 +203,11 @@ export interface SearchHit {
   cnpj?: string | undefined;
   /** Código IBGE quando for município. */
   codigoIbge?: string | undefined;
+  /**
+   * Id do deputado na Câmara (`attributes.id`) quando o hit for `politician`.
+   * Habilita o cruzamento por deputadoId (despesas + votações) ao centralizar.
+   */
+  deputadoId?: string | undefined;
   /** Subtítulo curto (UF, partido, status…) para desambiguar na lista. */
   sublabel?: string | undefined;
 }
@@ -268,6 +343,25 @@ function sourceUrlFor(kind: GraphKind, row: D1EntityRow): string | undefined {
       return id
         ? `https://www.camara.leg.br/propostas-legislativas/${id}`
         : undefined;
+    }
+    case "parliamentary_expense": {
+      // Preferimos o comprovante real (urlDocumento); senão, a cota do deputado.
+      const url = str(attr(row, "urlDocumento"));
+      if (url) return url;
+      const depId = str(row.external_ids?.["deputadoId"]) || str(attr(row, "deputadoId"));
+      return depId
+        ? `https://www.camara.leg.br/deputados/${depId}?ano=${str(attr(row, "ano"))}`
+        : "https://www.camara.leg.br/transparencia/gastos-parlamentares";
+    }
+    case "legislative_vote": {
+      const id = str(row.external_ids?.["votacaoId"]) || str(attr(row, "id"));
+      return id
+        ? `https://www.camara.leg.br/votacoes/${id}`
+        : "https://www.camara.leg.br/votacoes";
+    }
+    case "company": {
+      const cnpj = sanitizeCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+      return cnpj ? `https://brasilapi.com.br/api/cnpj/v1/${cnpj}` : undefined;
     }
     default:
       return undefined;
@@ -454,6 +548,7 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
     case "politician": {
       const partido = str(attr(row, "partido"));
       const uf = str(attr(row, "uf"));
+      const depId = str(attr(row, "id")) || str(row.external_ids?.["camaraId"]);
       pushField(details, "Nome", name);
       pushField(details, "Partido", partido);
       pushField(details, "UF", uf);
@@ -465,6 +560,7 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
         label: name || "Político",
         sublabel: [partido, uf].filter(Boolean).join("-") || undefined,
         searchTerm: name || undefined,
+        deputadoId: depId || undefined,
         sourceUrl,
         details,
       };
@@ -504,6 +600,114 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
         rel,
         label: name || "Marca",
         sublabel: status || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "parliamentary_expense": {
+      const deputado = str(attr(row, "deputadoNome"));
+      const partido = str(attr(row, "partido"));
+      const uf = str(attr(row, "uf"));
+      const tipo = str(attr(row, "tipo"));
+      const fornecedor = str(attr(row, "fornecedor"));
+      const fornCnpj = validCnpj(str(attr(row, "cnpjFornecedor")) || str(row.cnpj));
+      const valor = moneyFromReais(attr(row, "valorLiquido")) || moneyFromReais(attr(row, "valorDocumento"));
+      pushField(details, "Deputado(a)", deputado);
+      pushField(details, "Partido/UF", [partido, uf].filter(Boolean).join("-"));
+      pushField(details, "Tipo de gasto", tipo);
+      pushField(details, "Fornecedor", fornecedor);
+      pushField(details, "CNPJ fornecedor", fornCnpj ? formatCnpj(fornCnpj) : "");
+      pushField(details, "Valor", valor);
+      pushField(details, "Data", formatDate(attr(row, "dataDocumento")));
+      return {
+        id,
+        kind,
+        rel,
+        // Rótulo prioriza o tipo de gasto (o deputado vira nó próprio quando o
+        // centro é a empresa) ou o fornecedor (quando o centro é o político).
+        label: tipo || fornecedor || "Despesa parlamentar",
+        sublabel: [deputado || fornecedor, valor].filter(Boolean).join(" · ") || undefined,
+        // A despesa carrega o CNPJ do FORNECEDOR — assim ela é expansível e a
+        // página pode ligar a despesa à empresa fornecedora (siga o dinheiro).
+        cnpj: fornCnpj || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "legislative_vote": {
+      const orgao = str(attr(row, "siglaOrgao"));
+      const descricao = str(attr(row, "descricao"));
+      const aprov = attr(row, "aprovacao");
+      const resultado =
+        aprov === true ? "Aprovado" : aprov === false ? "Rejeitado" : "";
+      const prop = attr(row, "proposicao") as Record<string, unknown> | undefined;
+      const propLabel = prop
+        ? [str(prop["siglaTipo"]), str(prop["numero"])].filter(Boolean).join(" ") +
+          (str(prop["ano"]) ? `/${str(prop["ano"])}` : "")
+        : "";
+      const placar = [
+        str(attr(row, "placarSim")) ? `Sim ${str(attr(row, "placarSim"))}` : "",
+        str(attr(row, "placarNao")) ? `Não ${str(attr(row, "placarNao"))}` : "",
+        str(attr(row, "placarAbstencoes")) ? `Abst. ${str(attr(row, "placarAbstencoes"))}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      pushField(details, "Órgão", orgao);
+      pushField(details, "Descrição", descricao.slice(0, 220));
+      pushField(details, "Proposição", propLabel);
+      pushField(details, "Resultado", resultado);
+      pushField(details, "Placar", placar);
+      pushField(details, "Data", formatDate(attr(row, "data")));
+      return {
+        id,
+        kind,
+        rel,
+        label: descricao ? descricao.slice(0, 64) : orgao || "Votação",
+        sublabel: [propLabel || orgao, resultado].filter(Boolean).join(" · ") || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "company": {
+      const razao = str(attr(row, "razaoSocial")) || name;
+      const fantasia = str(attr(row, "nomeFantasia"));
+      const ownCnpj = validCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+      const cnae = attr(row, "cnaePrincipal") as Record<string, unknown> | undefined;
+      const cnaeStr = cnae
+        ? [str(cnae["codigo"]), str(cnae["descricao"])].filter(Boolean).join(" — ")
+        : "";
+      const capital = moneyFromReais(attr(row, "capitalSocial"));
+      const natureza = str(attr(row, "naturezaJuridica"));
+      const situacao = str(attr(row, "situacaoCadastral"));
+      const municipio = str(attr(row, "municipio"));
+      const uf = str(attr(row, "uf"));
+      const ibge = str(attr(row, "codigoIbge"));
+      const simples = attr(row, "simples");
+      const mei = attr(row, "mei");
+      const qsa = attr(row, "qsa");
+      const nSocios = Array.isArray(qsa) ? qsa.length : 0;
+      pushField(details, "Razão social", razao);
+      pushField(details, "Nome fantasia", fantasia);
+      pushField(details, "CNPJ", ownCnpj ? formatCnpj(ownCnpj) : "");
+      pushField(details, "Situação", situacao);
+      pushField(details, "CNAE principal", cnaeStr);
+      pushField(details, "Natureza jurídica", natureza);
+      pushField(details, "Capital social", capital);
+      pushField(
+        details,
+        "Regime",
+        [simples === true ? "Simples" : "", mei === true ? "MEI" : ""].filter(Boolean).join(" · "),
+      );
+      pushField(details, "Município/UF", [municipio, uf].filter(Boolean).join(" / "));
+      pushField(details, "Sócios (QSA)", nSocios > 0 ? String(nSocios) : "");
+      return {
+        id,
+        kind,
+        rel,
+        label: razao || "Empresa",
+        sublabel: [cnaeStr.split(" — ")[1] || cnaeStr, situacao].filter(Boolean).join(" · ") || undefined,
+        cnpj: ownCnpj || undefined,
+        codigoIbge: ibge || undefined,
         sourceUrl,
         details,
       };
@@ -599,26 +803,36 @@ function toErrorMessage(error: unknown): string {
 
 // ─── Busca por CNPJ / por NOME por kind ──────────────────────────────────────────
 
-/** Busca um kind por CNPJ, devolvendo nós-folha + candidato a rótulo do centro. */
+/**
+ * Busca um kind por CNPJ, devolvendo nós-folha + candidato a rótulo do centro +
+ * as linhas cruas (para os cruzamentos que precisam de attributes além da folha,
+ * ex.: QSA de `company`, deputado de `parliamentary_expense`). `rel` define como
+ * a folha se liga ao centro (despesas de fornecedor usam `fornecedor`, não `cnpj`).
+ */
 async function fetchKindByCnpj(
   kind: GraphKind,
   cnpj: string,
   fetcher: typeof fetch,
-): Promise<{ leaves: RawLeaf[]; centerLabel: string }> {
+  rel: EdgeKind = "cnpj",
+): Promise<{ leaves: RawLeaf[]; centerLabel: string; rows: D1EntityRow[] }> {
   const { rows } = await fetchD1Entities({ kind, cnpj, limit: PAGE_LIMIT }, fetcher);
 
   const leaves: RawLeaf[] = [];
+  const kept: D1EntityRow[] = [];
   let centerLabel = "";
   for (const row of rows) {
     if (centerLabel === "") {
       const candidate = str(attr(row, "fornecedorNome")) || str(row.name);
       if (candidate) centerLabel = candidate;
     }
-    const leaf = leafFromRow(kind, row, "cnpj");
-    if (leaf) leaves.push(leaf);
+    const leaf = leafFromRow(kind, row, rel);
+    if (leaf) {
+      leaves.push(leaf);
+      kept.push(row);
+    }
     if (leaves.length >= MAX_PER_KIND) break;
   }
-  return { leaves, centerLabel };
+  return { leaves, centerLabel, rows: kept };
 }
 
 /**
@@ -716,6 +930,158 @@ async function fetchMunicipiosForLeaves(
   return { municipios, edges };
 }
 
+// ─── Cruzamentos "siga o dinheiro" e atividade legislativa ───────────────────────
+
+/** Nó-pessoa (sócio do QSA) — não é um kind do D1, é derivado de `company.qsa`. */
+function personLeaf(
+  socio: Record<string, unknown>,
+  ownerCnpj: string,
+  index: number,
+): RawLeaf | null {
+  const nome = str(socio["nomeSocio"]);
+  if (nome === "") return null;
+  const qualificacao = str(socio["qualificacao"]);
+  const dataEntrada = str(socio["dataEntrada"]);
+  const repr = str(socio["nomeRepresentante"]);
+  const details: DetailField[] = [];
+  pushField(details, "Sócio", nome);
+  pushField(details, "Qualificação", qualificacao);
+  pushField(details, "Entrada na sociedade", formatDate(dataEntrada));
+  pushField(details, "Representante legal", repr);
+  return {
+    // Id estável por (CNPJ da empresa + nome do sócio): evita colisão entre
+    // sócios homônimos de empresas diferentes e deduplica o mesmo sócio.
+    id: `person:${ownerCnpj}:${norm(nome).replace(/\s+/g, "-")}:${index}`,
+    kind: "person",
+    rel: "socio",
+    label: nome,
+    sublabel: qualificacao || undefined,
+    // Pessoas físicas não têm CNPJ; expandir por nome cruza outras bases (raro,
+    // mas habilita o caso de um sócio que também seja político/fornecedor PF).
+    searchTerm: nome,
+    details,
+  };
+}
+
+/** Normaliza texto p/ ids/keys (minúsculas, sem acento). Local — sem DOM. */
+function norm(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
+/**
+ * A partir das linhas `company` cruas (cadastro BrasilAPI da empresa-centro),
+ * extrai os SÓCIOS do QSA como nós-pessoa. A ligação é feita ao CENTRO pelo
+ * chamador (não há nó `company` solto — o cadastro enriquece o próprio centro).
+ * Degrada para vazio quando não há `company` ou o QSA está vazio.
+ */
+function sociosFromCompanyRows(rows: D1EntityRow[]): RawLeaf[] {
+  const socios: RawLeaf[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const ownerCnpj = sanitizeCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+    const qsa = attr(row, "qsa");
+    if (!Array.isArray(qsa)) continue;
+    qsa.slice(0, MAX_SOCIOS).forEach((s, i) => {
+      if (s == null || typeof s !== "object") return;
+      const person = personLeaf(s as Record<string, unknown>, ownerCnpj, i);
+      if (!person || seen.has(person.id)) return;
+      seen.add(person.id);
+      socios.push(person);
+    });
+  }
+  return socios;
+}
+
+/**
+ * Ponta EMPRESA → POLÍTICO do "siga o dinheiro": a partir das despesas em que a
+ * empresa-centro foi fornecedora (`parliamentary_expense` casadas por CNPJ),
+ * resolve os DEPUTADOS pagadores como nós `politician` (buscando por `deputadoId`)
+ * e devolve as arestas despesa→deputado. Cap por `MAX_DEPUTADOS`.
+ */
+async function deputadosFromExpenseLeaves(
+  expenseLeaves: Array<{ leaf: RawLeaf; deputadoId: string; deputadoNome: string }>,
+  fetcher: typeof fetch,
+): Promise<{
+  politicians: RawLeaf[];
+  edges: Array<{ from: string; to: string; rel: EdgeKind }>;
+}> {
+  // Agrupa as despesas por deputadoId (cada deputado vira um único nó).
+  const byDeputado = new Map<string, { ids: string[]; nome: string }>();
+  for (const e of expenseLeaves) {
+    if (e.deputadoId === "") continue;
+    const entry = byDeputado.get(e.deputadoId) ?? { ids: [], nome: e.deputadoNome };
+    entry.ids.push(e.leaf.id);
+    if (entry.nome === "" && e.deputadoNome) entry.nome = e.deputadoNome;
+    byDeputado.set(e.deputadoId, entry);
+  }
+  const deputadoIds = [...byDeputado.keys()].slice(0, MAX_DEPUTADOS);
+  if (deputadoIds.length === 0) return { politicians: [], edges: [] };
+
+  // Os deputados da Câmara são ~513 — buscamos a lista UMA vez e casamos todos os
+  // ids no cliente (o d1-bridge não filtra por external_ids). Bem mais barato que
+  // uma chamada por deputado.
+  const byId = await fetchPoliticiansById(fetcher);
+
+  const politicians: RawLeaf[] = [];
+  const edges: Array<{ from: string; to: string; rel: EdgeKind }> = [];
+  const seen = new Set<string>();
+  for (const depId of deputadoIds) {
+    const group = byDeputado.get(depId)!;
+    const row = byId.get(depId);
+    let leaf: RawLeaf | null = row ? leafFromRow("politician", row, "despesa") : null;
+    if (!leaf && group.nome) {
+      // Sem registro `politician` na base: sintetiza um nó mínimo a partir do nome
+      // embutido na despesa (degrada com elegância, sem fabricar dados).
+      leaf = {
+        id: `politician:depid:${depId}`,
+        kind: "politician",
+        rel: "despesa",
+        label: group.nome,
+        searchTerm: group.nome,
+        deputadoId: depId,
+        sourceUrl: `https://www.camara.leg.br/deputados/${depId}`,
+        details: [{ label: "Deputado(a)", value: group.nome }],
+      };
+    }
+    if (!leaf) continue;
+    if (!seen.has(leaf.id)) {
+      seen.add(leaf.id);
+      politicians.push(leaf);
+    }
+    for (const fromId of group.ids) {
+      edges.push({ from: fromId, to: leaf.id, rel: "despesa" });
+    }
+  }
+  return { politicians, edges };
+}
+
+/**
+ * Carrega os `politician` da base UMA vez e indexa por deputadoId (attributes.id /
+ * external_ids.camaraId). Devolve um Map vazio em qualquer falha (degrada sem
+ * quebrar — os deputados caem para o nó sintético a partir do nome da despesa).
+ */
+async function fetchPoliticiansById(
+  fetcher: typeof fetch,
+): Promise<Map<string, D1EntityRow>> {
+  const byId = new Map<string, D1EntityRow>();
+  try {
+    const { rows } = await fetchD1Entities(
+      { kind: "politician", limit: PAGE_LIMIT },
+      fetcher,
+    );
+    for (const r of rows) {
+      const id = str(attr(r, "id")) || str(r.external_ids?.["camaraId"]);
+      if (id !== "" && !byId.has(id)) byId.set(id, r);
+    }
+  } catch {
+    /* sem lista — usa os nós sintéticos por nome */
+  }
+  return byId;
+}
+
 // ─── API pública: busca textual (começar por nome) ───────────────────────────────
 
 /**
@@ -748,12 +1114,17 @@ export async function searchEntities(
               : kind === "trademark"
                 ? str(attr(row, "status"))
                 : uf;
+        const deputadoId =
+          kind === "politician"
+            ? str(attr(row, "id")) || str(row.external_ids?.["camaraId"])
+            : "";
         return {
           id: row.id,
           kind,
           name: str(attr(row, "fornecedorNome")) || str(row.name) || "—",
           cnpj: cnpj || undefined,
           codigoIbge: ibge || undefined,
+          deputadoId: deputadoId || undefined,
           sublabel: sub || undefined,
         };
       });
@@ -787,8 +1158,12 @@ export async function searchEntities(
 
 /**
  * Expande um CNPJ: busca todos os kinds por CNPJ em paralelo, cruza por NOME os
- * kinds sem CNPJ casado (processos), abre os municípios referenciados (por IBGE)
- * e tenta o caminho premium (InfoSimples) para marcas. Tolerante a falhas.
+ * kinds sem CNPJ casado (processos), abre os municípios referenciados (por IBGE),
+ * tenta o caminho premium (InfoSimples) para marcas e monta os cruzamentos novos:
+ *   • cadastro `company` → enriquece o CENTRO + abre os SÓCIOS do QSA (rel `socio`);
+ *   • despesas `parliamentary_expense` em que a empresa foi FORNECEDORA → liga ao
+ *     centro por `fornecedor` e abre os DEPUTADOS pagadores (rel `despesa`).
+ * Tolerante a falhas: cada cruzamento que falhar/vier vazio degrada em silêncio.
  */
 export async function expandCnpj(
   rawCnpj: string,
@@ -799,26 +1174,56 @@ export async function expandCnpj(
     throw new Error("CNPJ inválido: digite os 14 números (com ou sem máscara).");
   }
 
+  // A despesa liga ao centro como "pagamento a fornecedor"; os demais por "cnpj".
+  const relForKind = (kind: GraphKind): EdgeKind =>
+    kind === "parliamentary_expense" ? "fornecedor" : "cnpj";
+
   const cnpjResults = await Promise.allSettled(
-    CNPJ_KINDS.map((kind) => fetchKindByCnpj(kind, cnpj, fetcher)),
+    CNPJ_KINDS.map((kind) => fetchKindByCnpj(kind, cnpj, fetcher, relForKind(kind))),
   );
 
   const leaves: RawLeaf[] = [];
   const counts: Partial<Record<NodeKind, number>> = {};
   const errors: string[] = [];
   let centerLabel = "";
+  // Linhas cruas retidas para os cruzamentos que precisam de attributes.
+  let companyRows: D1EntityRow[] = [];
+  let expenseRows: D1EntityRow[] = [];
 
   cnpjResults.forEach((result, i) => {
     const kind = CNPJ_KINDS[i]!;
-    if (result.status === "fulfilled") {
-      const { leaves: kindLeaves, centerLabel: candidate } = result.value;
-      if (centerLabel === "" && candidate) centerLabel = candidate;
-      if (kindLeaves.length > 0) counts[kind] = kindLeaves.length;
-      leaves.push(...kindLeaves);
-    } else {
+    if (result.status !== "fulfilled") {
       errors.push(`${kind}: ${toErrorMessage(result.reason)}`);
+      return;
     }
+    const { leaves: kindLeaves, centerLabel: candidate, rows } = result.value;
+    if (centerLabel === "" && candidate) centerLabel = candidate;
+
+    // `company` é o cadastro da PRÓPRIA empresa-centro: não vira nó solto (seria um
+    // duplicado do centro) — enriquece o centro e alimenta o QSA. Guardamos as rows.
+    if (kind === "company") {
+      companyRows = rows;
+      return;
+    }
+    if (kind === "parliamentary_expense") expenseRows = rows;
+
+    if (kindLeaves.length > 0) counts[kind] = kindLeaves.length;
+    leaves.push(...kindLeaves);
   });
+
+  // Enriquecimento do CENTRO a partir do cadastro `company` (razão, CNAE, capital…).
+  let centerDetails: DetailField[] | undefined;
+  let centerSourceUrl: string | undefined;
+  if (companyRows.length > 0) {
+    const companyLeaf = leafFromRow("company", companyRows[0]!, "cnpj");
+    if (companyLeaf) {
+      centerDetails = companyLeaf.details;
+      centerSourceUrl = companyLeaf.sourceUrl;
+      if (centerLabel === "" || centerLabel === formatCnpj(cnpj)) {
+        centerLabel = companyLeaf.label;
+      }
+    }
+  }
 
   // Cruza por NOME (processos sem CNPJ) — só quando já temos um rótulo de empresa.
   if (centerLabel !== "" && centerLabel !== formatCnpj(cnpj)) {
@@ -855,6 +1260,47 @@ export async function expandCnpj(
     /* degrada para a base RPI já carregada */
   }
 
+  const crossEdges: Array<{ from: string; to: string; rel: EdgeKind }> = [];
+
+  // Sócios do QSA (a partir do cadastro `company` do centro) — ligados ao CENTRO.
+  // Não há nó `company` solto (o cadastro enriquece o próprio centro), então cada
+  // sócio liga ao centro via o sentinela CENTER_SENTINEL, resolvido na página.
+  try {
+    const socios = sociosFromCompanyRows(companyRows);
+    if (socios.length > 0) {
+      counts["person"] = (counts["person"] ?? 0) + socios.length;
+      leaves.push(...socios);
+      // Liga cada sócio diretamente ao CENTRO. Usamos o id sentinela CENTER_SENTINEL
+      // no `from`: a página o resolve para o id real do nó central em `mergeExpansion`.
+      for (const s of socios) {
+        crossEdges.push({ from: CENTER_SENTINEL, to: s.id, rel: "socio" });
+      }
+    }
+  } catch (error) {
+    errors.push(`person(QSA): ${toErrorMessage(error)}`);
+  }
+
+  // Ponta empresa→político do "siga o dinheiro": deputados pagadores das despesas.
+  try {
+    const expenseInfo = expenseRows
+      .map((row) => ({
+        leaf: leaves.find((l) => l.id === `parliamentary_expense:${row.id}`),
+        deputadoId: str(row.external_ids?.["deputadoId"]) || str(attr(row, "deputadoId")),
+        deputadoNome: str(attr(row, "deputadoNome")),
+      }))
+      .filter((e): e is { leaf: RawLeaf; deputadoId: string; deputadoNome: string } =>
+        e.leaf != null,
+      );
+    const { politicians, edges } = await deputadosFromExpenseLeaves(expenseInfo, fetcher);
+    if (politicians.length > 0) {
+      counts["politician"] = (counts["politician"] ?? 0) + politicians.length;
+      leaves.push(...politicians);
+      crossEdges.push(...edges);
+    }
+  } catch (error) {
+    errors.push(`politician(despesa): ${toErrorMessage(error)}`);
+  }
+
   // Abre os municípios referenciados pelas folhas (por código IBGE) como nós.
   const municipalityEdges: Array<{ from: string; to: string }> = [];
   try {
@@ -871,11 +1317,181 @@ export async function expandCnpj(
   return {
     cnpj,
     centerLabel: centerLabel || formatCnpj(cnpj),
+    centerDetails,
+    centerSourceUrl,
     leaves,
     counts,
     errors,
     trademarksPremium,
     municipalityEdges: municipalityEdges.length > 0 ? municipalityEdges : undefined,
+    crossEdges: crossEdges.length > 0 ? crossEdges : undefined,
+  };
+}
+
+// ─── API pública: expandir um POLÍTICO (centro = deputado) ───────────────────────
+
+/**
+ * Expande um deputado por `deputadoId`: monta a ponta político→empresa do "siga o
+ * dinheiro" (despesas CEAP do parlamentar → empresas fornecedoras por CNPJ) e a
+ * atividade legislativa (votações de que participou → proposições votadas).
+ *
+ * Limitações honestas das fontes (degradam com elegância, sem fabricar vínculo):
+ *   • Despesas: o d1-bridge não filtra por `deputadoId`; buscamos por NOME (`q`) e
+ *     filtramos no cliente por `attributes.deputadoId` para precisão.
+ *   • Votações: NÃO trazem o nome do deputado no texto (só em `attributes.votos[]`),
+ *     então varremos um lote das mais recentes (`VOTE_SCAN_LIMIT`) e filtramos por
+ *     `deputadoId` — mostramos as recentes, não o histórico inteiro.
+ */
+export async function expandPolitician(
+  deputadoId: string,
+  nome: string,
+  fetcher: typeof fetch = fetch,
+): Promise<ExpandResult> {
+  const leaves: RawLeaf[] = [];
+  const counts: Partial<Record<NodeKind, number>> = {};
+  const errors: string[] = [];
+  const crossEdges: Array<{ from: string; to: string; rel: EdgeKind }> = [];
+
+  // ── Despesas do parlamentar → empresas fornecedoras ──
+  try {
+    const q = nome.trim();
+    const { rows } = q.length >= 3
+      ? await fetchD1Entities(
+          { kind: "parliamentary_expense", q, limit: PAGE_LIMIT },
+          fetcher,
+        )
+      : { rows: [] as D1EntityRow[] };
+
+    // Filtra por deputadoId (precisão) ou, na ausência do id, pelo nome casado.
+    const mine = rows.filter((r) => {
+      const rid = str(r.external_ids?.["deputadoId"]) || str(attr(r, "deputadoId"));
+      if (deputadoId !== "") return rid === deputadoId;
+      return norm(str(attr(r, "deputadoNome"))) === norm(nome);
+    });
+
+    // Agrupa fornecedores distintos (1 nó-empresa por CNPJ, não 1 por documento).
+    const fornByCnpj = new Map<string, { nome: string; expenseIds: string[] }>();
+    for (const row of mine.slice(0, MAX_PER_KIND)) {
+      const leaf = leafFromRow("parliamentary_expense", row, "despesa");
+      if (!leaf) continue;
+      leaves.push(leaf);
+      counts["parliamentary_expense"] = (counts["parliamentary_expense"] ?? 0) + 1;
+      const fornCnpj = validCnpj(str(attr(row, "cnpjFornecedor")) || str(row.cnpj));
+      if (fornCnpj === "") continue;
+      const entry = fornByCnpj.get(fornCnpj) ?? {
+        nome: str(attr(row, "fornecedor")),
+        expenseIds: [],
+      };
+      entry.expenseIds.push(leaf.id);
+      fornByCnpj.set(fornCnpj, entry);
+    }
+
+    // Cria um nó-empresa por fornecedor e liga despesa→empresa (rel `fornecedor`).
+    let fornCount = 0;
+    for (const [fornCnpj, info] of fornByCnpj) {
+      if (fornCount >= MAX_FORNECEDORES) break;
+      fornCount++;
+      const companyId = `company:fornecedor:${fornCnpj}`;
+      leaves.push({
+        id: companyId,
+        kind: "company",
+        rel: "fornecedor",
+        label: info.nome || formatCnpj(fornCnpj),
+        sublabel: formatCnpj(fornCnpj),
+        cnpj: fornCnpj,
+        sourceUrl: `https://brasilapi.com.br/api/cnpj/v1/${fornCnpj}`,
+        details: [
+          { label: "Fornecedor", value: info.nome || "—" },
+          { label: "CNPJ", value: formatCnpj(fornCnpj) },
+          { label: "Documentos de despesa", value: String(info.expenseIds.length) },
+        ],
+      });
+      counts["company"] = (counts["company"] ?? 0) + 1;
+      for (const expenseId of info.expenseIds) {
+        crossEdges.push({ from: expenseId, to: companyId, rel: "fornecedor" });
+      }
+    }
+  } catch (error) {
+    errors.push(`parliamentary_expense: ${toErrorMessage(error)}`);
+  }
+
+  // ── Votações de que o deputado participou → proposições ──
+  try {
+    const { rows } = await fetchD1Entities(
+      { kind: "legislative_vote", limit: VOTE_SCAN_LIMIT },
+      fetcher,
+    );
+    let voteCount = 0;
+    const propSeen = new Set<string>();
+    for (const row of rows) {
+      if (voteCount >= MAX_VOTES) break;
+      const votos = attr(row, "votos");
+      if (!Array.isArray(votos) || votos.length === 0) continue;
+      const voto = votos.find(
+        (v) =>
+          v != null &&
+          typeof v === "object" &&
+          str((v as Record<string, unknown>)["deputadoId"]) === deputadoId,
+      ) as Record<string, unknown> | undefined;
+      if (!voto && deputadoId !== "") continue;
+
+      const voteLeaf = leafFromRow("legislative_vote", row, "voto");
+      if (!voteLeaf) continue;
+      // Anexa COMO o deputado votou (Sim/Não/Abstenção) ao detalhe da votação.
+      const comoVotou = str(voto?.["voto"]);
+      if (comoVotou && voteLeaf.details) {
+        voteLeaf.details.push({ label: "Voto do parlamentar", value: comoVotou });
+      }
+      leaves.push(voteLeaf);
+      counts["legislative_vote"] = (counts["legislative_vote"] ?? 0) + 1;
+      voteCount++;
+
+      // Proposição votada → nó próprio (rel `voto`), deduplicada por id.
+      const prop = attr(row, "proposicao") as Record<string, unknown> | undefined;
+      if (prop) {
+        const propId = str(prop["id"]);
+        const sigla = [str(prop["siglaTipo"]), str(prop["numero"])]
+          .filter(Boolean)
+          .join(" ");
+        const ano = str(prop["ano"]);
+        const ementa = str(prop["ementa"]);
+        const label = (sigla + (ano ? `/${ano}` : "")).trim() || ementa.slice(0, 40);
+        if (label !== "") {
+          const nodeId = `legal_proposition:${propId || norm(label).replace(/\s+/g, "-")}`;
+          if (!propSeen.has(nodeId)) {
+            propSeen.add(nodeId);
+            leaves.push({
+              id: nodeId,
+              kind: "legal_proposition",
+              rel: "voto",
+              label,
+              sublabel: ementa ? ementa.slice(0, 60) : undefined,
+              searchTerm: label,
+              sourceUrl: propId
+                ? `https://www.camara.leg.br/propostas-legislativas/${propId}`
+                : undefined,
+              details: [
+                { label: "Proposição", value: label },
+                ...(ementa ? [{ label: "Ementa", value: ementa.slice(0, 240) }] : []),
+              ],
+            });
+            counts["legal_proposition"] = (counts["legal_proposition"] ?? 0) + 1;
+          }
+          crossEdges.push({ from: voteLeaf.id, to: nodeId, rel: "voto" });
+        }
+      }
+    }
+  } catch (error) {
+    errors.push(`legislative_vote: ${toErrorMessage(error)}`);
+  }
+
+  return {
+    cnpj: "",
+    centerLabel: nome,
+    leaves,
+    counts,
+    errors,
+    crossEdges: crossEdges.length > 0 ? crossEdges : undefined,
   };
 }
 
@@ -884,15 +1500,26 @@ export async function expandCnpj(
 /**
  * Expande um nó-folha conforme o que ele carrega:
  *   • tem CNPJ próprio  → `expandCnpj` (rede completa do órgão/empresa).
+ *   • é um deputado     → `expandPolitician` (despesas → fornecedores + votações).
  *   • tem searchTerm    → busca por NOME nos kinds âncora (político, município…).
  * Quando não há por onde expandir, devolve vazio (a página trata).
  */
 export async function expandLeaf(
-  node: { cnpj?: string | undefined; searchTerm?: string | undefined; label: string },
+  node: {
+    cnpj?: string | undefined;
+    searchTerm?: string | undefined;
+    deputadoId?: string | undefined;
+    kind?: NodeKind | undefined;
+    label: string;
+  },
   fetcher: typeof fetch = fetch,
 ): Promise<ExpandResult> {
   if (node.cnpj && sanitizeCnpj(node.cnpj) !== "") {
     return expandCnpj(node.cnpj, fetcher);
+  }
+  // Deputado: cruzamento dedicado (despesas → fornecedores + votações → proposições).
+  if (node.kind === "politician" && (node.deputadoId || node.label)) {
+    return expandPolitician(node.deputadoId ?? "", node.searchTerm ?? node.label, fetcher);
   }
   const termo = (node.searchTerm ?? node.label).trim();
   if (termo.length < 3) {

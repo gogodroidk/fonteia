@@ -43,6 +43,7 @@ import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
 import { IntelligenceOmnibox } from "./components/ai/IntelligenceOmnibox";
 import { ContextChat } from "./components/ai/ContextChat";
+import { PwaInstallPrompt } from "./components/pwa-install-prompt";
 
 // --- ErrorBoundary: captura erros de chunks lazy e renderiza fallback amigável ---
 interface ErrorBoundaryState {
@@ -634,21 +635,23 @@ function AppShell({ path, navigate }: AppShellProps) {
                 <ThemeToggle />
               </HelpHint>
               {/* Botão Modo Ajuda */}
-              <button
-                className="btn btn--icon btn--ghost"
-                type="button"
-                onClick={toggleHelp}
-                aria-label={helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
-                aria-pressed={helpOn}
-                title={helpOn ? "Desligar ajuda" : "Ligar ajuda"}
-                style={{
-                  color: helpOn ? "var(--brand-ink, #1D5FE0)" : undefined,
-                  background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : undefined,
-                  borderRadius: 9,
-                }}
-              >
-                <HelpCircle size={18} aria-hidden="true" />
-              </button>
+              <HelpHint id="topbar.help">
+                <button
+                  className="btn btn--icon btn--ghost shell-help"
+                  type="button"
+                  onClick={toggleHelp}
+                  aria-label={helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
+                  aria-pressed={helpOn}
+                  title={helpOn ? "Desligar ajuda" : "Ligar ajuda"}
+                  style={{
+                    color: helpOn ? "var(--brand-ink, #1D5FE0)" : undefined,
+                    background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : undefined,
+                    borderRadius: 9,
+                  }}
+                >
+                  <HelpCircle size={18} aria-hidden="true" />
+                </button>
+              </HelpHint>
               <HelpHint id="topbar.alerts">
                 <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
                   <Bell size={18} aria-hidden="true" />
@@ -783,6 +786,9 @@ function AppShell({ path, navigate }: AppShellProps) {
       <div className="shell-chat">
         <ContextChat context={aiContext} {...(aiAccessToken ? { accessToken: aiAccessToken } : {})} />
       </div>
+
+      {/* Convite para instalar o app no celular (Android/Chrome e iOS/Safari). */}
+      <PwaInstallPrompt />
 
       {/* floating "Perguntar" button — mobile only, sits above the bottom nav */}
       {route !== "search" && (
@@ -986,6 +992,12 @@ function AppShell({ path, navigate }: AppShellProps) {
           /* mobile: IA fica no FAB "Perguntar" (abaixo). Esconde omnibox e chat flutuante. */
           .shell-omnibox{display:none}
           .shell-chat{display:none}
+          /* No mobile o upgrade vira ícone e o espaçamento aperta, garantindo que
+             Ajuda, Tema, Alertas e Conta caibam sempre — sem nenhum botão sair da tela. */
+          .shell-actions{gap:4px}
+          .shell-upgrade-label{display:none}
+          .shell-upgrade{padding:0;width:36px;height:36px;border-radius:11px}
+          .shell-help{flex:0 0 auto}
           /* clear the fixed bottom nav so content is never hidden behind it */
           .shell-content{padding-bottom:calc(64px + env(safe-area-inset-bottom) + 16px)}
           .shell-bottomnav{

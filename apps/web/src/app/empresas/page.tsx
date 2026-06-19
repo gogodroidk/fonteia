@@ -17,6 +17,8 @@ import type { OrgaoPublico } from "@fonteia/sources";
 import {
   type EmpresaCnpj,
   type SancaoItem,
+  type CompanyEnrichItem,
+  fetchCompanyEnrichment,
   formatCnpjSancao,
   listOrgaos,
   listSancoes,
@@ -111,6 +113,8 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchedCnpj, setSearchedCnpj] = useState<string | null>(null);
+  const [enrichment, setEnrichment] = useState<CompanyEnrichItem | null>(null);
+  const [isLoadingEnrich, setIsLoadingEnrich] = useState(false);
 
   const digits = sanitizeCnpj(input);
   const canSearch = digits !== "" && !isLoading;
@@ -125,14 +129,32 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
     setIsLoading(true);
     setError(null);
     setEmpresa(null);
+    setEnrichment(null);
+    setIsLoadingEnrich(true);
     setSearchedCnpj(formatCnpj(cnpj));
+
+    let cancelled = false;
+
     try {
       const result = await lookupCnpj(cnpj);
       setEmpresa(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
+      cancelled = true;
+      setIsLoadingEnrich(false);
     } finally {
       setIsLoading(false);
+    }
+
+    if (!cancelled) {
+      fetchCompanyEnrichment(cnpj)
+        .then((result) => {
+          setEnrichment(result.company);
+          setIsLoadingEnrich(false);
+        })
+        .catch(() => {
+          setIsLoadingEnrich(false);
+        });
     }
   }
 
@@ -141,6 +163,8 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
     setEmpresa(null);
     setError(null);
     setSearchedCnpj(null);
+    setEnrichment(null);
+    setIsLoadingEnrich(false);
   }
 
   const ativa = empresa ? isSituacaoAtiva(empresa.situacao) : false;
@@ -383,7 +407,284 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
           </div>
         </article>
       )}
+
+      {/* Enriquecimento BrasilAPI */}
+      {(isLoadingEnrich || enrichment !== null) && empresa !== null && (
+        <EnrichmentPanel enrichment={enrichment} isLoading={isLoadingEnrich} />
+      )}
     </section>
+  );
+}
+
+// ─── Painel de enriquecimento BrasilAPI ─────────────────────────────────────────
+
+/** Lista de CNAEs com colapso após 3 itens. */
+function CnaeChips({ items }: { items: Array<{ codigo: string; descricao: string }> }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? items : items.slice(0, 3);
+  const remaining = items.length - 3;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+      {visible.map((c) => (
+        <span
+          key={c.codigo}
+          className="badge badge--neutral"
+          style={{ fontSize: 12 }}
+          title={c.descricao}
+        >
+          {c.codigo}
+        </span>
+      ))}
+      {!expanded && remaining > 0 && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          style={{ fontSize: 12, padding: "2px 8px", height: "auto" }}
+          onClick={() => setExpanded(true)}
+        >
+          Ver todos ({items.length})
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Painel de dados enriquecidos — BrasilAPI / D1. */
+function EnrichmentPanel({
+  enrichment,
+  isLoading,
+}: {
+  enrichment: CompanyEnrichItem | null;
+  isLoading: boolean;
+}) {
+  const FONTE_DOTS_BRASIL_API = [
+    { sigla: "BA", cor: "#2563eb", nome: "BrasilAPI — enriquecimento cadastral (D1)" },
+  ];
+
+  return (
+    <article
+      className="card"
+      style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}
+    >
+      {/* Cabeçalho */}
+      <div className="row between" style={{ gap: 8, alignItems: "center" }}>
+        <div
+          className="tiny"
+          style={{
+            fontWeight: 700,
+            color: "var(--t-hi)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <span
+            style={{
+              padding: "1px 8px",
+              borderRadius: 4,
+              background: "color-mix(in srgb, #2563eb 12%, var(--surface))",
+              color: "#1d4ed8",
+              fontWeight: 800,
+              fontSize: 11,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+            }}
+          >
+            BrasilAPI
+          </span>
+          Dados Enriquecidos — BrasilAPI
+          {isLoading && (
+            <Loader2
+              size={14}
+              className="spin"
+              aria-hidden="true"
+              style={{ color: "var(--t-low)" }}
+            />
+          )}
+        </div>
+        <FonteDots fontes={FONTE_DOTS_BRASIL_API} size={20} />
+      </div>
+
+      {/* Conteúdo: spinner quando carregando, dados quando disponível */}
+      {isLoading && enrichment === null ? (
+        <div
+          className="tiny muted"
+          style={{ display: "flex", alignItems: "center", gap: 8, paddingBottom: 4 }}
+        >
+          <Loader2 size={14} className="spin" aria-hidden="true" />
+          Buscando dados complementares…
+        </div>
+      ) : enrichment === null ? (
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Nenhum dado de enriquecimento disponível para este CNPJ no momento.
+        </p>
+      ) : (
+        <EnrichmentContent enrichment={enrichment} />
+      )}
+    </article>
+  );
+}
+
+function EnrichmentContent({ enrichment }: { enrichment: CompanyEnrichItem }) {
+  const { attributes } = enrichment;
+
+  const {
+    capitalSocial,
+    simples,
+    mei,
+    situacaoCadastral,
+    cnaePrincipal,
+    cnaesSecundarios,
+    qsa,
+  } = attributes;
+
+  const hasSituacaoAtiva =
+    situacaoCadastral != null &&
+    situacaoCadastral.toUpperCase().includes("ATIVA");
+  const hasSituacaoBaixa =
+    situacaoCadastral != null &&
+    (situacaoCadastral.toUpperCase().includes("BAIXADA") ||
+      situacaoCadastral.toUpperCase().includes("SUSPENSA"));
+
+  const situacaoColor = hasSituacaoAtiva
+    ? "#0a7d4b"
+    : hasSituacaoBaixa
+    ? "var(--danger)"
+    : "var(--t-mid)";
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Capital social */}
+      {capitalSocial != null && capitalSocial > 0 && (
+        <div>
+          <div className="tiny muted" style={{ marginBottom: 3 }}>
+            Capital social
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--t-hi)" }}>
+            {capitalSocial.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+          </div>
+        </div>
+      )}
+
+      {/* Regime tributário */}
+      {simples != null && (
+        <div>
+          <div className="tiny muted" style={{ marginBottom: 6 }}>
+            Regime tributário
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {simples === true && (
+              <span
+                className="badge"
+                style={{
+                  background: "color-mix(in srgb, #16a34a 14%, var(--surface))",
+                  color: "#0a7d4b",
+                  border: "1px solid color-mix(in srgb, #16a34a 28%, transparent)",
+                  fontWeight: 700,
+                }}
+              >
+                Simples Nacional
+              </span>
+            )}
+            {mei === true && (
+              <span
+                className="badge"
+                style={{
+                  background: "color-mix(in srgb, #16a34a 14%, var(--surface))",
+                  color: "#0a7d4b",
+                  border: "1px solid color-mix(in srgb, #16a34a 28%, transparent)",
+                  fontWeight: 700,
+                }}
+              >
+                MEI
+              </span>
+            )}
+            {simples === false && (
+              <span className="badge badge--neutral" style={{ fontWeight: 600 }}>
+                Não optante
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Situação cadastral */}
+      {situacaoCadastral != null && (
+        <div>
+          <div className="tiny muted" style={{ marginBottom: 3 }}>
+            Situação cadastral
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: situacaoColor }}>
+            {situacaoCadastral}
+          </div>
+        </div>
+      )}
+
+      {/* CNAE principal */}
+      {cnaePrincipal != null && (
+        <div>
+          <div className="tiny muted" style={{ marginBottom: 3 }}>
+            CNAE principal
+          </div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--t-hi)" }}>
+            {cnaePrincipal.codigo} — {cnaePrincipal.descricao}
+          </div>
+        </div>
+      )}
+
+      {/* CNAEs secundários */}
+      {cnaesSecundarios != null && cnaesSecundarios.length > 0 && (
+        <div>
+          <div className="tiny muted" style={{ marginBottom: 6 }}>
+            CNAEs secundários
+          </div>
+          <CnaeChips items={cnaesSecundarios} />
+        </div>
+      )}
+
+      {/* Quadro societário — BrasilAPI */}
+      {qsa != null && qsa.length > 0 && (
+        <div>
+          <div
+            className="tiny"
+            style={{
+              fontWeight: 700,
+              color: "var(--t-hi)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 8,
+            }}
+          >
+            <Users size={14} aria-hidden="true" />
+            Quadro societário — BrasilAPI ({qsa.length})
+          </div>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+            }}
+          >
+            {qsa.map((socio, i) => (
+              <li
+                key={`${socio.nome}-${i}`}
+                className="inset"
+                style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2 }}
+              >
+                <span style={{ fontWeight: 600, color: "var(--t-hi)", fontSize: 13.5 }}>
+                  {socio.nome}
+                </span>
+                <span className="tiny muted">{socio.qualificacao || "Sócio"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 

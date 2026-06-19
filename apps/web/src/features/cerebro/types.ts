@@ -27,10 +27,18 @@ export type GraphKind =
   | "municipality"
   | "politician"
   | "legal_proposition"
-  | "trademark";
+  | "trademark"
+  // ── Novos kinds (ingeridos em paralelo — degradam sem quebrar quando vazios) ──
+  | "parliamentary_expense" // despesas/cota parlamentar (CEAP) — "siga o dinheiro"
+  | "legislative_vote" // votações nominais da Câmara
+  | "company"; // enriquecimento BrasilAPI por CNPJ (CNAE, QSA, capital…)
 
-/** Tipo lógico de um nó no grafo. `entity` é o nó central (empresa/pessoa). */
-export type NodeKind = GraphKind | "entity";
+/**
+ * Tipo lógico de um nó no grafo. `entity` é o nó central (empresa/pessoa).
+ * `person` é um nó-folha de pessoa física (ex.: sócio do QSA de uma empresa) —
+ * não é um GraphKind buscável no D1, só um nó derivado de `company.attributes.qsa`.
+ */
+export type NodeKind = GraphKind | "entity" | "person";
 
 /**
  * Como dois nós ficaram ligados — define a COR e o RÓTULO do fio (legenda de
@@ -42,7 +50,12 @@ export type EdgeKind =
   | "name" // mesmo nome/razão social (processos e contratos sem CNPJ casado)
   | "municipio" // mesmo município (código IBGE) — licitações/contratos ↔ município
   | "orgao" // órgão público ligado ao contrato/licitação
-  | "derived"; // expansão a partir de um nó-folha (recentralização leve)
+  | "derived" // expansão a partir de um nó-folha (recentralização leve)
+  // ── Novas semânticas de relação ──
+  | "despesa" // político → despesa (cota parlamentar / CEAP)
+  | "fornecedor" // despesa → empresa fornecedora (por CNPJ) — "siga o dinheiro"
+  | "voto" // político ↔ votação ↔ proposição (atividade legislativa)
+  | "socio"; // empresa → sócio do QSA (pessoa)
 
 /**
  * Nó do grafo. As coordenadas/velocidade são mutadas pelo motor de força
@@ -67,6 +80,11 @@ export interface GraphNode {
    * não têm CNPJ próprio.
    */
   searchTerm?: string | undefined;
+  /**
+   * Id do deputado na Câmara (quando o nó é `politician`). Habilita o cruzamento
+   * por deputadoId — despesas (fornecedores) e votações (proposições).
+   */
+  deputadoId?: string | undefined;
   /** Link para a fonte oficial deste registro (quando houver). */
   sourceUrl?: string | undefined;
   /** Pares rótulo→valor com os dados completos do registro (painel de detalhe). */
@@ -200,26 +218,58 @@ export const MODULE_META: Record<NodeKind, ModuleMeta> = {
     color: "#14CBB1", // --accent-2
     fonte: "INPI (RPI / InfoSimples premium)",
   },
+  parliamentary_expense: {
+    kind: "parliamentary_expense",
+    label: "Despesa parlamentar (CEAP)",
+    color: "#F472B6", // rosa (cota parlamentar — família política/Câmara)
+    fonte: "Câmara dos Deputados — Cota Parlamentar (CEAP)",
+  },
+  legislative_vote: {
+    kind: "legislative_vote",
+    label: "Votação legislativa",
+    color: "#C084FC", // lilás (votações — família política/Câmara)
+    fonte: "Câmara dos Deputados — Votações",
+  },
+  company: {
+    kind: "company",
+    label: "Empresa (Cadastro CNPJ)",
+    color: "#2DD4BF", // teal (enriquecimento cadastral — família empresas)
+    fonte: "BrasilAPI — Cadastro CNPJ (espelho Receita Federal)",
+  },
+  person: {
+    kind: "person",
+    label: "Pessoa / sócio (QSA)",
+    color: "#FB923C", // âmbar quente (pessoa física — distinto de empresa)
+    fonte: "BrasilAPI — Quadro de Sócios e Administradores (QSA)",
+  },
 };
 
 /** Ordem de exibição na legenda / lista (centro primeiro, depois por relevância). */
 export const LEGEND_ORDER: NodeKind[] = [
   "entity",
+  "company",
+  "person",
   "sanction",
   "public_contract",
   "bidding_opportunity",
+  "parliamentary_expense",
   "legal_process",
   "environmental_infraction",
   "trademark",
   "organization",
   "municipality",
   "politician",
+  "legislative_vote",
   "legal_proposition",
 ];
 
-/** Todos os kinds-folha que servem de CAMADA filtrável (sem o centro). */
+/**
+ * Todos os kinds-folha que servem de CAMADA filtrável (sem o centro). `person` é
+ * excluído: é um nó DERIVADO (sócio do QSA), não um kind buscável no D1, então não
+ * vira um toggle de camada — mas continua aparecendo na legenda e na lista lateral.
+ */
 export const FILTERABLE_KINDS: GraphKind[] = LEGEND_ORDER.filter(
-  (k): k is GraphKind => k !== "entity",
+  (k): k is GraphKind => k !== "entity" && k !== "person",
 );
 
 /** Cor de um kind (fallback para o azul de marca se faltar). */
@@ -251,10 +301,25 @@ export const RELATION_META: Record<EdgeKind, RelationMeta> = {
   municipio: { rel: "municipio", label: "Mesmo município (IBGE)", color: "#22A7F0" },
   orgao: { rel: "orgao", label: "Órgão contratante", color: "#7C5CFF" },
   derived: { rel: "derived", label: "Conexão derivada", color: "#94A3B8" },
+  // ── Novas relações ──
+  despesa: { rel: "despesa", label: "Despesa do parlamentar", color: "#F472B6" },
+  fornecedor: { rel: "fornecedor", label: "Pagamento a fornecedor", color: "#FB7185" },
+  voto: { rel: "voto", label: "Atividade legislativa", color: "#C084FC" },
+  socio: { rel: "socio", label: "Sócio (QSA)", color: "#FB923C" },
 };
 
 /** Ordem das relações na legenda. */
-export const RELATION_ORDER: EdgeKind[] = ["cnpj", "name", "municipio", "orgao", "derived"];
+export const RELATION_ORDER: EdgeKind[] = [
+  "cnpj",
+  "fornecedor",
+  "despesa",
+  "socio",
+  "voto",
+  "name",
+  "municipio",
+  "orgao",
+  "derived",
+];
 
 /** Cor de um tipo de relação (fallback cinza neutro). */
 export function relColorOf(rel: EdgeKind): string {

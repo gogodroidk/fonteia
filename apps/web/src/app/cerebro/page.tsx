@@ -54,6 +54,7 @@ import {
   sanitizeCnpj,
   formatCnpj,
   EXEMPLO_CNPJ,
+  CENTER_SENTINEL,
   type ExpandResult,
   type RawLeaf,
   type SearchHit,
@@ -75,6 +76,7 @@ import {
   type GraphNode,
   type NodeKind,
 } from "../../features/cerebro/types";
+import CerebroGuide from "../../components/cerebro/cerebro-guide";
 
 // ─── Helpers de grafo ───────────────────────────────────────────────────────────
 
@@ -133,6 +135,7 @@ function makeLeafNode(
     cnpj: leaf.cnpj,
     codigoIbge: leaf.codigoIbge,
     searchTerm: leaf.searchTerm,
+    deputadoId: leaf.deputadoId,
     sourceUrl: leaf.sourceUrl,
     details: leaf.details,
     isCenter: false,
@@ -151,26 +154,68 @@ function makeLeafNode(
 const edgeKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 
 /**
+ * Relações "contextuais" desenhadas TRACEJADAS (município/órgão/nome/voto), para
+ * o olho separá-las dos vínculos fortes/diretos sólidos (CNPJ, fornecedor — siga
+ * o dinheiro —, despesa, sócio). Usado tanto no canvas quanto na legenda.
+ */
+const DASHED_RELS = new Set<EdgeKind>(["municipio", "name", "voto"]);
+function isDashedRel(rel: EdgeKind): boolean {
+  return DASHED_RELS.has(rel);
+}
+
+/**
+ * Kinds que NÃO ligam diretamente ao pai porque já são ligados por arestas extra
+ * (município por IBGE; sócios/proposições/fornecedores por `crossEdges`). Evita o
+ * fio redundante centro→folha quando a folha já tem o seu vínculo semântico.
+ */
+const CROSS_LINKED_KINDS = new Set<NodeKind>([
+  "municipality",
+  "person",
+  "legal_proposition",
+]);
+
+/**
  * Funde os nós-folha de uma expansão num grafo existente, ligando cada folha ao
- * nó-pai (com a relação correta) e adicionando as arestas extra de município.
+ * nó-pai (com a relação correta) e adicionando as arestas extra (município +
+ * cruzamentos tipados de `crossEdges`). Também enriquece o nó-pai com os detalhes
+ * cadastrais do centro (`centerDetails`/`centerSourceUrl`, vindos do `company`).
  * Deduplica nós e arestas por id. Marca o pai como `expanded`. Devolve um
  * GraphData novo (imutável p/ o React reagir).
  */
 function mergeExpansion(
   prev: GraphData,
   parentId: string,
-  result: Pick<ExpandResult, "leaves" | "municipalityEdges">,
+  result: Pick<
+    ExpandResult,
+    "leaves" | "municipalityEdges" | "crossEdges" | "centerDetails" | "centerSourceUrl"
+  >,
 ): GraphData {
-  const nodes = prev.nodes.map((n) =>
-    n.id === parentId ? { ...n, expanded: true } : n,
-  );
+  const { leaves, municipalityEdges, crossEdges, centerDetails, centerSourceUrl } = result;
+
+  // Marca o pai como expandido e, se vieram detalhes do centro, funde-os no nó.
+  const nodes = prev.nodes.map((n) => {
+    if (n.id !== parentId) return n;
+    const enriched: GraphNode = { ...n, expanded: true };
+    if (centerDetails && centerDetails.length > 0) enriched.details = centerDetails;
+    if (centerSourceUrl && !enriched.sourceUrl) enriched.sourceUrl = centerSourceUrl;
+    return enriched;
+  });
   const parent = nodes.find((n) => n.id === parentId);
   if (!parent) return prev;
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const existingEdges = new Set(prev.edges.map((e) => edgeKey(e.source, e.target)));
   const newEdges: GraphEdge[] = [...prev.edges];
-  const { leaves, municipalityEdges } = result;
+
+  /** Adiciona uma aresta deduplicada (ignora se algum extremo não existe). */
+  const addEdge = (from: string, to: string, rel: GraphEdge["rel"]): void => {
+    if (from === to) return;
+    if (!nodeById.has(from) || !nodeById.has(to)) return;
+    const key = edgeKey(from, to);
+    if (existingEdges.has(key)) return;
+    existingEdges.add(key);
+    newEdges.push({ source: from, target: to, length: edgeLengthFor(rel), rel });
+  };
 
   leaves.forEach((leaf, i) => {
     if (!nodeById.has(leaf.id)) {
@@ -178,27 +223,23 @@ function mergeExpansion(
       nodeById.set(node.id, node);
       nodes.push(node);
     }
-    // Município já é ligado às folhas pelas arestas extra — não ligamos ao pai.
-    if (leaf.kind === "municipality") return;
-    const key = edgeKey(parentId, leaf.id);
-    if (!existingEdges.has(key)) {
-      existingEdges.add(key);
-      newEdges.push({
-        source: parentId,
-        target: leaf.id,
-        length: edgeLengthFor(leaf.rel),
-        rel: leaf.rel,
-      });
-    }
+    // Folhas com vínculo próprio (município/sócio/proposição) são ligadas pelas
+    // arestas extra — não duplicamos o fio centro→folha.
+    if (CROSS_LINKED_KINDS.has(leaf.kind)) return;
+    addEdge(parentId, leaf.id, leaf.rel);
   });
 
   // Arestas folha↔município (cruzamento por código IBGE).
   for (const me of municipalityEdges ?? []) {
-    if (!nodeById.has(me.from) || !nodeById.has(me.to)) continue;
-    const key = edgeKey(me.from, me.to);
-    if (existingEdges.has(key)) continue;
-    existingEdges.add(key);
-    newEdges.push({ source: me.from, target: me.to, length: edgeLengthFor("municipio"), rel: "municipio" });
+    addEdge(me.from, me.to, "municipio");
+  }
+
+  // Cruzamentos tipados (siga o dinheiro + atividade legislativa). O sentinela
+  // CENTER_SENTINEL no `from`/`to` é resolvido para o id real do nó-pai.
+  for (const ce of crossEdges ?? []) {
+    const from = ce.from === CENTER_SENTINEL ? parentId : ce.from;
+    const to = ce.to === CENTER_SENTINEL ? parentId : ce.to;
+    addEdge(from, to, ce.rel);
   }
 
   return { nodes, edges: newEdges };
@@ -396,9 +437,9 @@ export function CerebroPage() {
             : 0.3;
       ctx.strokeStyle = hexWithAlpha(base, alpha);
       ctx.lineWidth = (focused || hovered ? 2.4 : 1.2) / cam.scale;
-      // Fios de relação "contextual" (município/órgão/nome) tracejados, para
-      // distinguir de vínculos diretos por CNPJ.
-      if (edge.rel === "municipio" || edge.rel === "name") {
+      // Fios de relação "contextual" (município/órgão/nome/voto) tracejados, para
+      // distinguir de vínculos diretos/fortes (CNPJ, fornecedor, despesa, sócio).
+      if (isDashedRel(edge.rel)) {
         ctx.setLineDash([5 / cam.scale, 4 / cam.scale]);
       }
       ctx.stroke();
@@ -630,20 +671,28 @@ export function CerebroPage() {
         return;
       }
       // Entidade sem CNPJ (político, proposição, marca, município): centro =
-      // a própria entidade; expande por NOME nos kinds âncora.
+      // a própria entidade. Político usa o cruzamento dedicado por deputadoId
+      // (despesas → fornecedores + votações → proposições); os demais por NOME.
       setIsLoading(true);
       setError(null);
       setInfo(null);
       setHits([]);
       try {
-        const result = await expandLeaf(
-          { searchTerm: hit.name, label: hit.name },
-        );
+        const result = await expandLeaf({
+          searchTerm: hit.name,
+          label: hit.name,
+          kind: hit.kind,
+          deputadoId: hit.deputadoId,
+        });
         const centerId = `entity:${hit.kind}:${hit.id}`;
         const center = makeCenterNode(centerId, hit.name, {
           codigoIbge: hit.codigoIbge,
           sublabel: hit.sublabel,
         });
+        // Político-centro guarda o deputadoId para re-expandir/cruzar depois.
+        if (hit.kind === "politician" && hit.deputadoId) {
+          center.deputadoId = hit.deputadoId;
+        }
         // A própria entidade-centro pode reaparecer como folha (mesmo nome) —
         // remove para não duplicar o nó central.
         const ownLeafId = `${hit.kind}:${hit.id}`;
@@ -680,16 +729,48 @@ export function CerebroPage() {
     setError("Digite um CNPJ (14 dígitos) ou um nome para buscar.");
   }, [input, hits, runCnpj, runHit]);
 
-  /** Expande um nó-folha (por CNPJ, por nome ou município) — adiciona conexões. */
+  /**
+   * Exemplo do guia (chips para leigos): aceita CNPJ ou nome. CNPJ → grafo
+   * direto; nome → busca e usa o 1º resultado. Erro amigável se nada bater.
+   */
+  const handleGuideExample = useCallback(
+    (query: string) => {
+      setInput(query);
+      const cnpj = sanitizeCnpj(query);
+      if (cnpj !== "") {
+        void runCnpj(cnpj, true);
+        return;
+      }
+      setSearching(true);
+      void searchEntities(query)
+        .then((found) => {
+          const first = found[0];
+          if (first) {
+            void runHit(first);
+          } else {
+            setError(`Nada encontrado para "${query}". Tente outro nome ou um CNPJ.`);
+          }
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+        .finally(() => setSearching(false));
+    },
+    [runCnpj, runHit],
+  );
+
+  /** Expande um nó-folha (por CNPJ, por deputadoId, por nome ou município). */
   const expandNode = useCallback(
     async (node: GraphNode) => {
-      if (!node.cnpj && !node.searchTerm) return;
+      if (!node.cnpj && !node.searchTerm && !node.deputadoId) return;
       setIsLoading(true);
       setError(null);
       try {
-        const result = await expandLeaf(
-          { cnpj: node.cnpj, searchTerm: node.searchTerm ?? node.label, label: node.label },
-        );
+        const result = await expandLeaf({
+          cnpj: node.cnpj,
+          searchTerm: node.searchTerm ?? node.label,
+          deputadoId: node.deputadoId,
+          kind: node.kind,
+          label: node.label,
+        });
         setGraph((prev) => mergeExpansion(prev, node.id, result));
         const total = result.leaves.length;
         setInfo(
@@ -709,15 +790,29 @@ export function CerebroPage() {
     [],
   );
 
-  /** Recentraliza um nó-folha que tenha CNPJ (vira o novo centro). */
+  /**
+   * Recentraliza um nó-folha como novo centro do grafo:
+   *   • com CNPJ        → rede completa da empresa/órgão (`runCnpj`).
+   *   • político        → cruzamento por deputadoId (despesas + votações).
+   */
   const recenterNode = useCallback(
     (node: GraphNode) => {
       if (node.cnpj) {
         setInput(formatCnpj(node.cnpj));
         void runCnpj(node.cnpj, true);
+        return;
+      }
+      if (node.kind === "politician" && (node.deputadoId || node.searchTerm)) {
+        void runHit({
+          id: node.deputadoId ?? node.id,
+          kind: "politician",
+          name: node.searchTerm ?? node.label,
+          deputadoId: node.deputadoId,
+          sublabel: node.sublabel,
+        });
       }
     },
-    [runCnpj],
+    [runCnpj, runHit],
   );
 
   // ── Handlers de ponteiro (drag de nó + pan) ──
@@ -982,8 +1077,9 @@ export function CerebroPage() {
           Um cérebro visual dos dados públicos. Busque por CNPJ ou por nome (empresa, pessoa, marca,
           político, município): a entidade vira o centro e o grafo puxa tudo que existe sobre ela em
           todos os módulos — sanções, contratos, licitações, infrações ambientais, processos, marcas,
-          municípios e política. Cores por módulo (nós) e por tipo de relação (fios). Clique num nó
-          para ver os detalhes, abrir a fonte oficial, expandir ou recentralizar.
+          municípios, política, despesas parlamentares (siga o dinheiro), votações e sócios (QSA).
+          Cores por módulo (nós) e por tipo de relação (fios). Clique num nó para ver os detalhes,
+          abrir a fonte oficial, expandir ou recentralizar.
         </p>
       </div>
 
@@ -1067,6 +1163,9 @@ export function CerebroPage() {
           )}
         </button>
       </form>
+
+      {/* Guia amigável para leigos — some quando já há um grafo na tela */}
+      {!hasGraph && <CerebroGuide onExample={handleGuideExample} />}
 
       {/* Erro */}
       {error !== null && (
@@ -1385,26 +1484,31 @@ export function CerebroPage() {
                     <ExternalLink size={13} aria-hidden="true" /> Fonte oficial
                   </a>
                 )}
-                {!selectedNode.isCenter && (selectedNode.cnpj || selectedNode.searchTerm) && !selectedNode.expanded && (
-                  <button
-                    className="btn btn--soft btn--sm"
-                    type="button"
-                    onClick={() => void expandNode(selectedNode)}
-                    disabled={isLoading}
-                  >
-                    <Sparkles size={13} aria-hidden="true" /> Expandir conexões
-                  </button>
-                )}
-                {!selectedNode.isCenter && selectedNode.cnpj && (
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    type="button"
-                    onClick={() => recenterNode(selectedNode)}
-                    disabled={isLoading}
-                  >
-                    <Crosshair size={13} aria-hidden="true" /> Recentralizar
-                  </button>
-                )}
+                {!selectedNode.isCenter &&
+                  (selectedNode.cnpj || selectedNode.searchTerm || selectedNode.deputadoId) &&
+                  !selectedNode.expanded && (
+                    <button
+                      className="btn btn--soft btn--sm"
+                      type="button"
+                      onClick={() => void expandNode(selectedNode)}
+                      disabled={isLoading}
+                    >
+                      <Sparkles size={13} aria-hidden="true" /> Expandir conexões
+                    </button>
+                  )}
+                {!selectedNode.isCenter &&
+                  (selectedNode.cnpj ||
+                    (selectedNode.kind === "politician" &&
+                      (selectedNode.deputadoId || selectedNode.searchTerm))) && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => recenterNode(selectedNode)}
+                      disabled={isLoading}
+                    >
+                      <Crosshair size={13} aria-hidden="true" /> Recentralizar
+                    </button>
+                  )}
               </div>
             </div>
           ) : (
@@ -1622,7 +1726,7 @@ function RelDot({ rel }: { rel: EdgeKind }) {
         style={{
           width: 16,
           height: 0,
-          borderTop: `2px ${rel === "municipio" || rel === "name" ? "dashed" : "solid"} ${meta.color}`,
+          borderTop: `2px ${isDashedRel(rel) ? "dashed" : "solid"} ${meta.color}`,
           display: "inline-block",
         }}
       />
