@@ -215,81 +215,108 @@ function normalizeFaf(
   };
 }
 
+/** Info do órgão descentralizador (repassador) de um programa TED. */
+type ProgramaInfo = { sigla: string; nome: string };
+
+/**
+ * Enriquece o cache com os programas referenciados nestes itens TED.
+ * O repassador (quem descentraliza o recurso) vive em /ted/programa, ligado por
+ * id_programa — buscamos com UMA chamada in.(...) por página (não N por item).
+ * Falha de rede é tolerada: o repassador apenas fica "não informado".
+ */
+async function fetchProgramasInto(
+  items: Record<string, unknown>[],
+  cache: Map<number, ProgramaInfo>,
+): Promise<void> {
+  const need = new Set<number>();
+  for (const it of items) {
+    const idp = Number(it["id_programa"]);
+    if (Number.isFinite(idp) && !cache.has(idp)) need.add(idp);
+  }
+  if (need.size === 0) return;
+  const ids = [...need];
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    const url = `${BASE_TED}/programa?id_programa=in.(${chunk.join(",")})` +
+      `&select=id_programa,sigla_unidade_descentralizadora,unidade_descentralizadora`;
+    try {
+      const res = await fetchWithRetry(url, {
+        timeoutMs: 20000,
+        retries: 2,
+        backoffMs: 800,
+        init: { headers: HEADERS },
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data)) continue;
+      for (const p of data as Record<string, unknown>[]) {
+        const idp = Number(p["id_programa"]);
+        if (!Number.isFinite(idp)) continue;
+        cache.set(idp, {
+          sigla: trimStr(p["sigla_unidade_descentralizadora"]),
+          nome: trimStr(p["unidade_descentralizadora"]),
+        });
+      }
+    } catch {
+      // graceful: sem repassador para este chunk
+    }
+  }
+}
+
 function normalizeTed(
   raw: RawPlanoAcaoTed,
   collectedAt: string,
+  programaCache: Map<number, ProgramaInfo>,
 ): TransferegovItem {
-  // TED plano_acao tem estrutura diferente — campo names distintos.
-  // O modelo real tem campos prefixados de forma diferente; normalizamos
-  // de modo defensivo lendo qualquer key presente.
+  // Campos REAIS da API /ted/plano_acao (verificados). TED é descentralização
+  // ÓRGÃO->ÓRGÃO federal: não há CNPJ, município nem UF.
   const r = raw as Record<string, unknown>;
   const id = `ted:${raw.id_plano_acao}`;
-  const codigo =
-    trimStr(r["codigo_plano_acao"]) ||
-    trimStr(r["tx_numero_instrumento"]) ||
-    String(raw.id_plano_acao);
 
-  const orgaoRepassador =
-    trimStr(r["nome_orgao_descentralizador"]) ||
-    trimStr(r["sigla_orgao_descentralizador"]) ||
-    "Órgão não informado";
-  const cnpjRepassador = extractCnpj(r["cnpj_orgao_descentralizador"] as string);
-
+  // Recebedor = unidade descentralizada (quem recebe/executa o recurso).
   const orgaoRecebedor =
-    trimStr(r["nome_unidade_descentralizada"]) ||
-    trimStr(r["nome_ente_recebedor"]) ||
-    "Ente não informado";
-  const cnpjRecebedor = extractCnpj(
-    (r["cnpj_unidade_descentralizada"] ?? r["cnpj_ente_recebedor"]) as string,
-  );
+    trimStr(r["unidade_descentralizada"]) ||
+    trimStr(r["sigla_unidade_descentralizada"]) ||
+    "Unidade não informada";
+
+  // Repassador = unidade descentralizadora do PROGRAMA (join por id_programa).
+  const idPrograma = Number(r["id_programa"]);
+  const prog = Number.isFinite(idPrograma) ? programaCache.get(idPrograma) : undefined;
+  const orgaoRepassador = prog
+    ? (prog.nome || prog.sigla || "Órgão não informado")
+    : "Órgão não informado";
 
   const objeto =
-    trimStr(r["objeto_plano_acao"]).slice(0, 500) ||
-    trimStr(r["objetivos_plano_acao"]).slice(0, 500) ||
-    trimStr(r["tx_objeto"]).slice(0, 500) ||
+    trimStr(r["tx_objeto_plano_acao"]).slice(0, 500) ||
+    trimStr(r["tx_justificativa_plano_acao"]).slice(0, 500) ||
     "Objeto não informado";
 
-  const ibge =
-    trimStr(r["codigo_ibge_municipio"] ?? r["cod_ibge_municipio"]) || null;
-  const municipio =
-    trimStr(r["nome_municipio"] ?? r["nm_municipio"]) || null;
-  const uf = trimStr(r["uf"] ?? r["sigla_uf"]) || null;
-
-  const valorTotal = nullableNumber(
-    r["valor_total_plano_acao"] ?? r["vl_global"],
-  );
-  const valorRepasse = nullableNumber(
-    r["valor_repasse_plano_acao"] ?? r["vl_repasse"],
-  );
+  const situacao = trimStr(r["tx_situacao_plano_acao"]) || "Não informada";
+  const valorTotal = nullableNumber(r["vl_total_plano_acao"]);
+  const codigo = String(raw.id_plano_acao);
 
   return {
     id,
     sourceId: SOURCE_ID,
     modulo: "ted",
     nome: orgaoRecebedor,
-    cnpj: cnpjRecebedor,
-    codigoIbge: ibge,
-    municipio,
-    uf,
+    cnpj: null,           // TED não expõe CNPJ
+    codigoIbge: null,     // TED não tem município/IBGE
+    municipio: null,
+    uf: null,
     objeto,
     orgaoRepassador,
-    cnpjOrgaoRepassador: cnpjRepassador,
+    cnpjOrgaoRepassador: null,
     orgaoRecebedor,
-    cnpjOrgaoRecebedor: cnpjRecebedor,
-    situacao:
-      trimStr(r["situacao_plano_acao"] ?? r["tx_situacao"]) || "Não informada",
+    cnpjOrgaoRecebedor: null,
+    situacao,
     valorTotal,
-    valorRepasse,
-    dataInicio: parseDateBrt(
-      (r["data_inicio_vigencia_plano_acao"] ??
-        r["dt_inicio_vigencia"]) as string | undefined,
-    ),
-    dataFim: parseDateBrt(
-      (r["data_fim_vigencia_plano_acao"] ??
-        r["dt_fim_vigencia"]) as string | undefined,
-    ),
+    valorRepasse: valorTotal, // valor total descentralizado
+    dataInicio: parseDateBrt(r["dt_inicio_vigencia"] as string | undefined),
+    dataFim: parseDateBrt(r["dt_fim_vigencia"] as string | undefined),
     codigoPlanoAcao: codigo,
-    sourceUrl: buildSourceUrl("ted", codigo),
+    // URL verificável (API filtrada) — rastreabilidade honesta.
+    sourceUrl: `${BASE_TED}/plano_acao?id_plano_acao=eq.${raw.id_plano_acao}`,
     collectedAt,
     raw: r,
   };
@@ -393,6 +420,7 @@ Deno.serve(async (req) => {
     const allItems: TransferegovItem[] = [];
     const errors: Array<{ modulo: string; offset: number; error: string }> = [];
     const seen = new Set<string>(); // dedup por id dentro da execução
+    const programaCache = new Map<number, ProgramaInfo>(); // repassador TED (id_programa -> órgão)
     let nextCursor: string | null = null;
     let processedPages = 0;
 
@@ -447,11 +475,16 @@ Deno.serve(async (req) => {
           break; // dataset do módulo esgotado -> próximo módulo (offset 0)
         }
 
+        // TED: enriquece o repassador (id_programa -> /ted/programa) em 1 chamada/página.
+        if (modulo === "ted") {
+          await fetchProgramasInto(page.items, programaCache);
+        }
+
         for (const raw of page.items) {
           try {
             const item = modulo === "faf"
               ? normalizeFaf(raw as RawPlanoAcaoFaf, collectedAt)
-              : normalizeTed(raw as RawPlanoAcaoTed, collectedAt);
+              : normalizeTed(raw as RawPlanoAcaoTed, collectedAt, programaCache);
             if (seen.has(item.id)) continue;
             seen.add(item.id);
             allItems.push(item);
