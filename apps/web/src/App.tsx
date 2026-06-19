@@ -377,6 +377,14 @@ function AppShell({ path, navigate }: AppShellProps) {
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "sucesso",
   );
 
+  // Limpa o ?checkout=sucesso da URL após exibir o banner — evita que um link
+  // compartilhado/favoritado mostre "pagamento confirmado" para outra pessoa.
+  useEffect(() => {
+    if (checkoutOk && typeof window !== "undefined" && window.location.search.includes("checkout=")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    }
+  }, [checkoutOk]);
+
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
 

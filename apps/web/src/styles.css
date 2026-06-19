@@ -85,8 +85,8 @@
   --base: 200ms var(--ease);
   --slow: 320ms var(--ease);
 
-  /* Typography */
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Typography — a fonte real (Figtree) é governada por body{font-family:var(--font)}
+     em design-system.css (importado depois). O :root não fixa mais "Inter". */
   font-size: 16px;
   line-height: 1.5;
   color: var(--n-900);
