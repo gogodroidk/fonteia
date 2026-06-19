@@ -5,7 +5,7 @@
  * Rota sugerida: /onboarding/profissao
  *
  * Fluxo:
- *   Passo 0 — Qual é sua área? (profissão)
+ *   Passo 0 — Boas-vindas + qual é sua área? (profissão)
  *   Passo 1 — O que você quer? (objetivo)
  *   Passo 2 — Cidade / região? (texto livre, opcional)
  *   Passo 3 — Plano personalizado (estático, sem IA)
@@ -31,10 +31,12 @@ import {
   Leaf,
   MapPin,
   Scale,
+  ShieldCheck,
   Sparkles,
   Target,
   TrendingUp,
   Users,
+  Zap,
 } from "lucide-react";
 import {
   type ObjetivoId,
@@ -52,16 +54,72 @@ const PROFISSOES: {
   icon: React.ElementType;
   titulo: string;
   desc: string;
+  /** Dica curta exibida assim que o usuário seleciona a profissão */
+  hint: string;
 }[] = [
-  { id: "advogado",        icon: Scale,      titulo: "Advogado(a)",               desc: "Consultoria, due diligence ou contencioso." },
-  { id: "contador",        icon: BookOpen,   titulo: "Contador(a)",               desc: "Captação de clientes e compliance contábil." },
-  { id: "despachante",     icon: Briefcase,  titulo: "Despachante",               desc: "Regularização e documentação empresarial." },
-  { id: "vendedor",        icon: TrendingUp, titulo: "Vendedor B2B / Prestador",  desc: "Vendo produto ou serviço para empresas." },
-  { id: "empresario",      icon: Building2,  titulo: "Empresário(a)",             desc: "Gestão estratégica e expansão de negócios." },
-  { id: "compliance",      icon: BadgeCheck, titulo: "Compliance / Auditoria",    desc: "Gestão de risco e due diligence corporativa." },
-  { id: "jornalista",      icon: Globe,      titulo: "Jornalista / Transparência", desc: "Investigação e dados de interesse público." },
-  { id: "comprador_leilao",icon: Gavel,      titulo: "Comprador de leilão",       desc: "Arrematação de lotes judiciais e da Receita." },
-  { id: "outro",           icon: Users,      titulo: "Outro",                     desc: "Meu perfil não está na lista acima." },
+  {
+    id: "advogado",
+    icon: Scale,
+    titulo: "Advogado(a)",
+    desc: "Consultoria, due diligence ou contencioso.",
+    hint: "Recomendamos começar por: Empresas — confira sanções CEIS/CNEP antes de aceitar um cliente.",
+  },
+  {
+    id: "contador",
+    icon: BookOpen,
+    titulo: "Contador(a)",
+    desc: "Captação de clientes e compliance contábil.",
+    hint: "Recomendamos começar por: Empresas — filtre por CNAE e cidade para prospectar clientes qualificados.",
+  },
+  {
+    id: "despachante",
+    icon: Briefcase,
+    titulo: "Despachante",
+    desc: "Regularização e documentação empresarial.",
+    hint: "Recomendamos começar por: Empresas — situação cadastral e sócios sem precisar do site da Receita.",
+  },
+  {
+    id: "vendedor",
+    icon: TrendingUp,
+    titulo: "Vendedor B2B / Prestador",
+    desc: "Vendo produto ou serviço para empresas.",
+    hint: "Recomendamos começar por: Licitações — encontre editais abertos no seu nicho antes da concorrência.",
+  },
+  {
+    id: "empresario",
+    icon: Building2,
+    titulo: "Empresário(a)",
+    desc: "Gestão estratégica e expansão de negócios.",
+    hint: "Recomendamos começar por: Licitações — monitore concorrentes e oportunidades no seu setor.",
+  },
+  {
+    id: "compliance",
+    icon: BadgeCheck,
+    titulo: "Compliance / Auditoria",
+    desc: "Gestão de risco e due diligence corporativa.",
+    hint: "Recomendamos começar por: Empresas — cheque fornecedores em CEIS/CNEP/CEPIM com um clique.",
+  },
+  {
+    id: "jornalista",
+    icon: Globe,
+    titulo: "Jornalista / Transparência",
+    desc: "Investigação e dados de interesse público.",
+    hint: "Recomendamos começar por: Política — cruze políticos com empresas e contratos públicos.",
+  },
+  {
+    id: "comprador_leilao",
+    icon: Gavel,
+    titulo: "Comprador de leilão",
+    desc: "Arrematação de lotes judiciais e da Receita.",
+    hint: "Recomendamos começar por: Lotes — radar de oportunidades com score, prazo e Raio-X com IA.",
+  },
+  {
+    id: "outro",
+    icon: Users,
+    titulo: "Outro",
+    desc: "Meu perfil não está na lista acima.",
+    hint: "Recomendamos começar por: Empresas ou Licitações — os módulos mais usados na plataforma.",
+  },
 ];
 
 const OBJETIVOS: {
@@ -70,11 +128,11 @@ const OBJETIVOS: {
   titulo: string;
   desc: string;
 }[] = [
-  { id: "vender_mais",          icon: TrendingUp, titulo: "Vender mais",             desc: "Encontrar clientes e oportunidades de negócio." },
-  { id: "avaliar_risco",        icon: Target,     titulo: "Avaliar risco",           desc: "Due diligence de empresas, sócios e contratos." },
-  { id: "acompanhar_politica",  icon: Landmark,   titulo: "Acompanhar política",     desc: "Mandatos, gastos públicos e transparência." },
-  { id: "achar_leiloes",        icon: Gavel,      titulo: "Achar leilões",           desc: "Lotes judiciais e da Receita com score de oportunidade." },
-  { id: "monitorar_empresas",   icon: FileSearch, titulo: "Monitorar empresas",      desc: "CNPJ, sócios, sanções e alterações cadastrais." },
+  { id: "vender_mais",         icon: TrendingUp, titulo: "Vender mais",           desc: "Encontrar clientes e oportunidades de negócio." },
+  { id: "avaliar_risco",       icon: Target,     titulo: "Avaliar risco",          desc: "Due diligence de empresas, sócios e contratos." },
+  { id: "acompanhar_politica", icon: Landmark,   titulo: "Acompanhar política",    desc: "Mandatos, gastos públicos e transparência." },
+  { id: "achar_leiloes",       icon: Gavel,      titulo: "Achar leilões",          desc: "Lotes judiciais e da Receita com score de oportunidade." },
+  { id: "monitorar_empresas",  icon: FileSearch, titulo: "Monitorar empresas",     desc: "CNPJ, sócios, sanções e alterações cadastrais." },
 ];
 
 // Mapeamento ícone por rota (para o plano final)
@@ -110,6 +168,10 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
 
   const primeiroNome = (nome ?? "").split(" ")[0] || null;
   const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
+
+  const profissaoSelecionada = profissao !== null
+    ? PROFISSOES.find((p) => p.id === profissao) ?? null
+    : null;
 
   const avancarParaObjetivo = useCallback(() => {
     if (!profissao) return;
@@ -187,20 +249,43 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
         </div>
 
         {/* ══════════════════════════════════════
-            PASSO 0 — Qual é sua área?
+            PASSO 0 — Boas-vindas + qual é sua área?
             ══════════════════════════════════════ */}
         {step === 0 && (
           <div className="onboarding-body rise" key="step-0">
             <span className="onboarding-eyebrow">
               <Sparkles size={13} aria-hidden="true" />
-              Personalize sua experiência
+              Bem-vindo ao Fonte.ia
             </span>
 
             <h1 className="onboarding-body-h1">
-              {primeiroNome ? `${primeiroNome}, qual` : "Qual"} é sua área?
+              {primeiroNome ? `${primeiroNome}, o` : "O"} que você faz?
             </h1>
-            <p className="onboarding-sub">
-              Vamos montar um plano de uso sob medida. Leva menos de 1 minuto.
+
+            {/* Mini intro — o que é a Fonte.ia */}
+            <div className="onb-intro-banner" role="note" aria-label="O que é o Fonte.ia">
+              <p className="onb-intro-lead">
+                A Fonte.ia transforma dados públicos do Brasil em respostas rastreáveis —
+                com a fonte sempre citada. Veja o que você pode fazer:
+              </p>
+              <div className="onb-intro-exemplos" role="list">
+                <div className="onb-intro-exemplo" role="listitem">
+                  <Gavel size={14} aria-hidden="true" className="onb-intro-icon" />
+                  <span>Encontrar leilões da Receita com score de oportunidade</span>
+                </div>
+                <div className="onb-intro-exemplo" role="listitem">
+                  <ShieldCheck size={14} aria-hidden="true" className="onb-intro-icon" />
+                  <span>Pesquisar empresas, sócios e sanções por CNPJ</span>
+                </div>
+                <div className="onb-intro-exemplo" role="listitem">
+                  <Zap size={14} aria-hidden="true" className="onb-intro-icon" />
+                  <span>Analisar editais e licitações com IA — fonte citada</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="onboarding-sub onb-sub-area">
+              Escolha sua área para montar um plano sob medida. Leva menos de 1 minuto.
             </p>
 
             <div
@@ -226,6 +311,17 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                 </button>
               ))}
             </div>
+
+            {/* Hint personalizado após escolher profissão */}
+            {profissaoSelecionada !== null && (
+              <div className="onb-hint" role="note" aria-live="polite">
+                <CheckCircle2 size={16} className="onb-hint-icon" aria-hidden="true" />
+                <div className="onb-hint-text">
+                  <strong>Recomendado para você</strong>
+                  {profissaoSelecionada.hint}
+                </div>
+              </div>
+            )}
 
             <div className="onb-footer">
               <button type="button" className="onb-btn-skip" onClick={pular}>
@@ -526,7 +622,7 @@ const ESTILOS = `
     margin: auto;
   }
 
-  /* Grid 2 colunas para as profissões (telas ≥ 480 px) */
+  /* Grid 2 colunas para as profissões (telas >= 480 px) */
   .onb-grid {
     display: grid !important;
     grid-template-columns: 1fr 1fr;
@@ -536,6 +632,82 @@ const ESTILOS = `
     .onb-grid {
       grid-template-columns: 1fr !important;
     }
+  }
+
+  /* Banner de intro — o que é a Fonte.ia */
+  .onb-intro-banner {
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--brand) 6%, var(--surface-2));
+    border: 1px solid color-mix(in srgb, var(--brand) 18%, transparent);
+    padding: 14px 16px;
+    margin: 0 0 var(--s-4);
+  }
+  .onb-intro-lead {
+    font-size: 13.5px;
+    color: var(--t-mid);
+    line-height: 1.5;
+    margin: 0 0 10px;
+  }
+  .onb-intro-exemplos {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .onb-intro-exemplo {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--t-hi);
+    line-height: 1.4;
+    font-weight: 500;
+  }
+  .onb-intro-icon {
+    color: var(--brand-ink);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* Sub separador antes do grid */
+  .onb-sub-area {
+    margin-top: 0 !important;
+    margin-bottom: var(--s-3) !important;
+  }
+
+  /* Hint de recomendação após escolha de profissão */
+  .onb-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 13px;
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--ok) 8%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
+    margin-top: 12px;
+    animation: onb-hint-in 0.2s ease both;
+  }
+  @keyframes onb-hint-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .onb-hint-icon {
+    color: var(--ok);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .onb-hint-text {
+    font-size: 13px;
+    color: var(--t-mid);
+    line-height: 1.45;
+  }
+  .onb-hint-text strong {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+    color: var(--ok);
   }
 
   /* Campo cidade */
@@ -638,6 +810,10 @@ const ESTILOS = `
   .onb-acao-link:hover {
     background: color-mix(in srgb, var(--brand) 18%, transparent);
   }
+  .onb-acao-link:focus-visible {
+    outline: 2px solid var(--ring, var(--brand));
+    outline-offset: 2px;
+  }
 
   /* Destaque (busca / alerta) */
   .onb-destaque {
@@ -736,6 +912,10 @@ const ESTILOS = `
   }
   .onb-btn-primary:hover { opacity: 0.92; }
   .onb-btn-primary:active { transform: scale(0.98); }
+  .onb-btn-primary:focus-visible {
+    outline: 2px solid var(--ring, var(--brand));
+    outline-offset: 3px;
+  }
   .onb-btn-primary:disabled {
     opacity: 0.4;
     cursor: not-allowed;
@@ -762,6 +942,10 @@ const ESTILOS = `
     text-underline-offset: 2px;
   }
   .onb-btn-skip:hover { color: var(--t-hi); background: var(--surface-2); }
+  .onb-btn-skip:focus-visible {
+    outline: 2px solid var(--ring, var(--brand));
+    outline-offset: 2px;
+  }
 
   /* Footer de ações */
   .onb-footer {
@@ -804,5 +988,7 @@ const ESTILOS = `
     .rise { animation: none !important; }
     .onb-dot { transition: none; }
     .onb-acao-link { transition: none; }
+    .onb-hint { animation: none; }
+    @keyframes onb-hint-in { from { opacity: 1; } }
   }
 `;

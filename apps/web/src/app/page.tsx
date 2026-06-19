@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Landmark, SearchX } from "lucide-react";
 import { navigateSpa } from "./_nav";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
@@ -227,6 +227,108 @@ const MODULE_CARDS: ModuleCardConfig[] = [
     descricao: "Propriedade industrial",
   },
 ];
+
+// ─── Quick actions ────────────────────────────────────────────────────────────
+
+interface QuickAction {
+  id: string;
+  icon: ReactNode;
+  title: string;
+  description: string;
+  route?: string;
+  ask?: string;
+}
+
+function QuickActionIcon({ children }: { children: ReactNode }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 44,
+        height: 44,
+        borderRadius: "var(--r-lg)",
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        flexShrink: 0,
+        fontSize: 20,
+        transition: "background .2s, border-color .2s",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function QuickActionCard({
+  action,
+  onAsk,
+}: {
+  action: QuickAction;
+  onAsk?: ((q?: string) => void) | undefined;
+}) {
+  function handleClick() {
+    if (action.ask && onAsk) {
+      onAsk(action.ask);
+      return;
+    }
+    if (action.route) {
+      if (typeof window !== "undefined") {
+        window.history.pushState(null, "", action.route);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="quick-action-card"
+      onClick={handleClick}
+      aria-label={action.title}
+    >
+      <QuickActionIcon>{action.icon}</QuickActionIcon>
+      <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 14,
+            color: "var(--t-hi)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {action.title}
+        </div>
+        <div
+          style={{
+            fontSize: 12.5,
+            color: "var(--t-mid)",
+            marginTop: 2,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {action.description}
+        </div>
+      </div>
+      <svg
+        aria-hidden="true"
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+        fill="none"
+        style={{ flexShrink: 0, color: "var(--t-low)", transition: "transform .18s" }}
+      >
+        <path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
 
 // ─── ModuleCard component ─────────────────────────────────────────────────────
 
@@ -742,6 +844,68 @@ export function DashboardPage(props: {
     );
   }, [moduleData]);
 
+  // ─── Quick actions config (inline so they close over onAsk) ─────────────
+  const QUICK_ACTIONS: QuickAction[] = [
+    {
+      id: "leiloes",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="2" y="13" width="16" height="4" rx="1.5" fill="var(--brand-ink)" opacity=".18" />
+          <rect x="5" y="9" width="10" height="4" rx="1" fill="var(--brand-ink)" opacity=".35" />
+          <rect x="8" y="5" width="4" height="4" rx="1" fill="var(--brand-ink)" />
+          <line x1="10" y1="3" x2="10" y2="2" stroke="var(--brand-ink)" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      ),
+      title: "Ver leilões da Receita",
+      description: "Lotes com score e economia mapeada",
+      route: "/app/leiloes",
+    },
+    {
+      id: "empresas",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="3" y="7" width="14" height="10" rx="1.5" stroke="var(--accent-ink)" strokeWidth="1.5" fill="none" />
+          <path d="M7 7V5a3 3 0 0 1 6 0v2" stroke="var(--accent-ink)" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="10" cy="12" r="1.5" fill="var(--accent-ink)" />
+        </svg>
+      ),
+      title: "Investigar uma empresa",
+      description: "Busque pelo CNPJ, razão social ou CPF do sócio",
+      route: "/app/empresas",
+    },
+    {
+      id: "cerebro",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="10" r="2" fill="var(--brand-ink)" />
+          <circle cx="4" cy="6" r="1.5" fill="var(--brand-ink)" opacity=".5" />
+          <circle cx="16" cy="6" r="1.5" fill="var(--brand-ink)" opacity=".5" />
+          <circle cx="4" cy="14" r="1.5" fill="var(--brand-ink)" opacity=".5" />
+          <circle cx="16" cy="14" r="1.5" fill="var(--brand-ink)" opacity=".5" />
+          <line x1="10" y1="10" x2="4" y2="6" stroke="var(--brand-ink)" strokeWidth="1" opacity=".4" />
+          <line x1="10" y1="10" x2="16" y2="6" stroke="var(--brand-ink)" strokeWidth="1" opacity=".4" />
+          <line x1="10" y1="10" x2="4" y2="14" stroke="var(--brand-ink)" strokeWidth="1" opacity=".4" />
+          <line x1="10" y1="10" x2="16" y2="14" stroke="var(--brand-ink)" strokeWidth="1" opacity=".4" />
+        </svg>
+      ),
+      title: "Explorar o Cérebro",
+      description: "Veja conexões entre empresas, políticos e contratos",
+      route: "/app/cerebro",
+    },
+    {
+      id: "politica",
+      icon: (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <circle cx="10" cy="7" r="3" stroke="var(--gold)" strokeWidth="1.5" fill="none" />
+          <path d="M4 17c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="var(--gold)" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+        </svg>
+      ),
+      title: "Acompanhar um político",
+      description: "Despesas, votações e gastos com a cota parlamentar",
+      route: "/app/politica",
+    },
+  ];
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -913,12 +1077,75 @@ export function DashboardPage(props: {
         .dashboard-page .dash-section-enter:nth-child(4) { animation-delay: 120ms; }
         .dashboard-page .dash-section-enter:nth-child(5) { animation-delay: 160ms; }
 
+        /* ── Quick-action cards ─────────────────────────────────── */
+        .dashboard-page .quick-actions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+          gap: 12px;
+        }
+        .dashboard-page .quick-action-card {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: var(--r-xl);
+          cursor: pointer;
+          font-family: var(--font);
+          color: var(--t-hi);
+          box-shadow: var(--shadow-sm);
+          transition: transform .2s cubic-bezier(.2,.7,.3,1), box-shadow .2s, border-color .2s, background .15s;
+          width: 100%;
+          text-align: left;
+          min-height: 64px;
+        }
+        .dashboard-page .quick-action-card:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-md);
+          border-color: var(--border-2);
+          background: var(--surface-2);
+        }
+        .dashboard-page .quick-action-card:hover span[aria-hidden] {
+          background: color-mix(in srgb, var(--brand-ink) 10%, var(--surface));
+          border-color: color-mix(in srgb, var(--brand-ink) 22%, transparent);
+        }
+        .dashboard-page .quick-action-card:focus-visible {
+          outline: 2px solid var(--brand-ink);
+          outline-offset: 2px;
+        }
+        .dashboard-page .quick-action-card:active {
+          transform: translateY(0);
+        }
+        .dashboard-page .quick-action-card:hover svg {
+          transform: translateX(3px);
+          color: var(--brand-ink);
+        }
+
+        /* ── Fonte promise banner ───────────────────────────────── */
+        .dashboard-page .fonte-promise {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          background: color-mix(in srgb, var(--accent-ink) 7%, var(--surface));
+          border: 1px solid color-mix(in srgb, var(--accent-ink) 18%, transparent);
+          border-radius: var(--r-lg);
+          font-size: 13px;
+          color: var(--t-mid);
+        }
+        .dashboard-page .fonte-promise strong {
+          color: var(--accent-ink);
+          font-weight: 700;
+        }
+
         /* ── Reduced-motion: disable all animations ─────────────── */
         @media (prefers-reduced-motion: reduce) {
           .dashboard-page .dash-section-enter,
           .dashboard-page .module-card,
           .dashboard-page .lot-row,
-          .dashboard-page .closing-soon-row {
+          .dashboard-page .closing-soon-row,
+          .dashboard-page .quick-action-card {
             animation: none !important;
             transition: none !important;
           }
@@ -941,6 +1168,14 @@ export function DashboardPage(props: {
             grid-template-columns: 1fr;
           }
           .dashboard-page .modules-grid {
+            grid-template-columns: 1fr;
+          }
+          .dashboard-page .quick-actions-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+        @media (max-width: 480px) {
+          .dashboard-page .quick-actions-grid {
             grid-template-columns: 1fr;
           }
         }
@@ -973,6 +1208,29 @@ export function DashboardPage(props: {
             Perguntar ao Fonte.ia
           </button>
         ) : null}
+      </section>
+
+      {/* ════════════════════════════════════════════════════════════
+          ZONA 1b — Comece por aqui
+      ════════════════════════════════════════════════════════════ */}
+      <section className="dash-section-enter" aria-label="Ações rápidas">
+        <div className="section-label" style={{ marginBottom: 10 }}>
+          Comece por aqui
+        </div>
+        <div className="quick-actions-grid">
+          {QUICK_ACTIONS.map((action) => (
+            <QuickActionCard key={action.id} action={action} onAsk={onAsk} />
+          ))}
+        </div>
+        <div className="fonte-promise" style={{ marginTop: 12 }}>
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true" style={{ flexShrink: 0 }}>
+            <circle cx="7.5" cy="7.5" r="6.5" stroke="var(--accent-ink)" strokeWidth="1.4" fill="none" />
+            <path d="M5 7.5l2 2 3-3" stroke="var(--accent-ink)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>
+            <strong>fonte antes de opinião</strong> — todo dado aponta a fonte oficial com link, data e hash.
+          </span>
+        </div>
       </section>
 
       {/* KPI global: sempre visível — seed totals imediatos, live totals quando carregados */}
