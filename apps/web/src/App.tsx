@@ -688,9 +688,14 @@ function AppShell({ path, navigate }: AppShellProps) {
             )}
             <ErrorBoundary>
               <Suspense fallback={
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 240, gap: 12, color: "var(--t-mid)" }}>
-                  <ShieldCheck size={28} strokeWidth={1.6} aria-hidden="true" style={{ opacity: .4 }} />
-                  <span className="muted">Carregando…</span>
+                <div className="fade-in" aria-busy="true" aria-label="Carregando" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <div className="skeleton skeleton-text" style={{ width: 220, height: 26 }} />
+                  <div className="skeleton skeleton-text" style={{ width: 340, maxWidth: "80%" }} />
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(260px, 100%), 1fr))", gap: 16, marginTop: 6 }}>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="skeleton-card" style={{ height: 150 }} />
+                    ))}
+                  </div>
                 </div>
               }>
                 {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}

@@ -32,6 +32,7 @@ import {
   getSupabasePublicConfig,
   trimTrailingSlash,
 } from "./api-client";
+import { cachedFetch } from "./d1-cache";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,31 @@ const D1_TIMEOUT_MS = 12_000;
 
 /** Caminho da edge function que serve o D1. */
 const D1_BRIDGE_PATH = "/functions/v1/d1-bridge/query";
+
+/**
+ * TTL do cache cliente de páginas D1/Supabase.
+ * 60 s é suficiente para que navegações frequentes sejam instantâneas, sem
+ * exibir dados muito desatualizados para datasets públicos que mudam em horas.
+ */
+const CACHE_TTL_MS = 60_000;
+
+/**
+ * Monta uma chave de cache estável e determinística para uma página de query.
+ *
+ * Formato: `d1|{kind}|{cnpj}|{q}|{limit}|{offset}`
+ * Campos ausentes ficam como string vazia para manter o mesmo número de
+ * segmentos e evitar colisões entre, p. ex., kind="a|b" e kind="a", cnpj="b".
+ */
+function makeCacheKey(params: FetchD1Params): string {
+  return [
+    "d1",
+    params.kind,
+    params.cnpj ?? "",
+    params.q ?? "",
+    String(params.limit ?? DEFAULT_LIMIT),
+    String(params.offset ?? 0),
+  ].join("|");
+}
 
 // ─── Helpers internos ──────────────────────────────────────────────────────────
 
@@ -264,6 +290,12 @@ async function fetchSupabasePage<A>(
  * falha/timeout/resposta inválida, cai para o Supabase REST (mesma consulta de
  * antes). Devolve as linhas + a origem efetiva.
  *
+ * Cache: quando o `fetcher` padrão (global `fetch`) é usado, o resultado é
+ * mantido em memória por `CACHE_TTL_MS` (60 s) e requisições simultâneas para
+ * a mesma página são deduplicadas (uma única chamada de rede). Quando um
+ * `fetcher` customizado é passado (ex.: em testes), o cache é ignorado para
+ * preservar o isolamento.
+ *
  * Use isto quando você quer controlar a paginação manualmente. Para puxar todas
  * as páginas de um kind (o padrão dos módulos), use `fetchAllD1Entities`.
  */
@@ -271,19 +303,30 @@ export async function fetchD1Entities<A = Record<string, unknown>>(
   params: FetchD1Params,
   fetcher: typeof fetch = fetch,
 ): Promise<FetchD1Result<A>> {
-  try {
-    const rows = await fetchD1Page<A>(params, fetcher);
-    return { rows, source: "d1" };
-  } catch (d1Error) {
-    // Falha do D1 → fallback transparente para o Supabase. Logamos em nível
-    // baixo para diagnóstico, sem poluir o console do usuário.
-    console.warn(
-      `[d1-client] D1 falhou para kind=${params.kind}, usando Supabase. Motivo:`,
-      d1Error instanceof Error ? d1Error.message : String(d1Error),
-    );
-    const rows = await fetchSupabasePage<A>(params, fetcher);
-    return { rows, source: "supabase" };
+  // Loader que executa a lógica D1 → Supabase-fallback real (sem cache).
+  const load = async (): Promise<FetchD1Result<A>> => {
+    try {
+      const rows = await fetchD1Page<A>(params, fetcher);
+      return { rows, source: "d1" };
+    } catch (d1Error) {
+      // Falha do D1 → fallback transparente para o Supabase. Logamos em nível
+      // baixo para diagnóstico, sem poluir o console do usuário.
+      console.warn(
+        `[d1-client] D1 falhou para kind=${params.kind}, usando Supabase. Motivo:`,
+        d1Error instanceof Error ? d1Error.message : String(d1Error),
+      );
+      const rows = await fetchSupabasePage<A>(params, fetcher);
+      return { rows, source: "supabase" };
+    }
+  };
+
+  // Quando um fetcher customizado é fornecido, pulamos o cache: o chamador
+  // provavelmente está em testes e quer controle total sobre as respostas.
+  if (fetcher !== fetch) {
+    return load();
   }
+
+  return cachedFetch<FetchD1Result<A>>(makeCacheKey(params), CACHE_TTL_MS, load);
 }
 
 /**

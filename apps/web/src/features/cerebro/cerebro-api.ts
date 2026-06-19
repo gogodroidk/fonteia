@@ -371,12 +371,59 @@ function sourceUrlFor(kind: GraphKind, row: D1EntityRow): string | undefined {
 // ─── Conversão de linha → nó-folha (com detalhes para o painel) ──────────────────
 
 /**
+ * Identidade do nó CENTRAL (entidade pesquisada), passada ao construtor de folhas
+ * para que contratos/licitações/despesas mostrem a CONTRAPARTE (o outro lado da
+ * relação), nunca o nome do próprio centro. Ambos os campos são opcionais: quando
+ * desconhecidos, caímos num rótulo seguro (órgão), sem repetir o centro.
+ */
+interface CenterRef {
+  /** CNPJ (14 dígitos, já sanitizado) do centro, quando a origem foi por CNPJ. */
+  cnpj?: string | undefined;
+  /** Nome/razão social do centro (fallback de comparação quando falta CNPJ). */
+  name?: string | undefined;
+}
+
+/**
+ * Decide de que LADO de um contrato/licitação está o centro, para escolher a
+ * contraparte a exibir como rótulo do nó:
+ *   • "supplier" → centro é o fornecedor; o rótulo deve ser o ÓRGÃO contratante.
+ *   • "buyer"    → centro é o órgão; o rótulo deve ser o FORNECEDOR.
+ *   • "unknown"  → não dá para afirmar; o chamador usa o default (órgão), porque
+ *     contratos quase sempre são consultados pelo CNPJ do fornecedor.
+ * A comparação é só por CNPJ (preciso, sem falso positivo) — o nome é frágil aqui
+ * (o centro PODE ter o mesmo nome do órgão em casos raros, mas isso é tratado pelo
+ * default seguro). `fornCnpj`/`orgaoCnpj` já vêm sanitizados pelo chamador.
+ */
+function contractSide(
+  center: CenterRef | undefined,
+  fornCnpj: string,
+  orgaoCnpj: string,
+): "supplier" | "buyer" | "unknown" {
+  const centerCnpj = center?.cnpj ?? "";
+  if (centerCnpj !== "") {
+    if (fornCnpj !== "" && fornCnpj === centerCnpj) return "supplier";
+    if (orgaoCnpj !== "" && orgaoCnpj === centerCnpj) return "buyer";
+  }
+  return "unknown";
+}
+
+/**
  * Transforma uma linha do BULK num nó-folha conforme o kind, montando também os
  * `details` (rótulo→valor) para o painel e o `sourceUrl` da fonte oficial.
  * `rel` indica como o nó se liga ao pai (cor do fio). Devolve null quando a linha
  * não tem nada útil para mostrar (evita nós "vazios").
+ *
+ * `center` (opcional) é a identidade da entidade central: contratos, licitações e
+ * despesas usam-na para rotular a CONTRAPARTE (o outro lado), nunca o próprio
+ * centro — senão um grafo de uma empresa fornecedora mostraria dezenas de nós
+ * todos com o nome dela mesma.
  */
-function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf | null {
+function leafFromRow(
+  kind: GraphKind,
+  row: D1EntityRow,
+  rel: EdgeKind,
+  center?: CenterRef | undefined,
+): RawLeaf | null {
   const id = `${kind}:${row.id}`;
   const name = str(row.name);
   const sourceUrl = sourceUrlFor(kind, row);
@@ -414,6 +461,9 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
       const objeto = str(attr(row, "objeto"));
       const ibge = str(attr(row, "codigoIbge"));
       const orgaoCnpj = validCnpj(str(attr(row, "orgaoCnpj")));
+      // No PNCP, `row.cnpj` é o CNPJ do fornecedor (extraído de niFornecedor).
+      const fornCnpj = validCnpj(str(attr(row, "fornecedorCnpj")) || str(row.cnpj));
+      const munUf = [municipio, uf].filter(Boolean).join("/");
       pushField(details, "Fornecedor", fornecedor);
       pushField(details, "Órgão", orgao);
       pushField(details, "Objeto", objeto.slice(0, 220));
@@ -421,15 +471,31 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
       pushField(details, "Modalidade", str(attr(row, "modalidade")));
       pushField(details, "Município/UF", [municipio, uf].filter(Boolean).join(" / "));
       pushField(details, "Assinatura", formatDate(attr(row, "dataAssinatura")));
+      // Rótulo = a CONTRAPARTE em relação ao centro. Quando o centro é o
+      // fornecedor (caso típico — contratos são buscados pelo CNPJ do fornecedor),
+      // mostramos o ÓRGÃO contratante; quando o centro é o órgão, mostramos o
+      // fornecedor. Nunca repetimos o nome do próprio centro.
+      const side = contractSide(center, fornCnpj, orgaoCnpj);
+      const counterparty =
+        side === "buyer"
+          ? fornecedor || orgao
+          : orgao || fornecedor; // "supplier" e "unknown" → órgão (default seguro)
+      // O nó é expansível pela CONTRAPARTE quando ela tem CNPJ próprio: se o centro
+      // é o fornecedor, abrimos o órgão (orgaoCnpj); se é o órgão, abrimos o
+      // fornecedor (fornCnpj). Assim clicar no nó navega para o outro lado.
+      const counterpartyCnpj = side === "buyer" ? fornCnpj : orgaoCnpj;
+      // Sublabel distingue dois contratos do mesmo órgão (objeto/valor/município).
+      const sub =
+        [objeto ? objeto.slice(0, 48) : "", valor, munUf].filter(Boolean).join(" · ") ||
+        undefined;
       return {
         id,
         kind,
         rel,
-        label: fornecedor || orgao || "Contrato",
-        sublabel: [orgao, valor].filter(Boolean).join(" · ") || objeto.slice(0, 60),
+        label: counterparty || "Contrato",
+        sublabel: sub,
         codigoIbge: ibge || undefined,
-        // O órgão do contrato é expansível por CNPJ próprio quando houver.
-        cnpj: orgaoCnpj || undefined,
+        cnpj: counterpartyCnpj || undefined,
         sourceUrl,
         details,
       };
@@ -442,6 +508,7 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
       const uf = str(attr(row, "uf"));
       const ibge = str(attr(row, "codigoIbge"));
       const orgaoCnpj = validCnpj(str(attr(row, "orgaoCnpj")) || str(row.cnpj));
+      const munUf = [municipio, uf].filter(Boolean).join("/");
       pushField(details, "Objeto", objeto.slice(0, 220));
       pushField(details, "Órgão", orgao);
       pushField(details, "Valor estimado", valor);
@@ -449,12 +516,25 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
       pushField(details, "Município/UF", [municipio, uf].filter(Boolean).join(" / "));
       pushField(details, "Abertura", formatDate(attr(row, "dataAbertura")));
       pushField(details, "Situação", str(attr(row, "situacao")));
+      // Licitação é pré-contrato (sem fornecedor adjudicado), então o objeto é o
+      // dado mais descritivo. Quando o centro É o próprio órgão da licitação,
+      // mostrar o objeto também evita repetir o nome do centro; senão preferimos
+      // o objeto e, na falta dele, o órgão (a contraparte) — nunca o centro.
+      const centerIsOrgao =
+        (center?.cnpj ?? "") !== "" && orgaoCnpj !== "" && orgaoCnpj === center?.cnpj;
+      const label = objeto
+        ? objeto.slice(0, 64)
+        : centerIsOrgao
+          ? "Licitação"
+          : orgao || "Licitação";
+      const sub =
+        [orgao, valor, munUf].filter(Boolean).join(" · ") || undefined;
       return {
         id,
         kind,
         rel,
-        label: objeto ? objeto.slice(0, 64) : orgao || "Licitação",
-        sublabel: [orgao, valor].filter(Boolean).join(" · ") || undefined,
+        label,
+        sublabel: sub,
         codigoIbge: ibge || undefined,
         cnpj: orgaoCnpj || undefined,
         sourceUrl,
@@ -619,14 +699,24 @@ function leafFromRow(kind: GraphKind, row: D1EntityRow, rel: EdgeKind): RawLeaf 
       pushField(details, "CNPJ fornecedor", fornCnpj ? formatCnpj(fornCnpj) : "");
       pushField(details, "Valor", valor);
       pushField(details, "Data", formatDate(attr(row, "dataDocumento")));
+      // Mostra a CONTRAPARTE em relação ao centro. Quando o centro é a EMPRESA
+      // fornecedora (a despesa casou pelo CNPJ do fornecedor), a contraparte é o
+      // DEPUTADO pagador → rótulo = deputado. Quando o centro é o POLÍTICO, a
+      // contraparte é o FORNECEDOR → rótulo = fornecedor. Sem centro/indefinido,
+      // preferimos o fornecedor (o tipo de gasto sozinho é pouco informativo).
+      const centerIsSupplier =
+        (center?.cnpj ?? "") !== "" && fornCnpj !== "" && fornCnpj === center?.cnpj;
+      const counterparty = centerIsSupplier
+        ? deputado || fornecedor
+        : fornecedor || deputado;
+      const sub =
+        [tipo, valor].filter(Boolean).join(" · ") || undefined;
       return {
         id,
         kind,
         rel,
-        // Rótulo prioriza o tipo de gasto (o deputado vira nó próprio quando o
-        // centro é a empresa) ou o fornecedor (quando o centro é o político).
-        label: tipo || fornecedor || "Despesa parlamentar",
-        sublabel: [deputado || fornecedor, valor].filter(Boolean).join(" · ") || undefined,
+        label: counterparty || tipo || "Despesa parlamentar",
+        sublabel: sub,
         // A despesa carrega o CNPJ do FORNECEDOR — assim ela é expansível e a
         // página pode ligar a despesa à empresa fornecedora (siga o dinheiro).
         cnpj: fornCnpj || undefined,
@@ -817,6 +907,9 @@ async function fetchKindByCnpj(
 ): Promise<{ leaves: RawLeaf[]; centerLabel: string; rows: D1EntityRow[] }> {
   const { rows } = await fetchD1Entities({ kind, cnpj, limit: PAGE_LIMIT }, fetcher);
 
+  // O centro desta busca É o CNPJ consultado: passamos sua identidade às folhas
+  // para que contratos/licitações/despesas rotulem a contraparte, não o centro.
+  const center: CenterRef = { cnpj };
   const leaves: RawLeaf[] = [];
   const kept: D1EntityRow[] = [];
   let centerLabel = "";
@@ -825,7 +918,7 @@ async function fetchKindByCnpj(
       const candidate = str(attr(row, "fornecedorNome")) || str(row.name);
       if (candidate) centerLabel = candidate;
     }
-    const leaf = leafFromRow(kind, row, rel);
+    const leaf = leafFromRow(kind, row, rel, center);
     if (leaf) {
       leaves.push(leaf);
       kept.push(row);
@@ -1136,11 +1229,21 @@ export async function searchEntities(
   for (const r of results) {
     if (r.status !== "fulfilled") continue;
     for (const hit of r.value) {
-      // Deduplica por CNPJ+kind (contratos repetem muito a mesma empresa).
-      const dedupe = hit.cnpj ? `${hit.kind}:${hit.cnpj}` : `${hit.kind}:${hit.id}`;
+      if (hit.name === "—") continue;
+      // Chave de dedupe:
+      //   • com CNPJ → CNPJ+kind (contratos/empresas repetem muito a mesma empresa);
+      //   • sem CNPJ → NOME normalizado+kind. Sem isso, marcas idênticas (ex.: a
+      //     mesma "PETROBRAS ENERGIAS" em vários processos INPI) apareceriam N vezes,
+      //     pois cada registro tem id (UUID) distinto. Município mantém o IBGE como
+      //     desempate quando houver (homônimos legítimos em UFs diferentes).
+      const dedupe = hit.cnpj
+        ? `${hit.kind}:${hit.cnpj}`
+        : hit.codigoIbge
+          ? `${hit.kind}:ibge:${hit.codigoIbge}`
+          : `${hit.kind}:name:${norm(hit.name)}`;
       if (seen.has(dedupe)) continue;
       seen.add(dedupe);
-      if (hit.name !== "—") hits.push(hit);
+      hits.push(hit);
     }
   }
 
