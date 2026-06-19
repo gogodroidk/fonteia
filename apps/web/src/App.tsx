@@ -377,6 +377,14 @@ function AppShell({ path, navigate }: AppShellProps) {
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "sucesso",
   );
 
+  // Limpa o ?checkout=sucesso da URL após exibir o banner — evita que um link
+  // compartilhado/favoritado mostre "pagamento confirmado" para outra pessoa.
+  useEffect(() => {
+    if (checkoutOk && typeof window !== "undefined" && window.location.search.includes("checkout=")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.hash);
+    }
+  }, [checkoutOk]);
+
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
 
@@ -686,7 +694,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               </div>
             )}
-            <ErrorBoundary>
+            <ErrorBoundary key={route}>
               <Suspense fallback={
                 <div className="fade-in" aria-busy="true" aria-label="Carregando" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div className="skeleton skeleton-text" style={{ width: 220, height: 26 }} />

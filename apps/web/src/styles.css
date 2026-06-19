@@ -70,11 +70,8 @@
   --s-12: 48px;
   --s-16: 64px;
 
-  /* Radius */
-  --r-sm: 6px;
-  --r-md: 10px;
-  --r-lg: 16px;
-  --r-xl: 24px;
+  /* Radius — a escala canônica (sm/md/lg/xl/2xl) vive em design-system.css,
+     que é importado depois e vence. Aqui só o que não é redefinido lá. */
   --r-full: 9999px;
 
   /* Shadow */
@@ -88,8 +85,8 @@
   --base: 200ms var(--ease);
   --slow: 320ms var(--ease);
 
-  /* Typography */
-  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Typography — a fonte real (Figtree) é governada por body{font-family:var(--font)}
+     em design-system.css (importado depois). O :root não fixa mais "Inter". */
   font-size: 16px;
   line-height: 1.5;
   color: var(--n-900);

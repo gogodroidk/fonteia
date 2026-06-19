@@ -57,7 +57,7 @@ export function CountUp({
   });
 
   return (
-    <span ref={spanRef} className="num">
+    <span ref={spanRef} className="num" aria-live="polite" aria-atomic="true">
       {prefix}
       {formatted}
       {suffix}

@@ -147,7 +147,8 @@ const S = {
 
 function isApplePlatform(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+  // navigator.platform é deprecado; usamos só o userAgent (mais portável).
+  return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 }
 
 export function IntelligenceOmnibox({
