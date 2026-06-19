@@ -2,7 +2,9 @@ import { useState } from "react";
 import {
   Bell,
   CheckCircle2,
+  FileSearch,
   Gavel,
+  Landmark,
   Mail,
   MessageCircle,
   Search,
@@ -25,18 +27,24 @@ const goals = [
     icon: Target,
     title: "Arrematar lotes",
     desc: "Achar os melhores leilões antes da concorrência.",
+    hint: "Recomendamos começar por: Lotes (Receita Federal) — explore o radar de oportunidades.",
+    hintRoute: "/lotes",
   },
   {
     id: "revender",
     icon: TrendingUp,
     title: "Revender com margem",
     desc: "Compro pra revender e preciso enxergar o lucro estimado.",
+    hint: "Recomendamos começar por: Raio-X do lote — veja riscos e estimativa de valor antes do lance.",
+    hintRoute: "/lotes",
   },
   {
     id: "consultar",
     icon: Search,
     title: "Assessorar clientes",
     desc: "Sou advogado ou consultor e analiso oportunidades.",
+    hint: "Recomendamos começar por: Empresas (CNPJ + sanções) — due diligence antes de orientar o cliente.",
+    hintRoute: "/empresas",
   },
 ] as const;
 
@@ -92,12 +100,13 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
 
   const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
 
+  const selectedGoalData = goal !== null ? goals.find((g) => g.id === goal) ?? null : null;
+
   return (
     <div className="onboarding">
       <style>{`
         /* ── Onboarding mobile polish (scoped, não toca CSS global) ── */
 
-        /* Card scroll seguro em telas pequenas */
         .onboarding {
           align-items: flex-start !important;
           padding: 16px !important;
@@ -161,6 +170,27 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           color: var(--t-mid);
           line-height: 1.45;
           margin-top: 2px;
+        }
+
+        /* Módulos chip list no step 0 */
+        .onb-modulos {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin: 0 0 var(--s-5);
+        }
+        .onb-modulo-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--brand) 10%, var(--surface-2));
+          border: 1px solid color-mix(in srgb, var(--brand) 20%, transparent);
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--brand-ink);
+          white-space: nowrap;
         }
 
         /* Raio-X card no step 3 */
@@ -264,7 +294,44 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           color: var(--accent-ink);
         }
 
-        /* Botão primário grande (≥44px, touch-safe) */
+        /* Hint de recomendação após escolha de objetivo */
+        .onb-hint {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 11px 13px;
+          border-radius: var(--r-md);
+          background: color-mix(in srgb, var(--ok) 8%, var(--surface));
+          border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent);
+          margin-top: 12px;
+          animation: onb-hint-in 0.2s ease both;
+        }
+        @keyframes onb-hint-in {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .onb-hint-icon {
+          color: var(--ok);
+          flex-shrink: 0;
+          margin-top: 1px;
+        }
+        .onb-hint-text {
+          font-size: 13px;
+          color: var(--t-mid);
+          line-height: 1.45;
+        }
+        .onb-hint-text strong {
+          color: var(--t-hi);
+          display: block;
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          margin-bottom: 3px;
+          color: var(--ok);
+        }
+
+        /* Botão primário grande (>=44px, touch-safe) */
         .onb-btn-primary {
           display: flex;
           align-items: center;
@@ -285,13 +352,17 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
         }
         .onb-btn-primary:hover { opacity: 0.92; }
         .onb-btn-primary:active { transform: scale(0.98); }
+        .onb-btn-primary:focus-visible {
+          outline: 2px solid var(--ring, var(--brand));
+          outline-offset: 3px;
+        }
         .onb-btn-primary:disabled {
           opacity: 0.4;
           cursor: not-allowed;
           transform: none;
         }
 
-        /* Botão de skip / voltar (link-style, touch target ≥44px) */
+        /* Botão de skip / voltar (link-style, touch target >=44px) */
         .onb-btn-skip {
           display: inline-flex;
           align-items: center;
@@ -311,8 +382,12 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           text-underline-offset: 2px;
         }
         .onb-btn-skip:hover { color: var(--t-hi); background: var(--surface-2); }
+        .onb-btn-skip:focus-visible {
+          outline: 2px solid var(--ring, var(--brand));
+          outline-offset: 2px;
+        }
 
-        /* Footer de ações: skip à esquerda, avançar à direita */
+        /* Footer de acoes: skip a esquerda, avancar a direita */
         .onb-footer {
           display: flex;
           align-items: center;
@@ -341,12 +416,14 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
         @media (prefers-reduced-motion: reduce) {
           .onb-btn-primary, .onb-btn-skip { transition: none; }
           .rise { animation: none !important; }
+          .onb-hint { animation: none; }
+          @keyframes onb-hint-in { from { opacity: 1; } }
         }
       `}</style>
 
       <div className="onboarding-card">
 
-        {/* ── Cabeçalho: logo + indicador de passos ── */}
+        {/* -- Cabecalho: logo + indicador de passos -- */}
         <div className="onboarding-head">
           <div className="brand-mark">f</div>
           <div
@@ -367,7 +444,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           </div>
         </div>
 
-        {/* ── Barra de progresso ── */}
+        {/* -- Barra de progresso -- */}
         <div
           className="bar"
           aria-hidden="true"
@@ -381,9 +458,9 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           />
         </div>
 
-        {/* ════════════════════════════════
-            PASSO 0 — Boas-vindas: o que é a Fonte.ia
-            ════════════════════════════════ */}
+        {/* ================================================
+            PASSO 0 -- Boas-vindas: o que e a Fonte.ia
+            ================================================ */}
         {step === 0 && (
           <div className="onboarding-body rise">
             <span className="onboarding-eyebrow">
@@ -392,27 +469,37 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
             </span>
 
             <h1 className="onboarding-body-h1">
-              Olá, {firstName}!<br />
-              Leilões da Receita, descomplicados.
+              Ola, {firstName}!<br />
+              Dados publicos do Brasil, sem enrolacao.
             </h1>
-            <p className="onboarding-sub" style={{ marginBottom: "var(--s-5)" }}>
-              A Fonte.ia monitora os editais oficiais e te mostra o que vale a pena — com dados rastreáveis, sem achismo.
+            <p className="onboarding-sub" style={{ marginBottom: "var(--s-4)" }}>
+              A Fonte.ia transforma dados oficiais em respostas rastreáveis —
+              com a fonte sempre citada. Sem achismo, sem invenção.
             </p>
 
-            {/* Ícone hero */}
+            {/* Icone hero */}
             <div className="onb-hero-icon" aria-hidden="true">
               <Gavel size={36} strokeWidth={1.8} />
             </div>
 
-            {/* 3 recursos visuais */}
+            {/* 3 exemplos do que o usuario pode fazer */}
             <div className="onb-features" role="list">
               <div className="onb-feature-row" role="listitem">
                 <div className="onb-feature-row-icon" aria-hidden="true">
                   <Gavel size={18} strokeWidth={2} />
                 </div>
                 <div className="onb-feature-row-text">
-                  <strong>Radar de lotes em tempo real</strong>
-                  <span>Leilões da Receita Federal atualizados com lance mínimo, prazo e categoria.</span>
+                  <strong>Encontre leilões da Receita Federal</strong>
+                  <span>Lotes com lance mínimo, prazo e score de oportunidade — atualizados em tempo real.</span>
+                </div>
+              </div>
+              <div className="onb-feature-row" role="listitem">
+                <div className="onb-feature-row-icon" aria-hidden="true">
+                  <FileSearch size={18} strokeWidth={2} />
+                </div>
+                <div className="onb-feature-row-text">
+                  <strong>Pesquise empresas, sócios e sanções</strong>
+                  <span>CNPJ, situação cadastral, sócios, CEIS/CNEP — due diligence em segundos.</span>
                 </div>
               </div>
               <div className="onb-feature-row" role="listitem">
@@ -420,19 +507,29 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                   <Zap size={18} strokeWidth={2} />
                 </div>
                 <div className="onb-feature-row-text">
-                  <strong>Raio-X do lote com IA</strong>
-                  <span>Análise instantânea de um edital em português — riscos, estimativa de valor e pontos de atenção.</span>
+                  <strong>Analise com IA — fonte citada sempre</strong>
+                  <span>Raio-X de editais, licitações e empresas: riscos, alertas e resumo em português.</span>
                 </div>
               </div>
-              <div className="onb-feature-row" role="listitem">
-                <div className="onb-feature-row-icon" aria-hidden="true">
-                  <ShieldCheck size={18} strokeWidth={2} />
-                </div>
-                <div className="onb-feature-row-text">
-                  <strong>Dado oficial, sempre rastreável</strong>
-                  <span>Cada informação tem fonte citada: Portal da Transparência, edital, DOU. Sem invenção.</span>
-                </div>
-              </div>
+            </div>
+
+            {/* Chips dos modulos disponiveis */}
+            <div className="onb-modulos" role="list" aria-label="Módulos disponíveis">
+              {[
+                { label: "Leiloes", icon: Gavel },
+                { label: "Licitacoes", icon: FileSearch },
+                { label: "Empresas", icon: ShieldCheck },
+                { label: "Politica", icon: Landmark },
+                { label: "Juridico", icon: Search },
+                { label: "INPI Marcas", icon: Target },
+                { label: "Municipios", icon: Bell },
+                { label: "Ambiental", icon: Sparkles },
+              ].map(({ label, icon: Icon }) => (
+                <span key={label} className="onb-modulo-chip" role="listitem">
+                  <Icon size={11} aria-hidden="true" />
+                  {label}
+                </span>
+              ))}
             </div>
 
             <div className="onb-footer-single">
@@ -441,20 +538,20 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                 className="onb-btn-primary"
                 onClick={() => setStep(1)}
               >
-                Começar — leva 1 minuto
+                Comecar — leva 1 minuto
               </button>
               <div style={{ textAlign: "center", marginTop: "12px" }}>
                 <button type="button" className="onb-btn-skip" onClick={finish}>
-                  Pular configuração
+                  Pular configuracao e entrar direto
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ════════════════════════════════
-            PASSO 1 — Objetivo do usuário
-            ════════════════════════════════ */}
+        {/* ================================================
+            PASSO 1 -- Objetivo do usuario
+            ================================================ */}
         {step === 1 && (
           <div className="onboarding-body rise">
             <span className="onboarding-eyebrow">
@@ -463,7 +560,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
             </span>
 
             <h1 className="onboarding-body-h1">
-              O que você quer fazer aqui?
+              O que voce quer fazer aqui?
             </h1>
             <p className="onboarding-sub">
               Isso ajusta o radar pra mostrar o que importa pra você. Pode mudar depois.
@@ -489,6 +586,17 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
               ))}
             </div>
 
+            {/* Hint personalizado apos escolha */}
+            {selectedGoalData !== null && (
+              <div className="onb-hint" role="note" aria-live="polite">
+                <CheckCircle2 size={16} className="onb-hint-icon" aria-hidden="true" />
+                <div className="onb-hint-text">
+                  <strong>Recomendado para voce</strong>
+                  {selectedGoalData.hint}
+                </div>
+              </div>
+            )}
+
             <div className="onb-footer">
               <button type="button" className="onb-btn-skip" onClick={() => setStep(0)}>
                 Voltar
@@ -506,9 +614,9 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           </div>
         )}
 
-        {/* ════════════════════════════════
-            PASSO 2 — Canal de alerta
-            ════════════════════════════════ */}
+        {/* ================================================
+            PASSO 2 -- Canal de alerta
+            ================================================ */}
         {step === 2 && (
           <div className="onboarding-body rise">
             <span className="onboarding-eyebrow">
@@ -520,7 +628,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
               Como quer ser avisado?
             </h1>
             <p className="onboarding-sub">
-              Quando aparecer um lote no seu perfil — ou o prazo de um leilão estiver chegando — te avisamos por aqui.
+              Quando aparecer um lote ou edital no seu perfil — ou o prazo estiver chegando — te avisamos por aqui.
             </p>
 
             <div className="onboarding-options" role="group" aria-label="Selecione o canal de alerta">
@@ -560,9 +668,9 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
           </div>
         )}
 
-        {/* ════════════════════════════════
-            PASSO 3 — Raio-X + CTA final
-            ════════════════════════════════ */}
+        {/* ================================================
+            PASSO 3 -- Raio-X + CTA final
+            ================================================ */}
         {step === 3 && (
           <div className="onboarding-body rise">
             <span className="onboarding-eyebrow">
@@ -574,24 +682,23 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
               Pronto, {firstName}!
             </h1>
             <p className="onboarding-sub">
-              Seu painel já está configurado. O primeiro passo é ver os lotes disponíveis — leva menos de 1 minuto.
+              Seu painel esta configurado. O primeiro passo e explorar — leva menos de 1 minuto.
             </p>
 
             {/* Destaque Raio-X */}
             <div className="onb-raiox" role="note" aria-label="Diferencial Fonte.ia">
               <span className="onb-raiox-badge" aria-hidden="true">Diferencial Fonte.ia</span>
-              <p className="onb-raiox-title">O que é o Raio-X?</p>
+              <p className="onb-raiox-title">O que e o Raio-X?</p>
               <p className="onb-raiox-desc">
-                Em qualquer lote, clique em <strong>Raio-X</strong> e a IA lê o edital
-                por você: mostra riscos, estima valor de mercado e aponta o que
-                verificar antes de dar um lance. Os dados vêm da fonte oficial — você
-                sempre sabe de onde veio cada informação.
+                Em qualquer lote ou edital, clique em <strong>Raio-X</strong> e a IA lê o
+                documento por você: mostra riscos, estima valor e aponta o que verificar.
+                Cada dado tem fonte oficial citada — você sempre sabe de onde veio.
               </p>
             </div>
 
             {/* Resumo das escolhas */}
             {(goal !== null || channel !== null) && (
-              <div className="onb-summary" role="region" aria-label="Suas preferências">
+              <div className="onb-summary" role="region" aria-label="Suas preferencias">
                 {goal !== null && (
                   <div className="onb-summary-row">
                     <span className="onb-summary-label">Objetivo</span>
@@ -604,11 +711,19 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                     <span className="onb-summary-value">{channelLabels[channel]}</span>
                   </div>
                 )}
+                {selectedGoalData !== null && (
+                  <div className="onb-summary-row">
+                    <span className="onb-summary-label">Comecar por</span>
+                    <span className="onb-summary-value" style={{ fontSize: "12px" }}>
+                      {selectedGoalData.hintRoute}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Checklist rápida */}
-            <ul className="onb-checklist" aria-label="O que você pode fazer agora">
+            {/* Checklist rapida */}
+            <ul className="onb-checklist" aria-label="O que voce pode fazer agora">
               <li>
                 <CheckCircle2
                   size={17}
@@ -616,7 +731,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                   aria-hidden="true"
                 />
                 <span>
-                  <strong style={{ color: "var(--t-hi)" }}>Ver lotes</strong> — radar com score de oportunidade por categoria
+                  <strong style={{ color: "var(--t-hi)" }}>Explorar lotes</strong> — radar com score de oportunidade por categoria
                 </span>
               </li>
               <li>
@@ -626,7 +741,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                   aria-hidden="true"
                 />
                 <span>
-                  <strong style={{ color: "var(--t-hi)" }}>Raio-X de um lote</strong> — análise com IA em segundos
+                  <strong style={{ color: "var(--t-hi)" }}>Raio-X de qualquer documento</strong> — analise com IA em segundos
                 </span>
               </li>
               <li>
@@ -636,15 +751,15 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                   aria-hidden="true"
                 />
                 <span>
-                  <strong style={{ color: "var(--t-hi)" }}>Criar alerta de prazo</strong> — aviso antes do leilão fechar
+                  <strong style={{ color: "var(--t-hi)" }}>Criar alerta de prazo</strong> — aviso antes de encerrar
                 </span>
               </li>
             </ul>
 
             {/* Nota honesta */}
             <p className="onb-honest">
-              Os lances são feitos no site oficial da Receita Federal. A Fonte.ia ajuda
-              você a descobrir e analisar as oportunidades — não garante lucro.
+              Os lances de leiloes sao feitos no site oficial da Receita Federal. A Fonte.ia ajuda
+              você a descobrir e analisar oportunidades — nao garante lucro.
             </p>
 
             {/* CTA principal */}
@@ -654,7 +769,7 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
               onClick={finish}
             >
               <Gavel size={18} aria-hidden="true" />
-              Ver os lotes da Receita
+              Entrar na plataforma
             </button>
 
             <div style={{ textAlign: "center", marginTop: "12px" }}>
