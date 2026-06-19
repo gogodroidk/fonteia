@@ -7,6 +7,12 @@ import { formatBRL } from "../../data/leiloes-seed";
 import { supabase } from "../../auth/supabase-client";
 import { useAuth } from "../../auth/auth-context";
 import {
+  listEntityAlerts,
+  deleteEntityAlert,
+  ALERT_KIND_LABELS,
+  type EntityAlert,
+} from "../../features/alerts/alerts-api";
+import {
   Bell,
   BookmarkX,
   ChevronRight,
@@ -627,6 +633,345 @@ function EmailAlertsSection({ user, demoMode }: EmailAlertsSectionProps) {
   );
 }
 
+// ─── Entity Alerts section ────────────────────────────────────────────────────
+
+interface EntityAlertsSectionProps {
+  user: import("@supabase/supabase-js").User | null;
+  demoMode: boolean;
+}
+
+function kindLabel(kind: string): string {
+  return ALERT_KIND_LABELS[kind] ?? kind;
+}
+
+function EntityAlertsSection({ user, demoMode }: EntityAlertsSectionProps) {
+  const [alerts, setAlerts] = useState<EntityAlert[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | undefined>();
+  const [removing, setRemoving] = useState<Set<string>>(() => new Set());
+  const [removeError, setRemoveError] = useState<string | undefined>();
+
+  const isLoggedIn = user !== null;
+
+  useEffect(() => {
+    if (!isLoggedIn || demoMode) return;
+
+    let active = true;
+    setLoading(true);
+    setFetchError(undefined);
+
+    void (async () => {
+      try {
+        const rows = await listEntityAlerts();
+        if (!active) return;
+        setAlerts(rows);
+      } catch (err: unknown) {
+        if (!active) return;
+        setFetchError(err instanceof Error ? err.message : "Erro ao carregar alertas.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [isLoggedIn, demoMode]);
+
+  async function handleRemove(id: string): Promise<void> {
+    setRemoving((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setRemoveError(undefined);
+
+    const ok = await deleteEntityAlert(id);
+
+    if (!ok) {
+      setRemoveError("Não foi possível remover o alerta. Tente novamente.");
+      setRemoving((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      return;
+    }
+
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    setRemoving((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  // Not logged in or demo mode
+  if (!isLoggedIn || demoMode) {
+    return (
+      <div
+        className="panel"
+        style={{
+          padding: "28px 24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          alignItems: "flex-start",
+        }}
+      >
+        <div className="row" style={{ gap: 8, marginBottom: 2 }}>
+          <Bell size={16} style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+          <span style={{ fontWeight: 700, fontSize: 15 }}>Meus alertas</span>
+        </div>
+        <div
+          style={{
+            padding: "12px 16px",
+            borderRadius: 10,
+            background: "color-mix(in srgb,var(--accent) 8%,var(--surface-2))",
+            border: "1px solid color-mix(in srgb,var(--accent) 22%,transparent)",
+            fontSize: 13,
+            color: "var(--t-mid)",
+            lineHeight: 1.5,
+          }}
+        >
+          {demoMode
+            ? "Alertas não estão disponíveis no modo demonstração."
+            : "Faça login para ver e gerenciar seus alertas de monitoramento."}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Section header */}
+      <div className="row between" style={{ marginBottom: 12 }}>
+        <div>
+          <div className="row" style={{ gap: 8, marginBottom: 2 }}>
+            <Bell size={16} style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Meus alertas</span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--t-mid)" }}>
+            Empresas, parlamentares, marcas, leilões e mais — qualquer entidade monitorada aparece aqui.
+          </p>
+        </div>
+        {alerts.length > 0 ? (
+          <span className="badge badge--neutral num" style={{ fontSize: 12 }}>
+            {alerts.length}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Remove error */}
+      {removeError !== undefined ? (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 9,
+            background: "color-mix(in srgb,var(--danger) 8%,var(--surface-2))",
+            border: "1px solid color-mix(in srgb,var(--danger) 20%,transparent)",
+            fontSize: 13,
+            color: "var(--danger)",
+            marginBottom: 10,
+          }}
+        >
+          {removeError}
+        </div>
+      ) : null}
+
+      {/* Loading */}
+      {loading ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            color: "var(--t-mid)",
+            fontSize: 14,
+          }}
+        >
+          Carregando alertas…
+        </div>
+      ) : fetchError !== undefined ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            color: "var(--danger)",
+            fontSize: 14,
+          }}
+        >
+          {fetchError}
+        </div>
+      ) : alerts.length === 0 ? (
+        <div
+          className="panel"
+          style={{
+            padding: "32px 24px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 2,
+            }}
+          >
+            <Bell size={20} style={{ color: "var(--t-mid)" }} />
+          </div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Nenhum alerta configurado</div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--t-mid)",
+              maxWidth: 340,
+              lineHeight: 1.5,
+            }}
+          >
+            Use o botão "Criar alerta" nas páginas de empresa, parlamentar, leilão e outros módulos
+            para monitorar entidades de interesse.
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {alerts.map((alert) => {
+            const isBeingRemoved = removing.has(alert.id);
+            const kLabel = kindLabel(alert.kind);
+
+            return (
+              <div
+                key={alert.id}
+                className="panel"
+                style={{
+                  padding: "14px 18px",
+                  display: "flex",
+                  gap: 14,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  opacity: isBeingRemoved ? 0.5 : 1,
+                  transition: "opacity 0.15s",
+                }}
+              >
+                {/* Kind badge */}
+                <span
+                  className="badge badge--info"
+                  style={{ fontSize: 11, flexShrink: 0, alignSelf: "flex-start", marginTop: 2 }}
+                >
+                  {kLabel}
+                </span>
+
+                {/* Content */}
+                <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: 14,
+                      marginBottom: 3,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {alert.entityLabel ?? alert.entityRef}
+                  </div>
+                  <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    {alert.query !== null ? (
+                      <span
+                        style={{
+                          fontSize: 12,
+                          color: "var(--t-low)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          maxWidth: 240,
+                        }}
+                        title={alert.query}
+                      >
+                        "{alert.query}"
+                      </span>
+                    ) : null}
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: "var(--t-low)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {alert.email}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <span
+                  className={
+                    alert.status === "active"
+                      ? "badge badge--ok"
+                      : "badge badge--neutral"
+                  }
+                  style={{ fontSize: 11, flexShrink: 0 }}
+                >
+                  {alert.status === "active" ? "ativo" : alert.status}
+                </span>
+
+                {/* Remove */}
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  type="button"
+                  title="Remover alerta"
+                  aria-label={`Remover alerta de ${alert.entityLabel ?? alert.entityRef}`}
+                  disabled={isBeingRemoved}
+                  onClick={() => {
+                    void handleRemove(alert.id);
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Phase 2 notice */}
+      <div
+        style={{
+          marginTop: 12,
+          padding: "9px 13px",
+          borderRadius: 10,
+          background: "color-mix(in srgb,var(--warn) 8%,var(--surface-2))",
+          border: "1px solid color-mix(in srgb,var(--warn) 22%,transparent)",
+          fontSize: 12,
+          color: "var(--warn)",
+          lineHeight: 1.5,
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+        }}
+      >
+        <Clock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+        <span>
+          Alertas de prazo de leilão chegam automaticamente por e-mail. Para outros módulos
+          (empresa, política, ambiental, marca etc.) o monitoramento está registrado — notificação
+          automática em ativação na próxima fase.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilaoLot) => void }) {
@@ -747,12 +1092,10 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
                   marginBottom: 2,
                 }}
               >
-                Lotes acompanhados e alertas
+                Alertas e acompanhamento
               </h1>
               <p style={{ fontSize: 13.5, color: "var(--t-mid)" }}>
-                {watchlistIds.length > 0
-                  ? `${watchlistIds.length} lote${watchlistIds.length !== 1 ? "s" : ""} acompanhado${watchlistIds.length !== 1 ? "s" : ""}`
-                  : "Nenhum lote acompanhado"}
+                Monitore lotes, empresas, parlamentares, marcas, processos e muito mais — tudo em um lugar.
               </p>
             </div>
             {watchlistIds.length > 0 ? (
@@ -836,8 +1179,11 @@ export function AlertasPage({ onSelectLot }: { onSelectLot?: (lot: ReceitaLeilao
           )}
         </div>
 
-        {/* Email Alerts */}
+        {/* Email Alerts — leilões */}
         <EmailAlertsSection user={user} demoMode={demoMode} />
+
+        {/* Entity Alerts — all modules */}
+        <EntityAlertsSection user={user} demoMode={demoMode} />
       </div>
 
       {/* ── Right: Alert preferences ──────────────────────────────── */}

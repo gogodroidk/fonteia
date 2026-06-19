@@ -352,6 +352,67 @@ export async function fetchTrademarksByQuery(
   return out;
 }
 
+// ─── Filtros client-side ─────────────────────────────────────────────────────
+
+/**
+ * Filtra um array de marcas por classe NICE (client-side).
+ * Passa `""` ou `"todas"` para retornar todas sem filtrar.
+ */
+export function filterTrademarksByNiceClass(
+  marks: InpiTrademark[],
+  classe: string,
+): InpiTrademark[] {
+  const normalized = classe.trim();
+  if (normalized === "" || normalized === "todas") return marks;
+  return marks.filter((m) => m.niceClasses.includes(normalized));
+}
+
+/**
+ * Filtra um array de marcas por situação/status (client-side, case-insensitive).
+ * Passa `""` ou `"todas"` para retornar todas sem filtrar.
+ */
+export function filterTrademarksBySituacao(
+  marks: InpiTrademark[],
+  situacao: string,
+): InpiTrademark[] {
+  const normalized = situacao.trim().toLowerCase();
+  if (normalized === "" || normalized === "todas") return marks;
+  return marks.filter((m) => m.status.toLowerCase() === normalized);
+}
+
+/**
+ * Extrai a lista de classes NICE únicas de um array de marcas, ordenadas
+ * numericamente. Útil para montar os chips/select de filtro dinamicamente.
+ */
+export function extractNiceClasses(marks: InpiTrademark[]): string[] {
+  const seen = new Set<string>();
+  for (const m of marks) {
+    for (const cls of m.niceClasses) {
+      if (cls !== "") seen.add(cls);
+    }
+  }
+  return [...seen].sort((a, b) => {
+    const na = parseInt(a, 10);
+    const nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b, "pt-BR");
+  });
+}
+
+/**
+ * Extrai a lista de situações únicas de um array de marcas, ordenadas
+ * alfabeticamente. Útil para montar os chips/select de filtro dinamicamente.
+ */
+export function extractSituacoes(marks: InpiTrademark[]): string[] {
+  const seen = new Set<string>();
+  for (const m of marks) {
+    if (m.status !== "") seen.add(m.status);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Busca o CONTEXTO da empresa titular (Receita Federal) pela Edge Function
  * "empresas-cnpj", reaproveitando a mesma infra do módulo Empresas (auth por

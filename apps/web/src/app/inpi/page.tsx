@@ -21,6 +21,10 @@ import {
   sanitizeCnpj,
   searchInpiByCnpj,
   fetchTrademarksByQuery,
+  filterTrademarksByNiceClass,
+  filterTrademarksBySituacao,
+  extractNiceClasses,
+  extractSituacoes,
 } from "../../features/inpi/inpi-api";
 import { FonteDots } from "../../components/ui";
 
@@ -58,6 +62,66 @@ function inpiProcessUrl(processNumber: string): string {
   return `${INPI_BUSCA_BASE}?processoMarca=${encodeURIComponent(num)}`;
 }
 
+// ─── Select control (chip nativo mobile-friendly) ────────────────────────────
+
+function FilterSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: ReadonlyArray<readonly [T, string]>;
+  onChange: (next: T) => void;
+}) {
+  return (
+    <label className="chip" style={{ gap: 8, paddingRight: 10 }}>
+      <span style={{ color: "var(--t-low)", fontWeight: 600 }}>{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        style={{
+          border: "none",
+          background: "transparent",
+          color: "var(--t-hi)",
+          fontFamily: "inherit",
+          fontSize: 13,
+          fontWeight: 600,
+          cursor: "pointer",
+          maxWidth: 200,
+        }}
+      >
+        {options.map(([val, text]) => (
+          <option key={val} value={val}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// ─── Skeleton de carregamento ─────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="card" style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12 }} aria-hidden="true">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <div className="skeleton" style={{ height: 11, width: "28%", borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 20, width: "38%", borderRadius: 999 }} />
+      </div>
+      <div className="skeleton" style={{ height: 15, width: "80%", borderRadius: 6 }} />
+      <div className="skeleton" style={{ height: 13, width: "60%", borderRadius: 6 }} />
+      <div style={{ display: "flex", gap: 6 }}>
+        <div className="skeleton" style={{ height: 24, width: 70, borderRadius: 8 }} />
+        <div className="skeleton" style={{ height: 24, width: 70, borderRadius: 8 }} />
+      </div>
+      <div className="skeleton" style={{ height: 12, width: "45%", borderRadius: 6, marginTop: 4 }} />
+    </div>
+  );
+}
+
 // ─── Card de fato (label + valor) ────────────────────────────────────────────
 
 function FactItem({ label, value, icon }: { label: string; value: string; icon?: ReactNode }) {
@@ -76,13 +140,27 @@ function FactItem({ label, value, icon }: { label: string; value: string; icon?:
 
 // ─── Card de marca ────────────────────────────────────────────────────────────
 
+function situacaoBadgeClass(situacao: string): string {
+  const s = normalizeForSearch(situacao);
+  if (s.includes("vigor") || s.includes("registr") || s.includes("concedid") || s.includes("ativa")) {
+    return "badge--ok";
+  }
+  if (s.includes("arquivad") || s.includes("extinct") || s.includes("caducid") || s.includes("cancelad") || s.includes("indeferid")) {
+    return "badge--danger";
+  }
+  if (s.includes("examinand") || s.includes("pendente") || s.includes("aguardand") || s.includes("publicad") || s.includes("deposit")) {
+    return "badge--warn";
+  }
+  return "badge--neutral";
+}
+
 function TrademarkCard({ marca }: { marca: InpiTrademark }) {
   const titularLabel = [marca.titularNome, marca.titularUf].filter(Boolean).join(" — ");
   const cnpjLabel = marca.titularCnpj !== "" ? formatCnpj(marca.titularCnpj) : null;
 
   return (
     <article
-      className="card card--hover"
+      className="card card--hover rise-in"
       style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
       aria-label={`Marca — ${marca.nome || "sem nome"}`}
     >
@@ -95,7 +173,7 @@ function TrademarkCard({ marca }: { marca: InpiTrademark }) {
             </span>
           )}
           {marca.status !== "" && (
-            <span className="badge badge--neutral" style={{ flexShrink: 0 }}>
+            <span className={`badge ${situacaoBadgeClass(marca.status)}`} style={{ flexShrink: 0 }}>
               {marca.status}
             </span>
           )}
@@ -161,14 +239,40 @@ function TrademarkCard({ marca }: { marca: InpiTrademark }) {
 
 // ─── Busca principal: por nome / titular / classe ─────────────────────────────
 
+const ALL_OPTION = "todas" as const;
+type FilterAll = typeof ALL_OPTION;
+
 function InpiNameSearch() {
   const [input, setInput] = useState("");
   const [results, setResults] = useState<InpiTrademark[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
+  // Filtros client-side sobre os resultados
+  const [classeFilter, setClasseFilter] = useState<FilterAll | string>(ALL_OPTION);
+  const [situacaoFilter, setSituacaoFilter] = useState<FilterAll | string>(ALL_OPTION);
 
   const canSearch = input.trim() !== "" && !isLoading;
+
+  // Classes NICE e situações únicas extraídas dos resultados actuais
+  const availableClasses = results !== null ? extractNiceClasses(results) : [];
+  const availableSituacoes = results !== null ? extractSituacoes(results) : [];
+
+  // Aplica os filtros client-side
+  const filteredResults: InpiTrademark[] = (() => {
+    if (results === null) return [];
+    let out = filterTrademarksByNiceClass(results, classeFilter);
+    out = filterTrademarksBySituacao(out, situacaoFilter);
+    return out;
+  })();
+
+  const hasActiveFilters =
+    classeFilter !== ALL_OPTION || situacaoFilter !== ALL_OPTION;
+
+  function clearFilters() {
+    setClasseFilter(ALL_OPTION);
+    setSituacaoFilter(ALL_OPTION);
+  }
 
   async function handleSearch() {
     const termo = input.trim();
@@ -177,6 +281,8 @@ function InpiNameSearch() {
     setError(null);
     setResults(null);
     setLastQuery(termo);
+    setClasseFilter(ALL_OPTION);
+    setSituacaoFilter(ALL_OPTION);
     try {
       const marcas = await fetchTrademarksByQuery(termo);
       setResults(marcas);
@@ -192,7 +298,20 @@ function InpiNameSearch() {
     setResults(null);
     setError(null);
     setLastQuery(null);
+    setClasseFilter(ALL_OPTION);
+    setSituacaoFilter(ALL_OPTION);
   }
+
+  // Opções para os selects de filtro
+  const classeOptions: ReadonlyArray<readonly [string, string]> = [
+    [ALL_OPTION, "Todas as classes"],
+    ...availableClasses.map((c) => [c, `Classe ${c}`] as const),
+  ];
+
+  const situacaoOptions: ReadonlyArray<readonly [string, string]> = [
+    [ALL_OPTION, "Todas as situações"],
+    ...availableSituacoes.map((s) => [s, s] as const),
+  ];
 
   return (
     <section
@@ -264,6 +383,7 @@ function InpiNameSearch() {
       {/* Estado inicial */}
       {results === null && error === null && !isLoading && lastQuery === null && (
         <div
+          className="fade-in"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -304,29 +424,37 @@ function InpiNameSearch() {
         </div>
       )}
 
-      {/* Loading */}
+      {/* Skeletons de carregamento */}
       {isLoading && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "16px 0",
-            color: "var(--t-mid)",
-            fontSize: 14,
-          }}
           role="status"
+          aria-label="Carregando marcas…"
           aria-live="polite"
+          style={{ display: "flex", flexDirection: "column", gap: 10 }}
         >
-          <Loader2 size={18} className="spin" aria-hidden="true" />
-          Consultando a RPI do INPI…
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--t-mid)", fontSize: 13.5 }}
+            aria-hidden="true"
+          >
+            <Loader2 size={15} className="spin" />
+            Consultando a RPI do INPI…
+          </div>
+          <div
+            className="grid"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}
+            aria-hidden="true"
+          >
+            {Array.from({ length: 6 }).map((_, i) => (
+              <SkeletonCard key={i} />
+            ))}
+          </div>
         </div>
       )}
 
       {/* Erro */}
       {error !== null && (
         <div
-          className="panel"
+          className="panel fade-in"
           style={{
             padding: "12px 16px",
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
@@ -342,9 +470,10 @@ function InpiNameSearch() {
         </div>
       )}
 
-      {/* Resultado vazio */}
-      {results !== null && results.length === 0 && !isLoading && (
+      {/* Resultados (com filtros) */}
+      {results !== null && results.length === 0 && !isLoading && !hasActiveFilters && (
         <div
+          className="fade-in"
           style={{
             display: "flex",
             flexDirection: "column",
@@ -378,27 +507,95 @@ function InpiNameSearch() {
         </div>
       )}
 
-      {/* Grade de resultados */}
       {results !== null && results.length > 0 && !isLoading && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Barra de filtros */}
+          <div className="filter-bar" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, flexShrink: 0 }}>
+              Filtrar:
+            </span>
+
+            {/* Filtro por classe NICE */}
+            {availableClasses.length > 0 && (
+              <FilterSelect
+                label="Classe NICE"
+                value={classeFilter}
+                options={classeOptions as ReadonlyArray<readonly [string, string]>}
+                onChange={setClasseFilter}
+              />
+            )}
+
+            {/* Filtro por situação */}
+            {availableSituacoes.length > 1 && (
+              <FilterSelect
+                label="Situação"
+                value={situacaoFilter}
+                options={situacaoOptions as ReadonlyArray<readonly [string, string]>}
+                onChange={setSituacaoFilter}
+              />
+            )}
+
+            {hasActiveFilters && (
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={clearFilters}
+                style={{ fontSize: 12, padding: "6px 10px" }}
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+
+          {/* Contagem */}
           <div
             className="tiny muted"
             style={{ paddingLeft: 2 }}
             aria-live="polite"
             role="status"
           >
-            {results.length} marca{results.length !== 1 ? "s" : ""} encontrada
-            {results.length !== 1 ? "s" : ""} para "{lastQuery}"
-            {results.length === 100 ? " (limite de exibição atingido — refine a busca)" : ""}
+            {hasActiveFilters
+              ? `${filteredResults.length} de ${results.length} marca${results.length !== 1 ? "s" : ""} após filtro`
+              : `${results.length} marca${results.length !== 1 ? "s" : ""} encontrada${results.length !== 1 ? "s" : ""} para "${lastQuery}"${results.length === 100 ? " (limite atingido — refine a busca)" : ""}`
+            }
           </div>
-          <div
-            className="grid"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}
-          >
-            {results.map((marca) => (
-              <TrademarkCard key={marca.id} marca={marca} />
-            ))}
-          </div>
+
+          {/* Nenhum resultado após filtros */}
+          {filteredResults.length === 0 && (
+            <div
+              style={{
+                padding: "16px 18px",
+                borderRadius: "var(--r-md, 10px)",
+                background: "var(--surface-2, var(--surface))",
+                border: "1px solid var(--border)",
+                fontSize: 13.5,
+                color: "var(--t-mid)",
+              }}
+              role="status"
+            >
+              Nenhuma marca corresponde aos filtros selecionados.{" "}
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={clearFilters}
+                style={{ display: "inline", padding: "2px 6px", fontSize: 12.5 }}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          )}
+
+          {/* Grade de resultados */}
+          {filteredResults.length > 0 && (
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}
+            >
+              {filteredResults.map((marca) => (
+                <TrademarkCard key={marca.id} marca={marca} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>
