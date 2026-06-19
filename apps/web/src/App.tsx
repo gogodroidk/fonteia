@@ -9,6 +9,7 @@ import {
   Database,
   Brain,
   FileText,
+  FileSearch2,
   Gavel,
   HelpCircle,
   LayoutGrid,
@@ -146,6 +147,9 @@ const JuridicoPage = lazy(() =>
 const InpiPage = lazy(() =>
   import("./app/inpi/page").then((m) => ({ default: m.InpiPage })),
 );
+const DossiePage = lazy(() =>
+  import("./app/dossie/page").then((m) => ({ default: m.DossiePage })),
+);
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -258,6 +262,7 @@ type RouteKey =
   | "raio-x"
   | "leads"
   | "cerebro"
+  | "dossie"
   | "onboarding";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
@@ -268,6 +273,7 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/politica", route: "politica", label: "Política", icon: Users },
   { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
   { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
+  { path: "/app/dossie", route: "dossie", label: "Dossiê", icon: FileSearch2 },
   { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
   { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
   { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
@@ -311,6 +317,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   "raio-x": "Raio-X de Empresa",
   leads: "Leads com Motivo",
   cerebro: "Cérebro",
+  dossie: "Dossiê da Empresa",
   onboarding: "Perfil",
 };
 
@@ -328,6 +335,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/juridico")) return "juridico";
   if (path.startsWith("/app/inpi")) return "inpi";
   if (path.startsWith("/app/cerebro")) return "cerebro";
+  if (path.startsWith("/app/dossie")) return "dossie";
   if (path.startsWith("/app/raio-x")) return "raio-x";
   if (path.startsWith("/app/leads")) return "leads";
   if (path.startsWith("/app/onboarding")) return "onboarding";
@@ -759,6 +767,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "inpi" && <InpiPage />}
                 {route === "raio-x" && <RaioXPage />}
                 {route === "cerebro" && <CerebroPage />}
+                {route === "dossie" && <DossiePage />}
                 {route === "leads" && <LeadsPage />}
                 {route === "onboarding" && <OnboardingProfissaoPage onFinish={() => go("/app")} />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
