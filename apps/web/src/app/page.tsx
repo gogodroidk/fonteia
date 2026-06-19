@@ -312,7 +312,7 @@ function ModuleCard({
       {/* Contador */}
       {data.error ? (
         <div style={{ fontSize: 12.5, color: "var(--danger)" }}>Erro ao carregar</div>
-      ) : (
+      ) : data.count > 0 ? (
         <div
           style={{
             fontSize: 26,
@@ -325,6 +325,12 @@ function ModuleCard({
           <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t-mid)", marginLeft: 4 }}>
             registros
           </span>
+        </div>
+      ) : (
+        // Módulos consultados sob demanda (ex.: INPI, busca por marca) não têm
+        // contagem global — mostramos isso em vez de um "0 registros" enganoso.
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t-mid)" }}>
+          Consulta sob demanda
         </div>
       )}
 
@@ -595,10 +601,11 @@ export function DashboardPage(props: {
           next.empresas = { count: 0, items: [], loaded: true, error: true };
         }
 
-        // INPI — sem listagem global (busca por CNPJ); mostra estado pendente
+        // INPI — módulo de busca (RPI/INPI indexada); sem contagem global porque
+        // a base é consultada por marca/titular/classe, não listada de uma vez.
         next.inpi = {
           count: 0,
-          items: ["Busca por CNPJ disponível", "Integração de marcas em andamento"],
+          items: ["Busca por marca, titular ou classe", "Marcas do INPI (RPI) já indexadas"],
           loaded: true,
           error: false,
         };

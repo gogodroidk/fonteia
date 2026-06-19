@@ -81,7 +81,7 @@ interface LotDetailPageProps {
 type AlertChannel = "in_app";
 
 const channelLabels: Record<AlertChannel, string> = {
-  in_app: "Notificação no app",
+  in_app: "Aviso por e-mail quando o prazo chegar",
 };
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
