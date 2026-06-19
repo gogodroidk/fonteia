@@ -686,7 +686,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               </div>
             )}
-            <ErrorBoundary>
+            <ErrorBoundary key={route}>
               <Suspense fallback={
                 <div className="fade-in" aria-busy="true" aria-label="Carregando" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div className="skeleton skeleton-text" style={{ width: 220, height: 26 }} />
