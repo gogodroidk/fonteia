@@ -188,8 +188,21 @@ export function edgeLengthFor(rel: EdgeKind): number {
   switch (rel) {
     case "cnpj":
       return 140;
+    // "Siga o dinheiro": despesa → fornecedor é o vínculo mais forte do grafo
+    // político↔empresa; fica curto para colar a empresa no documento de despesa.
+    case "fornecedor":
+      return 120;
+    // Despesa pendurada no parlamentar — curta para formar o "leque" de gastos.
+    case "despesa":
+      return 130;
+    // Sócio do QSA colado à empresa (cluster societário apertado).
+    case "socio":
+      return 115;
     case "name":
       return 175;
+    // Votação ↔ proposição: contexto legislativo — respira um pouco mais.
+    case "voto":
+      return 185;
     case "municipio":
       return 210;
     case "orgao":

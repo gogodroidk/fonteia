@@ -244,3 +244,83 @@ export async function listSancoes(fetcher: typeof fetch = fetch): Promise<Sancoe
     errors,
   };
 }
+
+// ─── Enriquecimento BrasilAPI (kind=company) ──────────────────────────────────
+
+/** Par código/descrição de CNAE. */
+export type CnaeItem = { codigo: string; descricao: string };
+
+/** Sócio simplificado (QSA) armazenado em entities.attributes. */
+export type SocioQsa = { nome: string; qualificacao: string };
+
+/** Atributos de enriquecimento BrasilAPI armazenados em entities.attributes. */
+export type CompanyAttributes = {
+  cnaePrincipal?: CnaeItem;
+  cnaesSecundarios?: CnaeItem[];
+  capitalSocial?: number;
+  simples?: boolean | null;
+  mei?: boolean | null;
+  qsa?: SocioQsa[];
+  naturezaJuridica?: string;
+  situacaoCadastral?: string;
+  municipio?: string;
+  uf?: string;
+  codigoIbge?: string;
+};
+
+/** Empresa enriquecida — lida de entities (kind=company). */
+export type CompanyEnrichItem = {
+  id: string;
+  cnpj: string;
+  nome: string;
+  attributes: CompanyAttributes;
+};
+
+/** Resultado da busca de enriquecimento BrasilAPI para um CNPJ. */
+export interface CompanyEnrichResult {
+  source: OrgaosDataSource;
+  company: CompanyEnrichItem | null;
+  lastSyncedAt?: string | undefined;
+  errors?: string[];
+}
+
+/**
+ * Busca dados de enriquecimento BrasilAPI (kind=company) para um CNPJ no D1.
+ * Recebe o CNPJ cru (14 dígitos ou com máscara), sanitiza e consulta a primeira
+ * linha disponível. Nunca lança — erros são capturados e devolvidos em `errors`.
+ */
+export async function fetchCompanyEnrichment(
+  cnpj: string,
+  fetcher: typeof fetch = fetch,
+): Promise<CompanyEnrichResult> {
+  const sanitized = sanitizeCnpj(cnpj);
+  if (sanitized === "") {
+    return { source: "empty", company: null };
+  }
+
+  try {
+    const { rows } = await fetchAllD1Entities<CompanyAttributes>(
+      { kind: "company", cnpj: sanitized },
+      { maxPages: 1, fetcher },
+    );
+
+    if (rows.length === 0) {
+      return { source: "empty", company: null };
+    }
+
+    const row = rows[0];
+    if (!row) {
+      return { source: "empty", company: null };
+    }
+    const company: CompanyEnrichItem = {
+      id: row.id,
+      cnpj: row.cnpj ?? sanitized,
+      nome: row.name ?? "",
+      attributes: row.attributes ?? {},
+    };
+
+    return { source: "supabase", company, lastSyncedAt: firstUpdatedAt(rows) };
+  } catch (error) {
+    return { source: "empty", company: null, errors: [toErrorMessage(error)] };
+  }
+}

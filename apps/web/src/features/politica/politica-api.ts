@@ -63,3 +63,128 @@ export async function listDeputados(fetcher: typeof fetch = fetch): Promise<Poli
 }
 
 export const loadDeputados = listDeputados;
+
+// ─── parliamentary_expense ───────────────────────────────────────────────────
+
+export type DespesaAttributes = {
+  deputadoId: string;
+  partido: string;
+  uf: string;
+  tipo: string;
+  fornecedor: string;
+  cnpjFornecedor: string;
+  valorDocumento: number;
+  valorLiquido: number;
+  dataDocumento: string;
+  ano: number;
+  mes: number;
+  urlDocumento: string;
+};
+
+export type DespesaItem = {
+  id: string;
+  attributes: DespesaAttributes;
+};
+
+export interface DespesasLoadResult {
+  source: PoliticaDataSource;
+  despesas: DespesaItem[];
+  lastSyncedAt?: string | undefined;
+  errors?: string[];
+}
+
+export async function listDespesas(fetcher: typeof fetch = fetch): Promise<DespesasLoadResult> {
+  const errors: string[] = [];
+
+  try {
+    const { rows } = await fetchAllD1Entities<DespesaAttributes>(
+      { kind: "parliamentary_expense" },
+      { maxPages: 10, fetcher },
+    );
+
+    const despesas: DespesaItem[] = rows.map((r) => ({ id: r.id, attributes: r.attributes }));
+
+    if (despesas.length > 0) {
+      return {
+        source: "supabase",
+        despesas,
+        lastSyncedAt: firstUpdatedAt(rows),
+      };
+    }
+  } catch (error) {
+    errors.push(`Supabase: ${toErrorMessage(error)}`);
+  }
+
+  return {
+    source: "empty",
+    despesas: [],
+    errors,
+  };
+}
+
+// ─── legislative_vote ────────────────────────────────────────────────────────
+
+export type ProposicaoRef = {
+  id?: number;
+  sigla?: string;
+  numero?: number;
+  ano?: number;
+  ementa?: string;
+};
+
+export type VotoDeputado = {
+  deputadoId: string;
+  voto: string;
+};
+
+export type VotacaoAttributes = {
+  data: string;
+  siglaOrgao: string;
+  aprovacao: boolean;
+  placarSim: number;
+  placarNao: number;
+  placarAbstencoes: number;
+  proposicao: ProposicaoRef;
+  votos: VotoDeputado[];
+};
+
+export type VotacaoItem = {
+  id: string;
+  attributes: VotacaoAttributes;
+};
+
+export interface VotacoesLoadResult {
+  source: PoliticaDataSource;
+  votacoes: VotacaoItem[];
+  lastSyncedAt?: string | undefined;
+  errors?: string[];
+}
+
+export async function listVotacoes(fetcher: typeof fetch = fetch): Promise<VotacoesLoadResult> {
+  const errors: string[] = [];
+
+  try {
+    const { rows } = await fetchAllD1Entities<VotacaoAttributes>(
+      { kind: "legislative_vote" },
+      { maxPages: 5, fetcher },
+    );
+
+    const votacoes: VotacaoItem[] = rows.map((r) => ({ id: r.id, attributes: r.attributes }));
+
+    if (votacoes.length > 0) {
+      return {
+        source: "supabase",
+        votacoes,
+        lastSyncedAt: firstUpdatedAt(rows),
+      };
+    }
+  } catch (error) {
+    errors.push(`Supabase: ${toErrorMessage(error)}`);
+  }
+
+  return {
+    source: "empty",
+    votacoes: [],
+    errors,
+  };
+}
