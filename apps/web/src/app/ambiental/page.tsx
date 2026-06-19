@@ -311,6 +311,7 @@ function SourceEmptyState() {
   return (
     <div
       className="panel"
+      role="status"
       style={{
         padding: 48,
         textAlign: "center",
@@ -376,7 +377,8 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar autos de infração.");
+        console.error("[ambiental] falha ao carregar:", err);
+        setErrorMessage("Não foi possível carregar os autos de infração. Verifique sua conexão e tente novamente.");
         setIsLoading(false);
       });
 
@@ -454,7 +456,7 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
 
   // ── Render ──
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
       <div>
         <span className="eyebrow">Ambiental</span>
@@ -481,7 +483,7 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
           }}
           role="alert"
         >
-          Erro ao carregar dados: {errorMessage}
+          {errorMessage}
         </div>
       )}
 

@@ -429,7 +429,8 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorProp(err instanceof Error ? err.message : "Erro ao carregar proposições.");
+        console.error("[juridico] falha ao carregar proposições:", err);
+        setErrorProp("Não foi possível carregar as proposições. Verifique sua conexão e tente novamente.");
         setIsLoadingProp(false);
       });
 
@@ -452,7 +453,8 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorProc(err instanceof Error ? err.message : "Erro ao carregar processos.");
+        console.error("[juridico] falha ao carregar processos:", err);
+        setErrorProc("Não foi possível carregar os processos judiciais. Verifique sua conexão e tente novamente.");
         setIsLoadingProc(false);
       });
 
@@ -590,7 +592,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
 
   // ── Render ──
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
       <div>
         <span className="eyebrow">Jurídico</span>
@@ -604,7 +606,12 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       </div>
 
       {/* Tabs */}
-      <div className="row" style={{ gap: 4, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+      <div
+        className="row"
+        role="tablist"
+        aria-label="Seções jurídicas"
+        style={{ gap: 4, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}
+      >
         {TABS.map(([key, label]) => (
           <button
             key={key}
@@ -627,7 +634,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
 
       {/* ── TAB: Proposições ── */}
       {activeTab === "proposicoes" && (
-        <>
+        <div role="tabpanel" aria-label="Proposições" className="fade-in">
           {/* Error banner */}
           {errorProp !== null && (
             <div
@@ -642,7 +649,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               }}
               role="alert"
             >
-              Erro ao carregar dados: {errorProp}
+              {errorProp}
             </div>
           )}
 
@@ -736,6 +743,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
           ) : errorProp !== null ? null : proposicoes.length === 0 ? (
             <div
               className="panel"
+              role="status"
               style={{
                 padding: 48,
                 textAlign: "center",
@@ -788,12 +796,12 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               )}
             </>
           )}
-        </>
+        </div>
       )}
 
       {/* ── TAB: Processos Judiciais ── */}
       {activeTab === "processos" && (
-        <>
+        <div role="tabpanel" aria-label="Processos judiciais" className="fade-in">
           {/* Error banner */}
           {errorProc !== null && (
             <div
@@ -808,7 +816,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               }}
               role="alert"
             >
-              Erro ao carregar dados: {errorProc}
+              {errorProc}
             </div>
           )}
 
@@ -883,6 +891,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
           ) : errorProc !== null ? null : processos.length === 0 ? (
             <div
               className="panel"
+              role="status"
               style={{
                 padding: 48,
                 textAlign: "center",
@@ -930,7 +939,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               )}
             </>
           )}
-        </>
+        </div>
       )}
     </div>
   );
