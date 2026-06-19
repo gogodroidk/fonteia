@@ -39,6 +39,7 @@ import {
 import { sanitizeCnpj, formatCnpj } from "../../features/cerebro/cerebro-api";
 import { ReportButton } from "../../components/report/ReportButton";
 import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { CertidoesSection } from "./CertidoesSection";
 
 // ─── Exemplos de CNPJ para facilitar a descoberta ────────────────────────────
 
@@ -1150,6 +1151,9 @@ export function DossiePage() {
 
           {/* ── Sócios / QSA ──────────────────────────────────────────────────── */}
           <SociosCard socios={dossie.socios} />
+
+          {/* ── Certidões & Idoneidade (InfoSimples) ───────────────────────────── */}
+          <CertidoesSection cnpj={dossie.cnpj} />
 
           {/* ── Seções por módulo ─────────────────────────────────────────────── */}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
