@@ -59,6 +59,8 @@ const CNPJ_KINDS: GraphKind[] = [
   "trademark",
   "parliamentary_expense",
   "company",
+  "fiscal_report",
+  "federal_transfer",
 ];
 
 /**
@@ -363,6 +365,12 @@ function sourceUrlFor(kind: GraphKind, row: D1EntityRow): string | undefined {
       const cnpj = sanitizeCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
       return cnpj ? `https://brasilapi.com.br/api/cnpj/v1/${cnpj}` : undefined;
     }
+    case "environmental_alert":
+      return "https://queimadas.dgi.inpe.br/queimadas/portal";
+    case "fiscal_report":
+      return "https://siconfi.tesouro.gov.br/siconfi/pages/public/declaracao/declaracao_list.jsf";
+    case "federal_transfer":
+      return "https://www.transferegov.gov.br/";
     default:
       return undefined;
   }
@@ -796,6 +804,85 @@ function leafFromRow(
         rel,
         label: razao || "Empresa",
         sublabel: [cnaeStr.split(" — ")[1] || cnaeStr, situacao].filter(Boolean).join(" · ") || undefined,
+        cnpj: ownCnpj || undefined,
+        codigoIbge: ibge || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "environmental_alert": {
+      const municipio = str(attr(row, "municipio"));
+      const uf = str(attr(row, "uf"));
+      const anoMes = str(attr(row, "anoMes"));
+      const bioma = str(attr(row, "bioma"));
+      const totalFocos = attr(row, "totalFocos");
+      const maxRisco = attr(row, "maxRiscoFogo");
+      const ibge = str(attr(row, "codigoIbge"));
+      // Formata "YYYYMM" → "YYYY/MM"
+      const periodo =
+        anoMes.length === 6 ? `${anoMes.slice(0, 4)}/${anoMes.slice(4)}` : anoMes;
+      pushField(details, "Município/UF", [municipio, uf].filter(Boolean).join(" / "));
+      pushField(details, "Período", periodo);
+      pushField(details, "Total de focos", totalFocos != null ? String(totalFocos) : "");
+      pushField(details, "Risco máximo de fogo", maxRisco != null ? String(maxRisco) : "");
+      pushField(details, "Bioma", bioma);
+      return {
+        id,
+        kind,
+        rel,
+        label: name || `Focos de incêndio — ${municipio || ""}${uf ? ` (${uf})` : ""}${periodo ? ` — ${periodo}` : ""}`.trim() || "Alerta de queimada",
+        sublabel: [bioma, periodo].filter(Boolean).join(" · ") || undefined,
+        codigoIbge: ibge || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "fiscal_report": {
+      const uf = str(attr(row, "uf"));
+      const esfera = str(attr(row, "esfera"));
+      const exercicio = attr(row, "exercicio");
+      const ownCnpj = validCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+      const ibge = str(attr(row, "codigoIbge"));
+      pushField(details, "Ente", name);
+      pushField(details, "UF", uf);
+      pushField(details, "CNPJ", ownCnpj ? formatCnpj(ownCnpj) : "");
+      pushField(details, "Esfera", esfera);
+      pushField(details, "Exercício", exercicio != null ? String(exercicio) : "");
+      return {
+        id,
+        kind,
+        rel,
+        label: name || "Relatório fiscal",
+        sublabel: [esfera, uf, exercicio != null ? String(exercicio) : ""].filter(Boolean).join(" · ") || undefined,
+        cnpj: ownCnpj || undefined,
+        codigoIbge: ibge || undefined,
+        sourceUrl,
+        details,
+      };
+    }
+    case "federal_transfer": {
+      const municipio = str(attr(row, "municipio"));
+      const uf = str(attr(row, "uf"));
+      const orgaoRepassador = str(attr(row, "orgaoRepassador"));
+      const orgaoRecebedor = str(attr(row, "orgaoRecebedor")) || name;
+      const valorTotal = moneyFromReais(attr(row, "valorTotal"));
+      const valorRepasse = moneyFromReais(attr(row, "valorRepasse"));
+      const situacao = str(attr(row, "situacao"));
+      const ownCnpj = validCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+      const ibge = str(attr(row, "codigoIbge"));
+      pushField(details, "Recebedor", orgaoRecebedor);
+      pushField(details, "Órgão repassador", orgaoRepassador);
+      pushField(details, "Município/UF", [municipio, uf].filter(Boolean).join(" / "));
+      pushField(details, "CNPJ recebedor", ownCnpj ? formatCnpj(ownCnpj) : "");
+      pushField(details, "Valor total", valorTotal);
+      pushField(details, "Valor repasse", valorRepasse);
+      pushField(details, "Situação", situacao);
+      return {
+        id,
+        kind,
+        rel,
+        label: orgaoRecebedor || "Transferência federal",
+        sublabel: [orgaoRepassador, valorRepasse || valorTotal].filter(Boolean).join(" · ") || undefined,
         cnpj: ownCnpj || undefined,
         codigoIbge: ibge || undefined,
         sourceUrl,
