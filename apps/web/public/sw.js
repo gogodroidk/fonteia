@@ -1,6 +1,6 @@
 // Service worker mínimo: network-first (sempre tenta a versão nova),
 // usa cache só como reserva offline. Evita servir versão antiga.
-const CACHE = "fonteia-v1";
+const CACHE = "fonteia-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

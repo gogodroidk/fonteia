@@ -24,10 +24,10 @@ describe("Fonte.ia web shell", () => {
   it("shows Leiloes active and keeps adjacent modules visible", () => {
     const html = renderToStaticMarkup(<ModulesPage />);
 
-    expect(html).toContain("Leiloes");
-    expect(html).toContain("liberado");
+    expect(html).toContain("Leilões");
+    expect(html).toContain("ativo");
     expect(html).toContain("INPI");
-    expect(html).toContain("travado");
+    expect(html).toContain("em breve");
     expect(PRODUCT_MODULES).toHaveLength(9);
   });
 

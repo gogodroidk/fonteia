@@ -76,6 +76,7 @@ import {
   type GraphNode,
   type NodeKind,
 } from "../../features/cerebro/types";
+import CerebroGuide from "../../components/cerebro/cerebro-guide";
 
 // ─── Helpers de grafo ───────────────────────────────────────────────────────────
 
@@ -728,6 +729,34 @@ export function CerebroPage() {
     setError("Digite um CNPJ (14 dígitos) ou um nome para buscar.");
   }, [input, hits, runCnpj, runHit]);
 
+  /**
+   * Exemplo do guia (chips para leigos): aceita CNPJ ou nome. CNPJ → grafo
+   * direto; nome → busca e usa o 1º resultado. Erro amigável se nada bater.
+   */
+  const handleGuideExample = useCallback(
+    (query: string) => {
+      setInput(query);
+      const cnpj = sanitizeCnpj(query);
+      if (cnpj !== "") {
+        void runCnpj(cnpj, true);
+        return;
+      }
+      setSearching(true);
+      void searchEntities(query)
+        .then((found) => {
+          const first = found[0];
+          if (first) {
+            void runHit(first);
+          } else {
+            setError(`Nada encontrado para "${query}". Tente outro nome ou um CNPJ.`);
+          }
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+        .finally(() => setSearching(false));
+    },
+    [runCnpj, runHit],
+  );
+
   /** Expande um nó-folha (por CNPJ, por deputadoId, por nome ou município). */
   const expandNode = useCallback(
     async (node: GraphNode) => {
@@ -1134,6 +1163,9 @@ export function CerebroPage() {
           )}
         </button>
       </form>
+
+      {/* Guia amigável para leigos — some quando já há um grafo na tela */}
+      {!hasGraph && <CerebroGuide onExample={handleGuideExample} />}
 
       {/* Erro */}
       {error !== null && (

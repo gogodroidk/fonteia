@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, Loader2, Search, SearchX, Sparkles, X } from "lucide-react";
+import { Inbox, Lightbulb, Loader2, Search, SearchX, Sparkles, X } from "lucide-react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
@@ -7,6 +7,7 @@ import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import type { LeiloesDataSource } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
+import { fuzzyTokenMatch, didYouMean } from "../../lib/fuzzy";
 
 // ─── Fonte (Receita Federal) para os FonteDots ────────────────────────────────
 
@@ -81,7 +82,11 @@ interface RankedLot {
   lot: ReceitaLeilaoLot;
   scoring: LeilaoOpportunityScore;
   economia: LotEconomia | null;
-  /** Quantos termos da busca casaram no texto do lote. */
+  /**
+   * Relevância textual: soma ponderada de hits por token.
+   * Hit exato de substring = 2, hit fuzzy = 1.
+   * Permite ordenar exatos antes dos fuzzy com o mesmo número de termos.
+   */
   keywordHits: number;
 }
 
@@ -102,7 +107,13 @@ function rankLots(lots: ReceitaLeilaoLot[], parsed: ParsedQuery, now: Date): Ran
 
   const ranked: RankedLot[] = pool.map((lot) => {
     const haystack = lotHaystack(lot);
-    const keywordHits = tokens.reduce((acc, token) => (haystack.includes(token) ? acc + 1 : acc), 0);
+    // Exact substring hit = 2 pts; fuzzy-only hit = 1 pt.
+    // This keeps exact matches ranked above fuzzy matches with the same token count.
+    const keywordHits = tokens.reduce((acc, token) => {
+      if (haystack.includes(token)) return acc + 2;
+      if (fuzzyTokenMatch(haystack, token, 0.8)) return acc + 1;
+      return acc;
+    }, 0);
     return {
       lot,
       scoring: scoreReceitaLeilaoLot(lot, now),
@@ -339,6 +350,35 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
     return rankLots(lots, parsed, new Date());
   }, [lots, parsed, loadState]);
 
+  /**
+   * Vocabulary for "did you mean": unique cities + agencies (+ categories when present).
+   * Computed once when lots are loaded; empty while loading.
+   */
+  const vocabulary = useMemo<string[]>(() => {
+    if (lots.length === 0) return [];
+    const seen = new Set<string>();
+    const vocab: string[] = [];
+    for (const lot of lots) {
+      for (const term of [lot.city, lot.agency, lot.category ?? ""]) {
+        const t = term.trim();
+        if (t.length < 3) continue;
+        const key = t.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          vocab.push(t);
+        }
+      }
+    }
+    return vocab;
+  }, [lots]);
+
+  /** Suggestion shown when results are empty and the query looks like a near-miss. */
+  const suggestion = useMemo<string | null>(() => {
+    const q = submitted.trim();
+    if (q.length === 0 || results.length > 0 || vocabulary.length === 0) return null;
+    return didYouMean(q, vocabulary, { threshold: 0.6 });
+  }, [results.length, vocabulary, submitted]);
+
   function openLot(lot: ReceitaLeilaoLot) {
     if (onSelectLot) {
       onSelectLot(lot);
@@ -370,8 +410,8 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
           Encontre lotes por cidade, órgão ou categoria
         </h2>
         <p className="muted small" style={{ margin: 0, maxWidth: 560 }}>
-          Busca por palavra-chave nos dados oficiais — digite uma cidade, um órgão, “mais barato” ou
-          “pessoa física”. O Raio-X com IA fica no detalhe de cada lote.
+          Busca por palavra-chave nos dados oficiais — digite uma cidade, um órgão, "mais barato" ou
+          "pessoa física". O Raio-X com IA fica no detalhe de cada lote.
         </p>
 
         <form
@@ -480,9 +520,29 @@ export function SearchPage({ initialQuestion, onSelectLot }: SearchPageProps = {
               <SearchX size={28} style={{ color: "var(--t-mid)" }} aria-hidden="true" />
               <strong>Nenhum lote bate com essa busca</strong>
               <p className="muted small" style={{ margin: 0, maxWidth: 380 }}>
-                Tente termos mais simples — uma cidade, um órgão, “mais barato” ou “pessoa física”.
+                Tente termos mais simples — uma cidade, um órgão, "mais barato" ou "pessoa física".
                 Nenhuma resposta é inventada: mostramos apenas o que existe nas fontes.
               </p>
+              {suggestion ? (
+                <div className="search-kw__dym" role="note">
+                  <Lightbulb size={15} aria-hidden="true" style={{ color: "var(--brand, #1d5fe0)", flexShrink: 0 }} />
+                  <span className="muted small">
+                    Você quis dizer{" "}
+                    <button
+                      className="btn btn--ghost btn--sm search-kw__dym-btn"
+                      type="button"
+                      aria-label={`Buscar por ${suggestion}`}
+                      onClick={() => {
+                        setQuestion(suggestion);
+                        setSubmitted(suggestion);
+                      }}
+                    >
+                      "{suggestion}"
+                    </button>
+                    ?
+                  </span>
+                </div>
+              ) : null}
               {hasQuery ? (
                 <button
                   className="btn btn--ghost btn--sm"
@@ -633,6 +693,25 @@ const searchStyles = `
 }
 .search-kw__state--error {
   color: var(--danger, #dc2626);
+}
+.search-kw__dym {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.search-kw__dym-btn {
+  display: inline;
+  padding: 0 4px;
+  height: auto;
+  font-size: inherit;
+  font-weight: 700;
+  color: var(--brand-ink, #1d5fe0);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  vertical-align: baseline;
+}
+.search-kw__dym-btn:hover {
+  text-decoration: none;
 }
 @media (max-width: 520px) {
   .search-kw__field {
