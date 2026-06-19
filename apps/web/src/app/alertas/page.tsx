@@ -308,7 +308,7 @@ function EmptyWatchlist({ onExplore }: EmptyWatchlistProps) {
           lineHeight: 1.5,
         }}
       >
-        Marque lotes com a estrela na tela Lotes para acompanhá-los aqui e
+        Marque lotes com o coração na tela Lotes para acompanhá-los aqui e
         receber alertas quando algo mudar.
       </div>
       {onExplore !== undefined ? (
