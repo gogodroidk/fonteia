@@ -287,7 +287,7 @@ function QuickActionCard({
       type="button"
       className="quick-action-card"
       onClick={handleClick}
-      aria-label={action.title}
+      aria-label={`${action.title}. ${action.description}`}
     >
       <QuickActionIcon>{action.icon}</QuickActionIcon>
       <div style={{ minWidth: 0, flex: 1, textAlign: "left" }}>
@@ -539,7 +539,9 @@ export function DashboardPage(props: {
   const [riskFilter, setRiskFilter] = useState("all");
   const [personFilter, setPersonFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
-  const [watchlistSize, setWatchlistSize] = useState(0);
+  // Inicializa com o valor real (getWatchlistSize é SSR-safe → 0 sem window),
+  // evitando o flash visível 0→N na primeira renderização no cliente.
+  const [watchlistSize, setWatchlistSize] = useState(() => getWatchlistSize());
 
   // ── Multi-module data ─────────────────────────────────────────────────────
   const emptyMod = { count: 0, items: [], loaded: false, error: false };
