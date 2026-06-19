@@ -956,6 +956,7 @@ export function DashboardPage(props: {
           margin-top: 12px;
         }
         .dashboard-page .closing-soon-row {
+          appearance: none;
           display: flex;
           align-items: center;
           gap: 10px;
@@ -968,6 +969,7 @@ export function DashboardPage(props: {
           min-height: 44px;
           cursor: pointer;
           font-family: var(--font, inherit);
+          font-size: inherit;
           color: var(--t-hi);
           transition: background .16s, border-color .16s, transform .16s;
         }
@@ -1299,9 +1301,9 @@ export function DashboardPage(props: {
                 borderRadius: 999,
                 fontSize: 11,
                 fontWeight: 700,
-                color: "#1D5FE0",
-                background: "color-mix(in srgb, #1D5FE0 12%, var(--surface))",
-                border: "1px solid color-mix(in srgb, #1D5FE0 25%, transparent)",
+                color: "var(--brand-ink)",
+                background: "color-mix(in srgb, var(--brand-ink) 12%, var(--surface))",
+                border: "1px solid color-mix(in srgb, var(--brand-ink) 25%, transparent)",
               }}
             >
               RFB
@@ -1412,9 +1414,9 @@ export function DashboardPage(props: {
                 borderRadius: 999,
                 fontSize: 11,
                 fontWeight: 700,
-                color: "#1D5FE0",
-                background: "color-mix(in srgb, #1D5FE0 12%, var(--surface))",
-                border: "1px solid color-mix(in srgb, #1D5FE0 25%, transparent)",
+                color: "var(--brand-ink)",
+                background: "color-mix(in srgb, var(--brand-ink) 12%, var(--surface))",
+                border: "1px solid color-mix(in srgb, var(--brand-ink) 25%, transparent)",
               }}
             >
               RFB
@@ -1552,23 +1554,12 @@ export function DashboardPage(props: {
                   {closingSoon.map(({ lot, scoring, days }) => {
                     const isClickable = onSelectLot !== undefined;
                     const handleOpen = () => onSelectLot?.(lot);
-                    return (
-                      <div
+                    return isClickable ? (
+                      <button
                         key={lot.id}
+                        type="button"
                         className="closing-soon-row"
-                        role={isClickable ? "button" : undefined}
-                        tabIndex={isClickable ? 0 : undefined}
-                        onClick={isClickable ? handleOpen : undefined}
-                        onKeyDown={
-                          isClickable
-                            ? (e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  handleOpen();
-                                }
-                              }
-                            : undefined
-                        }
+                        onClick={handleOpen}
                       >
                         <ScoreRing value={scoring.score} size={36} />
                         <div style={{ minWidth: 0, flex: 1 }}>
@@ -1620,8 +1611,8 @@ export function DashboardPage(props: {
                         >
                           {deadlineHint(days)}
                         </span>
-                      </div>
-                    );
+                      </button>
+                    ) : null;
                   })}
                 </div>
               ) : (
@@ -1697,6 +1688,7 @@ export function DashboardPage(props: {
                       {["Lote", "Órgão / Cidade", "Lance min.", "Prazo", "Score", ""].map((h, i) => (
                         <th
                           key={`${h}-${i}`}
+                          scope="col"
                           style={{
                             padding: "12px 16px",
                             textAlign: i >= 2 ? "right" : "left",
@@ -1872,6 +1864,7 @@ export function DashboardPage(props: {
                       {["Lote", "Órgão / Cidade", "Lance min.", "Prazo", "Score", ""].map((h, i) => (
                         <th
                           key={`${h}-${i}`}
+                          scope="col"
                           style={{
                             padding: "12px 16px",
                             textAlign: i >= 2 ? "right" : "left",
