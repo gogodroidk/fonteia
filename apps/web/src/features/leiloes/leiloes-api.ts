@@ -129,9 +129,69 @@ export async function listLeilaoLots(fetcher: typeof fetch = fetch): Promise<Lei
   };
 }
 
+/**
+ * Faz uma query pontual no Supabase REST para um único lote por id.
+ * Usa o filtro JSONB `attributes->>id=eq.{id}` em vez de paginar tudo.
+ * Retorna null (sem lançar) quando o lote não existe ou ocorre qualquer erro.
+ */
+async function fetchSupabaseLotById(
+  lotId: string,
+  fetcher: typeof fetch,
+): Promise<ReceitaLeilaoLot | null> {
+  const { url: supabaseUrl, key: publishableKey } = getSupabasePublicConfig();
+
+  const query =
+    `entities?kind=eq.auction_lot` +
+    `&attributes->>id=eq.${encodeURIComponent(lotId)}` +
+    `&select=attributes,updated_at` +
+    `&limit=1`;
+
+  let response: Response;
+  try {
+    response = await fetcher(`${trimTrailingSlash(supabaseUrl)}/rest/v1/${query}`, {
+      headers: {
+        accept: "application/json",
+        apikey: publishableKey,
+        authorization: `Bearer ${publishableKey}`,
+      },
+    });
+  } catch (networkError) {
+    console.warn("[leiloes-api] fetchSupabaseLotById: erro de rede", networkError);
+    return null;
+  }
+
+  if (!response.ok) {
+    console.warn(`[leiloes-api] fetchSupabaseLotById: Supabase REST retornou ${response.status}`);
+    return null;
+  }
+
+  let batch: unknown;
+  try {
+    batch = await response.json();
+  } catch {
+    console.warn("[leiloes-api] fetchSupabaseLotById: resposta não é JSON válido");
+    return null;
+  }
+
+  if (!Array.isArray(batch) || batch.length === 0) {
+    return null;
+  }
+
+  const row = batch[0] as SupabaseEntityRow;
+  const lot = row.attributes;
+
+  // Garante que é um lote da Receita Federal (mesmo filtro do fetchSupabaseLots).
+  if (!lot || lot.sourceId !== "receita-leiloes-sle") {
+    return null;
+  }
+
+  return lot;
+}
+
 export async function getLeilaoLotById(lotId: string, fetcher: typeof fetch = fetch): Promise<LeilaoLotResult> {
   const errors: string[] = [];
 
+  // 1ª tentativa: endpoint dedicado da API Fonte.ia.
   try {
     const lot = await fetchApiLotById(lotId, fetcher);
 
@@ -145,16 +205,31 @@ export async function getLeilaoLotById(lotId: string, fetcher: typeof fetch = fe
     errors.push(`API detail: ${toErrorMessage(error)}`);
   }
 
-  const result = await listLeilaoLots(fetcher);
-  const lot = result.lots.find((item) => item.id === lotId) ?? null;
+  // 2ª tentativa: query pontual no Supabase REST — busca apenas 1 linha.
+  // Substitui o antigo listLeilaoLots() que paginava todo o dataset (~1 MB).
+  try {
+    const lot = await fetchSupabaseLotById(lotId, fetcher);
 
+    if (lot !== null) {
+      return {
+        source: "supabase",
+        lot,
+        lots: [lot],
+        message: "Lote carregado do Supabase público com RLS e evidências da Receita Federal.",
+        errors,
+      };
+    }
+  } catch (error) {
+    errors.push(`Supabase single: ${toErrorMessage(error)}`);
+  }
+
+  // Lote não encontrado em nenhuma fonte — retorna not-found sem baixar o dataset inteiro.
   return {
-    ...result,
-    lot,
-    errors: [...errors, ...(result.errors ?? [])],
-    message: lot
-      ? result.message
-      : `Não encontramos o lote ${lotId} nas fontes carregadas agora.`,
+    source: "empty",
+    lot: null,
+    lots: [],
+    message: `Não encontramos o lote ${lotId} nas fontes carregadas agora.`,
+    errors,
   };
 }
 
