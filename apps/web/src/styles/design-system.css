@@ -209,3 +209,205 @@ img,svg,video,canvas{max-width:100%}
 .tooltip{position:relative}
 .skeleton{background:var(--surface-2);border-radius:8px;position:relative;overflow:hidden}
 .skeleton::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--border),transparent);background-size:200% 100%;animation:shimmer 1.6s infinite}
+
+/* ── Motion & polish (2026-06) ──────────────────────────────────────────────
+   Additive only. All animations neutralised under prefers-reduced-motion.
+   Colors use tokens only — never hardcoded hex. GPU-safe: transform+opacity.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ---- Skeleton loaders ---------------------------------------------------- */
+/* Token-based shimmer gradient: works in light and dark themes automatically  */
+@keyframes skeleton-sweep {
+  0%   { background-position: -250% 0 }
+  100% { background-position:  250% 0 }
+}
+
+/* Base skeleton block — use where a loading placeholder replaces content */
+.skeleton {
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  position: relative;
+  overflow: hidden;
+  /* Ensure the element has dimensions even when empty */
+  min-height: 1em;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--t-hi) 6%, transparent) 45%,
+    color-mix(in srgb, var(--t-hi) 6%, transparent) 55%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  animation: skeleton-sweep 1.8s ease-in-out infinite;
+}
+
+/* Inline text-shaped placeholder (short block, rounded pill) */
+.skeleton-text {
+  background: var(--surface-2);
+  border-radius: 999px;
+  position: relative;
+  overflow: hidden;
+  height: 0.85em;
+  min-height: unset;
+  display: block;
+}
+.skeleton-text::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--t-hi) 6%, transparent) 45%,
+    color-mix(in srgb, var(--t-hi) 6%, transparent) 55%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  animation: skeleton-sweep 1.8s ease-in-out infinite;
+}
+
+/* Full card-shaped placeholder — mimics a .card surface */
+.skeleton-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  min-height: 120px;
+}
+.skeleton-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--t-hi) 5%, transparent) 40%,
+    color-mix(in srgb, var(--t-hi) 5%, transparent) 60%,
+    transparent 100%
+  );
+  background-size: 250% 100%;
+  animation: skeleton-sweep 2s ease-in-out infinite;
+}
+
+/* ---- Entrance animations ------------------------------------------------- */
+/* fade-in: pure opacity entrance — safest, no layout shift                   */
+@keyframes fade-in-kf {
+  from { opacity: 0 }
+  to   { opacity: 1 }
+}
+.fade-in {
+  animation: fade-in-kf 0.35s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* rise-in: opacity + upward rise — premier entrance for cards/panels         */
+@keyframes rise-in-kf {
+  from { opacity: 0; transform: translateY(12px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+.rise-in {
+  animation: rise-in-kf 0.42s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* page-enter: route-level fade+rise — apply to the wrapping route container  */
+@keyframes page-enter-kf {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+.page-enter {
+  animation: page-enter-kf 0.38s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Stagger helpers: add --stagger-delay to cascade child items               */
+.stagger > * { animation-delay: calc(var(--i, 0) * 55ms) }
+
+/* ---- Panel hover lift ---------------------------------------------------- */
+/* .card already has a lift via .card--hover; .panel has no hover at all.     */
+/* We add an opt-in class rather than touching .panel directly (non-breaking). */
+.panel-hover,
+.panel[data-hover] {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.3, 1),
+              box-shadow 0.25s,
+              border-color 0.25s;
+}
+.panel-hover:hover,
+.panel[data-hover]:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-2);
+}
+
+/* ---- Button & chip micro-interactions ------------------------------------ */
+/* .btn already has :active translateY(1px) scale(.99); add a tighter .97    */
+/* only when a specific modifier is used so existing feel stays intact.       */
+.btn--press:active,
+.chip:active {
+  transform: scale(0.97);
+  transition-duration: 80ms;
+}
+
+/* ---- Global scroll & overscroll niceties --------------------------------- */
+/* Smooth scroll respects reduced-motion via the @media block at the bottom.  */
+html {
+  scroll-behavior: smooth;
+}
+/* Contain overscroll on scrollable panels so the page doesn't bounce */
+.overflow-contain {
+  overscroll-behavior: contain;
+}
+
+/* ---- Focus-visible ring (explicit, using --ring token) ------------------- */
+/* Extends the baseline :focus-visible in design-system.css with a glow ring  */
+:focus-visible {
+  outline: 2px solid var(--brand-ink);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+/* ---- ::selection (token-based, dark-mode safe) --------------------------- */
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--t-hi);
+}
+
+/* ---- Reduced-motion: neutralise everything added above ------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after,
+  .skeleton-text::after,
+  .skeleton-card::after {
+    animation: none !important;
+    background: color-mix(in srgb, var(--t-hi) 5%, transparent);
+    background-size: unset;
+  }
+
+  .fade-in,
+  .rise-in,
+  .page-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .stagger > * {
+    animation-delay: 0ms !important;
+  }
+
+  .panel-hover,
+  .panel[data-hover] {
+    transition: none !important;
+  }
+
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  :focus-visible {
+    box-shadow: none;
+  }
+}

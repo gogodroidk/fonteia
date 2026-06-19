@@ -123,6 +123,7 @@ function riskDistribution(scores: number[]): { baixo: number; medio: number; alt
 }
 
 function getWatchlistSize(): number {
+  if (typeof window === "undefined") return 0;
   try {
     const raw = localStorage.getItem("fonteia_watchlist");
     if (!raw) return 0;
@@ -232,7 +233,7 @@ const MODULE_CARDS: ModuleCardConfig[] = [
 function ModuleCardSkeleton() {
   return (
     <div
-      className="panel"
+      className="panel module-card"
       style={{
         padding: 20,
         display: "flex",
@@ -275,7 +276,7 @@ function ModuleCard({
 }) {
   return (
     <div
-      className="panel"
+      className="panel module-card"
       style={{
         padding: 20,
         display: "flex",
@@ -475,7 +476,9 @@ export function DashboardPage(props: {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        setLoadError(err instanceof Error ? err.message : "Erro ao carregar lotes.");
+        // Log the raw error for debugging; show only a friendly message to users
+        console.error("[DashboardPage] Erro ao carregar lotes:", err);
+        setLoadError("Não foi possível carregar os lotes agora. Tente novamente em alguns instantes.");
         setIsLoading(false);
         setModuleData((prev) => ({
           ...prev,
@@ -737,6 +740,7 @@ export function DashboardPage(props: {
   return (
     <div className="dashboard-page">
       <style>{`
+        /* ── Layout ─────────────────────────────────────────────── */
         .dashboard-page {
           display: flex;
           flex-direction: column;
@@ -837,11 +841,17 @@ export function DashboardPage(props: {
           border-radius: var(--r-md, 10px);
           padding: 10px 12px;
           outline: none;
+          transition: border-color .18s, box-shadow .18s;
         }
         .dashboard-page .leiloes-filter-row input:focus,
         .dashboard-page .leiloes-filter-row select:focus {
           border-color: var(--brand-ink);
           box-shadow: 0 0 0 3px var(--ring);
+        }
+        .dashboard-page .leiloes-filter-row input:focus-visible,
+        .dashboard-page .leiloes-filter-row select:focus-visible {
+          outline: 2px solid var(--brand-ink);
+          outline-offset: 2px;
         }
         .dashboard-page .modules-grid {
           display: grid;
@@ -859,6 +869,55 @@ export function DashboardPage(props: {
           color: var(--t-mid);
           margin-bottom: 14px;
         }
+
+        /* ── Module card hover ──────────────────────────────────── */
+        .dashboard-page .module-card {
+          transition: transform .22s cubic-bezier(.2,.7,.3,1), box-shadow .22s, border-color .22s;
+        }
+        .dashboard-page .module-card:hover {
+          transform: translateY(-3px);
+          box-shadow: var(--shadow-md);
+          border-color: var(--border-2);
+        }
+
+        /* ── Table row hover ────────────────────────────────────── */
+        .dashboard-page .lot-row {
+          transition: background .14s;
+        }
+        .dashboard-page .lot-row:hover {
+          background: var(--surface-2);
+        }
+        .dashboard-page .lot-row:focus-visible {
+          outline: 2px solid var(--brand-ink);
+          outline-offset: -2px;
+        }
+
+        /* ── Entrance animation ─────────────────────────────────── */
+        @keyframes dash-rise {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .dashboard-page .dash-section-enter {
+          animation: dash-rise .4s cubic-bezier(.2,.7,.3,1) both;
+        }
+        .dashboard-page .dash-section-enter:nth-child(1) { animation-delay: 0ms; }
+        .dashboard-page .dash-section-enter:nth-child(2) { animation-delay: 40ms; }
+        .dashboard-page .dash-section-enter:nth-child(3) { animation-delay: 80ms; }
+        .dashboard-page .dash-section-enter:nth-child(4) { animation-delay: 120ms; }
+        .dashboard-page .dash-section-enter:nth-child(5) { animation-delay: 160ms; }
+
+        /* ── Reduced-motion: disable all animations ─────────────── */
+        @media (prefers-reduced-motion: reduce) {
+          .dashboard-page .dash-section-enter,
+          .dashboard-page .module-card,
+          .dashboard-page .lot-row,
+          .dashboard-page .closing-soon-row {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+
+        /* ── Responsive breakpoints ─────────────────────────────── */
         @media (max-width: 920px) {
           .dashboard-page .dash-spotlight {
             grid-template-columns: 1fr;
@@ -878,12 +937,20 @@ export function DashboardPage(props: {
             grid-template-columns: 1fr;
           }
         }
+        @media (max-width: 375px) {
+          .dashboard-page .kpi-strip {
+            grid-template-columns: 1fr;
+          }
+          .dashboard-page .global-kpi-strip {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
 
       {/* ════════════════════════════════════════════════════════════
           ZONA 1 — Saudação + KPIs globais
       ════════════════════════════════════════════════════════════ */}
-      <section className="dash-greeting">
+      <section className="dash-greeting dash-section-enter">
         <div>
           <h1 className="display">{greetingPeriod()}, {greetingName(user)}</h1>
           <p className="muted" style={{ marginTop: 4 }}>
@@ -902,7 +969,7 @@ export function DashboardPage(props: {
       </section>
 
       {/* KPI global: sempre visível — seed totals imediatos, live totals quando carregados */}
-      <section className="global-kpi-strip">
+      <section className="global-kpi-strip dash-section-enter">
         <div className="card card--pad">
           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--t-mid)" }}>
             Total indexado
@@ -983,7 +1050,7 @@ export function DashboardPage(props: {
       </section>
 
       {/* KPIs de leilões */}
-      <section className="kpi-strip">
+      <section className="kpi-strip dash-section-enter">
         {isLoading
           ? Array.from({ length: 4 }).map((_, i) => (
               <div className="card card--pad" key={i} aria-hidden="true">
@@ -1031,7 +1098,7 @@ export function DashboardPage(props: {
       {/* ════════════════════════════════════════════════════════════
           ZONA 2 — Grid de Módulos
       ════════════════════════════════════════════════════════════ */}
-      <section>
+      <section className="dash-section-enter">
         <div className="section-label">
           {SEED_ACTIVE_MODULES.length} módulos ativos — navegue por qualquer um
         </div>
@@ -1061,7 +1128,7 @@ export function DashboardPage(props: {
       {/* ════════════════════════════════════════════════════════════
           ZONA 3 — Destaque do dia (Leilões)
       ════════════════════════════════════════════════════════════ */}
-      <section>
+      <section className="dash-section-enter">
         <div className="section-label">
           <span
             style={{
@@ -1309,7 +1376,7 @@ export function DashboardPage(props: {
               {isLoading
                 ? "Sincronizando..."
                 : loadError
-                  ? "Erro ao carregar"
+                  ? "Indisponível no momento"
                   : `${lots.length} lote${lots.length !== 1 ? "s" : ""} carregado${lots.length !== 1 ? "s" : ""}`}
             </span>
           </div>
@@ -1414,12 +1481,40 @@ export function DashboardPage(props: {
               </div>
             </div>
           ) : loadError ? (
-            <p
-              className="muted"
-              style={{ padding: "32px 0", textAlign: "center", color: "var(--danger)" }}
+            <div
+              className="panel"
+              style={{
+                padding: 40,
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 10,
+              }}
             >
-              {loadError}
-            </p>
+              <div
+                aria-hidden="true"
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
+                  color: "var(--danger)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 22,
+                }}
+              >
+                !
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: "var(--t-hi)" }}>
+                Dados temporariamente indisponíveis
+              </div>
+              <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
+                {loadError}
+              </p>
+            </div>
           ) : lots.length === 0 ? (
             <div
               className="panel"
@@ -1536,6 +1631,7 @@ export function DashboardPage(props: {
                       return (
                         <tr
                           key={lot.id}
+                          className="lot-row"
                           style={{
                             borderTop: rowIdx > 0 ? "1px solid var(--border)" : undefined,
                             cursor: isClickable ? "pointer" : undefined,
