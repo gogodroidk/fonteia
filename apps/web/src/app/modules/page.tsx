@@ -244,24 +244,6 @@ export function ModulesPage({ selectedModuleId = "leiloes" }: ModulesPageProps) 
         </div>
       </div>
 
-      {/* ── Loading skeleton state (exported for external use, shown here for reference) ── */}
-      {false && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(min(300px, 100%), 1fr))",
-            gap: 14,
-          }}
-          aria-label="Carregando módulos…"
-          aria-busy="true"
-        >
-          {Array.from({ length: 6 }).map((_, i) => (
-            // eslint-disable-next-line react/no-array-index-key
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      )}
-
       {/* ── Footnote ── */}
       <p
         style={{
