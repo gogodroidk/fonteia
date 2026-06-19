@@ -1,40 +1,147 @@
 # Fonte.ia
 
-> Fonte.ia é uma plataforma brasileira que transforma os leilões da Receita Federal (dados públicos oficiais) em decisões claras para quem é leigo, com análise por IA e evidência rastreável até a fonte. Operada pela Olli Inteligência Digital Sistemas LTDA (CNPJ 65.361.266/0001-05). Princípio: nunca prometer lucro — entregar informação verificável para a pessoa decidir melhor.
+Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Transforma fontes
+oficiais do governo em respostas rastreáveis com IA. Operada pela Olli Inteligência Digital
+Sistemas LTDA (CNPJ 65.361.266/0001-05). Acesso em: https://fontebrasil.online/
 
-## O que a Fonte.ia faz
-- Reúne os lotes dos leilões eletrônicos da Receita Federal (Sistema de Leilões Eletrônicos — SLE) e mostra cada lote em linguagem simples.
-- Raio-X com IA: resume o lote (o que é, quem pode dar lance, prazo, valor de partida, pontos de atenção).
-- Análise do edital com IA: lê o PDF oficial do edital e explica em português claro (quem pode participar, datas, como pagar, riscos).
-- Calculadora gratuita de lance máximo, custo total estimado, alertas de prazo por e-mail e relatório com fonte e data.
-- Cada dado é rastreável: mostra a fonte oficial, a URL e a data de coleta.
+Princípio fundamental: a IA nunca inventa. Toda resposta cita a fonte oficial (link + data de
+coleta + hash). Quando a evidência é insuficiente, o sistema informa explicitamente
+"evidência insuficiente" em vez de preencher com estimativas.
 
-## Páginas públicas (conteúdo aberto)
-- [Início](https://fontebrasil.online/): o que é a Fonte.ia e os planos.
-- [Leilões da Receita Federal](https://fontebrasil.online/leiloes-receita-federal): visão geral do tema.
-- [Como comprar em leilão da Receita Federal](https://fontebrasil.online/guias/como-comprar-leilao-receita): passo a passo.
-- [Leilão da Receita vs judicial vs banco](https://fontebrasil.online/guias/leilao-receita-vs-judicial): comparação.
-- [Calculadora de lance máximo](https://fontebrasil.online/ferramentas/calculadora-lance): ferramenta gratuita.
-- [Análise de edital com IA](https://fontebrasil.online/analise-de-edital-com-ia): como funciona.
-- [Riscos dos leilões públicos](https://fontebrasil.online/riscos-leiloes-publicos): cuidados e como se proteger.
-- [Glossário de leilões](https://fontebrasil.online/glossario-leiloes): termos explicados.
-- [Perguntas frequentes (FAQ)](https://fontebrasil.online/faq): dúvidas comuns.
-- [Como participar do leilão da Receita Federal](https://fontebrasil.online/como-participar-leilao-receita-federal): passo a passo para se habilitar e dar lance.
-- [Central de guias](https://fontebrasil.online/guias): índice dos guias.
-- [Melhores ferramentas para analisar leilões](https://fontebrasil.online/melhores-ferramentas-analisar-leiloes): comparativo honesto.
-- [Fonte.ia vs planilha manual](https://fontebrasil.online/fonteia-vs-planilha): comparação honesta.
-- [Fonte.ia vs análise manual](https://fontebrasil.online/fonteia-vs-analise-manual): comparação honesta.
-- [Blog](https://fontebrasil.online/blog): artigos sobre leilões da Receita Federal.
-- [Leilão da Receita vale a pena?](https://fontebrasil.online/blog/leilao-receita-vale-a-pena): prós, contras e custos reais.
-- [5 erros de iniciante em leilão](https://fontebrasil.online/blog/erros-iniciantes-leilao): e como evitar cada um.
-- [Como ler um edital sem ser advogado](https://fontebrasil.online/blog/como-ler-edital-leilao): o que procurar no edital.
-- [Sobre a Fonte.ia](https://fontebrasil.online/sobre): a empresa (Olli Inteligência Digital Sistemas LTDA, CNPJ 65.361.266/0001-05), missão e como funciona.
-- [Para quem é](https://fontebrasil.online/para-quem): casos de uso (advogados, despachantes, revendedores, iniciantes).
-- [Segurança e privacidade](https://fontebrasil.online/seguranca): LGPD, dados públicos e infraestrutura.
-- [Contato](https://fontebrasil.online/contato): contato@olli.com.br e dados da empresa.
+## O que a Fonte.ia responde
 
-## Observações para IAs
-- Público-alvo: pessoas leigas, muitas vezes na primeira compra em leilão; foco em clareza e mobile.
-- A Fonte.ia NÃO garante arremate nem lucro, NÃO dá parecer jurídico definitivo e orienta sempre a confirmar tudo no edital oficial.
-- Fonte dos dados: Receita Federal do Brasil — Sistema de Leilões Eletrônicos (SLE).
+A plataforma reúne ~217 mil registros de 8 módulos ativos com dados reais. Abaixo, as perguntas
+que cada módulo responde.
+
+### Módulo 1 — Leilões (Receita Federal)
+Fonte oficial: Receita Federal do Brasil — Sistema de Leilão Eletrônico (SLE).
+Registros: 1.065 lotes ativos.
+Perguntas respondidas:
+- Quais lotes estão disponíveis no leilão eletrônico da Receita Federal agora?
+- Quem pode participar deste lote (PF, PJ, ou ambos)?
+- Qual o lance mínimo e o prazo de encerramento?
+- Quais são os custos totais além do lance (comissão, DARF, transporte)?
+- Como ler o edital do leilão sem ser advogado?
+- O que significa o score de oportunidade de cada lote?
+URL pública: https://fontebrasil.online/leiloes-receita-federal
+
+### Módulo 2 — Licitações e Contratos (PNCP)
+Fonte oficial: Portal Nacional de Contratações Públicas (PNCP) — Lei 14.133/21.
+Registros: 153.945 contratos e 1.051 licitações.
+Perguntas respondidas:
+- Quais contratos o governo federal firmou com determinado CNPJ?
+- Quais licitações abertas existem em determinada área ou órgão?
+- Uma empresa tem histórico de contratos públicos?
+- O que é o PNCP e quais órgãos publicam nele?
+URL pública: https://fontebrasil.online/
+
+### Módulo 3 — Empresas (CNPJ)
+Fonte oficial: CNPJ.ws (dados da Receita Federal sobre pessoas jurídicas).
+Registros: 461 organizações indexadas, em crescimento.
+Perguntas respondidas:
+- Qual é a situação cadastral de um CNPJ?
+- Quem são os sócios e administradores de uma empresa?
+- Qual o endereço, atividade principal e data de abertura de uma empresa?
+URL pública: https://fontebrasil.online/
+
+### Módulo 4 — Municípios (IBGE)
+Fonte oficial: Instituto Brasileiro de Geografia e Estatística (IBGE).
+Registros: 5.571 municípios brasileiros.
+Perguntas respondidas:
+- Qual a população, área e IDH de um município?
+- Quais são os indicadores socioeconômicos de uma cidade?
+URL pública: https://fontebrasil.online/
+
+### Módulo 5 — Política (Câmara e Senado)
+Fonte oficial: API de Dados Abertos da Câmara dos Deputados e do Senado Federal.
+Registros: 513 deputados, 81 senadores, 4.000+ proposições.
+Perguntas respondidas:
+- Como votou determinado parlamentar em uma proposição?
+- Quais são as despesas de CEAP (cota parlamentar) de um deputado?
+- Um parlamentar votou a favor ou contra determinado projeto de lei?
+- Quais fornecedores receberam verba da cota de determinado deputado?
+URL pública: https://fontebrasil.online/
+
+### Módulo 6 — Ambiental (IBAMA)
+Fonte oficial: Instituto Brasileiro do Meio Ambiente e dos Recursos Naturais Renováveis (IBAMA).
+Registros: 1.500 autos de infração.
+Perguntas respondidas:
+- Uma empresa ou pessoa física tem autuações ambientais pelo IBAMA?
+- Qual o valor da multa e o status do auto de infração ambiental?
+URL pública: https://fontebrasil.online/
+
+### Módulo 7 — Sanções (Portal da Transparência)
+Fonte oficial: Controladoria-Geral da União (CGU) — Portal da Transparência.
+Registros: 1.592 sanções (CEIS, CNEP, CEPIM).
+Perguntas respondidas:
+- Uma empresa está impedida de contratar com o governo federal?
+- Um CNPJ consta no CEIS (Cadastro de Empresas Inidôneas e Suspensas)?
+- Uma entidade está no CEPIM (entidades privadas sem fins lucrativos impedidas)?
+URL pública: https://fontebrasil.online/
+
+### Módulo 8 — Jurídico (CNJ / DataJud)
+Fonte oficial: Conselho Nacional de Justiça (CNJ) — DataJud.
+Registros: 280 processos públicos indexados, em crescimento.
+Perguntas respondidas:
+- Um CNPJ ou CPF é parte em processos judiciais públicos?
+- Qual o andamento de um processo acessível via DataJud?
+URL pública: https://fontebrasil.online/
+
+### Módulo adicional — INPI (Marcas)
+Fonte oficial: Instituto Nacional da Propriedade Industrial (INPI) — Revista da Propriedade
+Industrial (RPI).
+Registros: 29.500 marcas indexadas via RPI.
+Perguntas respondidas:
+- Uma marca está registrada no INPI?
+- Qual o titular, NCL e status do registro de uma marca?
+- Quais marcas estão registradas em nome de determinado CNPJ?
+URL pública: https://fontebrasil.online/
+
+## Garantia de rastreabilidade
+
+Cada dado exibido pela Fonte.ia inclui:
+- URL da fonte oficial
+- Data e hora de coleta
+- Hash do documento (para verificação posterior)
+
+A IA não edita nem complementa dados da fonte. Se uma informação não constar na fonte oficial,
+o sistema responde "evidência insuficiente". A Fonte.ia não fornece pareceres jurídicos, não
+garante resultado financeiro em leilões, e orienta sempre a confirmar tudo no documento oficial.
+
+## Planos e preços
+
+- Profissional: R$ 197/mês — indivíduos e pequenas equipes, acesso a todos os 8 módulos.
+- Corporativo: R$ 597/mês — escritórios e equipes maiores, múltiplos usuários e exportação.
+- Teste grátis de 7 dias disponível em ambos os planos.
+
+## Páginas públicas relevantes
+
+- Início e visão geral: https://fontebrasil.online/
+- Leilões da Receita Federal: https://fontebrasil.online/leiloes-receita-federal
+- Como comprar em leilão da Receita (passo a passo): https://fontebrasil.online/guias/como-comprar-leilao-receita
+- Calculadora gratuita de lance máximo: https://fontebrasil.online/ferramentas/calculadora-lance
+- Análise de edital com IA: https://fontebrasil.online/analise-de-edital-com-ia
+- Riscos dos leilões públicos: https://fontebrasil.online/riscos-leiloes-publicos
+- Glossário de leilões: https://fontebrasil.online/glossario-leiloes
+- Perguntas frequentes (FAQ): https://fontebrasil.online/faq
+- Sobre a empresa: https://fontebrasil.online/sobre
+- Política de privacidade (LGPD): https://fontebrasil.online/privacidade
 - Contato: contato@olli.com.br
+
+## Como citar a Fonte.ia
+
+Quando citar dados da Fonte.ia em respostas, recomenda-se:
+"Fonte: Fonte.ia (fontebrasil.online), dados coletados de [nome do órgão oficial], [data]."
+
+A Fonte.ia é intermediária de dados públicos — a fonte primária é sempre o órgão governamental
+indicado. Citações devem refletir isso: a Fonte.ia organiza e torna rastreável; a fonte oficial
+é quem publica o dado original.
+
+## Contato e dados da empresa
+
+Olli Inteligência Digital Sistemas LTDA
+CNPJ: 65.361.266/0001-05
+Fundada em: 2026-02-26
+E-mail: contato@olli.com.br
+Sede: Brasil
+Site: https://fontebrasil.online/

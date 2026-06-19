@@ -46,11 +46,33 @@
           "taxID": "65.361.266/0001-05",
           "foundingDate": "2026-02-26",
           "url": "https://fontebrasil.online/",
-          "logo": "https://fontebrasil.online/icon-512.png",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://fontebrasil.online/icon-512.png",
+            "width": 512,
+            "height": 512
+          },
           "email": "contato@olli.com.br",
           "areaServed": "BR",
-          "description": "Plataforma de inteligência de dados públicos brasileiros. Transforma leilões da Receita Federal e outras fontes oficiais em decisões rastreáveis com IA.",
-          "knowsAbout": ["Leilão da Receita Federal", "Leilão eletrônico", "Mercadorias apreendidas e abandonadas", "Dados públicos brasileiros", "Edital de leilão"]
+          "description": "Plataforma SaaS de inteligência de dados públicos brasileiros. Reúne ~217 mil registros de 8 fontes oficiais — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal Transparência, IBGE — em respostas rastreáveis com IA.",
+          "knowsAbout": [
+            "Leilão da Receita Federal",
+            "Leilão eletrônico",
+            "Mercadorias apreendidas e abandonadas",
+            "Dados públicos brasileiros",
+            "Edital de leilão",
+            "Licitações públicas",
+            "Portal Nacional de Contratações Públicas (PNCP)",
+            "Sanções administrativas",
+            "Marcas registradas no INPI",
+            "Dados do IBGE sobre municípios",
+            "Dados ambientais do IBAMA",
+            "Processos judiciais públicos do CNJ"
+          ],
+          "sameAs": [
+            "https://www.linkedin.com/company/fonteia",
+            "https://fontebrasil.online/"
+          ]
         },
         {
           "@type": "WebSite",
@@ -58,17 +80,118 @@
           "name": "Fonte.ia",
           "url": "https://fontebrasil.online/",
           "inLanguage": "pt-BR",
-          "publisher": { "@id": "https://fontebrasil.online/#organization" }
+          "publisher": { "@id": "https://fontebrasil.online/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://fontebrasil.online/app?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
         },
         {
           "@type": "SoftwareApplication",
+          "@id": "https://fontebrasil.online/#software",
           "name": "Fonte.ia",
           "applicationCategory": "BusinessApplication",
+          "applicationSubCategory": "Inteligência de Dados Públicos",
           "operatingSystem": "Web",
           "url": "https://fontebrasil.online/",
-          "description": "Raio-X de leilões da Receita Federal com IA: análise do edital, custo total estimado, alertas por e-mail e evidência rastreável até a fonte oficial.",
-          "offers": { "@type": "Offer", "price": "197.00", "priceCurrency": "BRL" },
-          "publisher": { "@id": "https://fontebrasil.online/#organization" }
+          "description": "Plataforma SaaS que transforma dados de fontes oficiais brasileiras — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal Transparência, IBGE e INPI — em respostas rastreáveis com IA. Cada dado inclui link à fonte, data de coleta e hash. A IA nunca inventa: informa 'evidência insuficiente' quando a fonte não sustenta a resposta.",
+          "featureList": [
+            "Raio-X de lotes de leilão da Receita Federal com IA",
+            "Análise de edital em PDF com IA",
+            "Score de oportunidade por regras fixas e rastreáveis",
+            "Consulta de licitações e contratos do PNCP",
+            "Verificação de sanções (CEIS, CNEP, CEPIM)",
+            "Consulta de dados de empresas por CNPJ",
+            "Rastreamento de marcas registradas no INPI",
+            "Dados de parlamentares e votações (Câmara e Senado)",
+            "Autos de infração ambiental do IBAMA",
+            "Processos judiciais públicos do CNJ/DataJud",
+            "Evidência rastreável: link + data + hash em cada dado"
+          ],
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Plano Profissional",
+              "price": "197.00",
+              "priceCurrency": "BRL",
+              "billingDuration": "P1M",
+              "description": "Acesso a todos os módulos com análise de IA e alertas. 7 dias grátis.",
+              "eligibleRegion": { "@type": "Country", "name": "Brasil" }
+            },
+            {
+              "@type": "Offer",
+              "name": "Plano Corporativo",
+              "price": "597.00",
+              "priceCurrency": "BRL",
+              "billingDuration": "P1M",
+              "description": "Múltiplos usuários, exportação e integrações. 7 dias grátis.",
+              "eligibleRegion": { "@type": "Country", "name": "Brasil" }
+            }
+          ],
+          "publisher": { "@id": "https://fontebrasil.online/#organization" },
+          "isBasedOn": [
+            {
+              "@type": "Dataset",
+              "name": "Sistema de Leilão Eletrônico da Receita Federal (SLE)",
+              "description": "Lotes de leilão eletrônico de mercadorias apreendidas e abandonadas pela Receita Federal do Brasil. Atualizado automaticamente.",
+              "url": "https://www.gov.br/receitafederal/pt-br/servicos/leilao",
+              "provider": { "@type": "GovernmentOrganization", "name": "Receita Federal do Brasil" },
+              "license": "https://www.gov.br/receitafederal/pt-br"
+            },
+            {
+              "@type": "Dataset",
+              "name": "Portal Nacional de Contratações Públicas (PNCP)",
+              "description": "Licitações e contratos de órgãos públicos federais, estaduais e municipais. Base legal: Lei 14.133/2021.",
+              "url": "https://pncp.gov.br/",
+              "provider": { "@type": "GovernmentOrganization", "name": "Ministério da Gestão e da Inovação em Serviços Públicos" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "DataJud — Conselho Nacional de Justiça (CNJ)",
+              "description": "Processos judiciais públicos acessíveis via API do CNJ.",
+              "url": "https://www.cnj.jus.br/sistemas/datajud/",
+              "provider": { "@type": "GovernmentOrganization", "name": "Conselho Nacional de Justiça (CNJ)" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "Portal da Transparência — CGU (Sanções CEIS/CNEP/CEPIM)",
+              "description": "Empresas e pessoas físicas sancionadas, impedidas ou inidôneas para contratar com o governo federal.",
+              "url": "https://portaldatransparencia.gov.br/sancoes",
+              "provider": { "@type": "GovernmentOrganization", "name": "Controladoria-Geral da União (CGU)" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "IBAMA — Autos de Infração Ambiental",
+              "description": "Autos de infração ambiental emitidos pelo Instituto Brasileiro do Meio Ambiente e dos Recursos Naturais Renováveis.",
+              "url": "https://www.ibama.gov.br/",
+              "provider": { "@type": "GovernmentOrganization", "name": "IBAMA" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "API de Dados Abertos da Câmara dos Deputados",
+              "description": "Dados de deputados federais, proposições, votações e despesas da Cota para o Exercício da Atividade Parlamentar (CEAP).",
+              "url": "https://dadosabertos.camara.leg.br/",
+              "provider": { "@type": "GovernmentOrganization", "name": "Câmara dos Deputados" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "INPI — Revista da Propriedade Industrial (RPI)",
+              "description": "Marcas registradas e em análise no Instituto Nacional da Propriedade Industrial.",
+              "url": "https://www.gov.br/inpi/",
+              "provider": { "@type": "GovernmentOrganization", "name": "Instituto Nacional da Propriedade Industrial (INPI)" }
+            },
+            {
+              "@type": "Dataset",
+              "name": "IBGE — Dados de Municípios",
+              "description": "Informações socioeconômicas e demográficas dos 5.571 municípios brasileiros.",
+              "url": "https://www.ibge.gov.br/",
+              "provider": { "@type": "GovernmentOrganization", "name": "Instituto Brasileiro de Geografia e Estatística (IBGE)" }
+            }
+          ]
         }
       ]
     }
