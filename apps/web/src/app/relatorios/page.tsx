@@ -1,52 +1,93 @@
+/**
+ * relatorios/page.tsx
+ * Lists ALL saved reports (any module/entity kind) and renders the selected
+ * one with EntityReport. Merges legacy lot-only reports (key: "fonteia_reports")
+ * with the new generic store (key: "fonteia.reports.v1") for backward compat.
+ *
+ * Mobile-first, dark/light safe, reduced-motion safe.
+ */
+
 import { useEffect, useState } from "react";
 import {
-  CheckSquare,
   Download,
   ExternalLink,
   FileSearch,
   FileText,
   Info,
+  Printer,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 import { navigateSpa } from "../_nav";
+import {
+  listReports,
+  deleteReport,
+  saveReport,
+  type SavedReport,
+} from "../../features/reports/reports-store";
+import { EntityReport } from "../../components/report/EntityReport";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Legacy migration ─────────────────────────────────────────────────────────
+// Old store used key "fonteia_reports" and ReportEntry shape (lotTitle, lotId).
+// We read it once, convert to SavedReport, merge into the new store, and clear
+// the old key so this migration only runs once.
 
-interface ReportEntry {
+interface LegacyEntry {
   id: string;
   lotTitle: string;
   lotId: string;
   createdAt: string;
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+function isLegacyEntry(x: unknown): x is LegacyEntry {
+  if (typeof x !== "object" || x === null) return false;
+  const r = x as Record<string, unknown>;
+  return (
+    typeof r["id"] === "string" &&
+    typeof r["lotTitle"] === "string" &&
+    typeof r["lotId"] === "string" &&
+    typeof r["createdAt"] === "string"
+  );
+}
+
+function migrateLegacy(): void {
+  if (typeof window === "undefined") return;
+  const LEGACY_KEY = "fonteia_reports";
+  try {
+    const raw = window.localStorage.getItem(LEGACY_KEY);
+    if (!raw) return;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    const entries = parsed.filter(isLegacyEntry);
+    for (const e of entries) {
+      const report: SavedReport = {
+        id: `lote:${e.lotId}`,
+        kind: "lote",
+        kindLabel: "Lote de leilão",
+        title: e.lotTitle,
+        subtitle: e.lotId,
+        fields: [],
+        sources: [
+          {
+            label: "Receita Federal — Leilões",
+            url: `https://www.leiloesjudiciais.gov.br/lotes/${encodeURIComponent(e.lotId)}`,
+            collectedAt: e.createdAt,
+          },
+        ],
+        createdAt: e.createdAt,
+      };
+      saveReport(report);
+    }
+    window.localStorage.removeItem(LEGACY_KEY);
+  } catch {
+    // Migration is best-effort; never break the page
+  }
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RelatoriosPageProps {
   onExplore?: (() => void) | undefined;
-}
-
-// ─── LocalStorage helper ──────────────────────────────────────────────────────
-
-const LS_KEY = "fonteia_reports";
-
-function loadReports(): ReportEntry[] {
-  try {
-    const raw = window.localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (item): item is ReportEntry =>
-        typeof item === "object" &&
-        item !== null &&
-        typeof (item as Record<string, unknown>)["id"] === "string" &&
-        typeof (item as Record<string, unknown>)["lotTitle"] === "string" &&
-        typeof (item as Record<string, unknown>)["lotId"] === "string" &&
-        typeof (item as Record<string, unknown>)["createdAt"] === "string",
-    );
-  } catch {
-    return [];
-  }
 }
 
 // ─── Date formatter ───────────────────────────────────────────────────────────
@@ -61,35 +102,104 @@ function formatDate(iso: string): string {
   });
 }
 
-// ─── What the report contains ─────────────────────────────────────────────────
+// ─── CSV download for a report (re-export from EntityReport helper) ───────────
+
+function buildCsvFromReport(report: SavedReport): string {
+  const header = "Campo,Valor\n";
+  const rows = report.fields
+    .map((f) => `"${f.label.replace(/"/g, '""')}","${f.value.replace(/"/g, '""')}"`)
+    .join("\n");
+  const sourcesHeader = "\n\nFonte,URL,Coletado em\n";
+  const sourceRows = report.sources
+    .map(
+      (s) =>
+        `"${s.label.replace(/"/g, '""')}","${(s.url ?? "").replace(/"/g, '""')}","${(s.collectedAt ?? "").replace(/"/g, '""')}"`,
+    )
+    .join("\n");
+  return header + rows + sourcesHeader + sourceRows;
+}
+
+function downloadCsv(report: SavedReport): void {
+  if (typeof window === "undefined") return;
+  const csv = buildCsvFromReport(report);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `fonteia-relatorio-${report.id.replace(/[^a-z0-9-]/gi, "_")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Kind badge colors ────────────────────────────────────────────────────────
+
+const KIND_BADGE: Record<string, string> = {
+  lote: "badge--info",
+  empresa: "badge--accent",
+  municipio: "badge--ok",
+  parlamentar: "badge--neutral",
+  ambiental: "badge--ok",
+  marca: "badge--neutral",
+  processo: "badge--neutral",
+};
+
+function kindBadgeClass(kind: string): string {
+  return KIND_BADGE[kind] ?? "badge--neutral";
+}
+
+// ─── What the reports system contains ────────────────────────────────────────
 
 const REPORT_CONTENTS: Array<{ icon: typeof FileText; label: string; desc: string }> = [
   {
     icon: ShieldCheck,
-    label: "Score de risco",
-    desc: "Pontuação de 0 a 100 calculada por regras fixas sobre o lote.",
+    label: "Dados estruturados",
+    desc: "Campos extraídos diretamente das fontes oficiais — sem inferência de IA.",
   },
   {
     icon: FileText,
-    label: "Resumo do lote",
-    desc: "Dados do edital, órgão, prazo e valor mínimo extraídos da fonte oficial.",
+    label: "Qualquer módulo",
+    desc:
+      "Funciona para empresas (CNPJ), municípios, parlamentares, lotes de leilão, autos IBAMA, marcas INPI e processos.",
   },
   {
     icon: Info,
-    label: "Riscos detectados",
-    desc: "Lista de fatores de risco identificados automaticamente (prazo, elegibilidade etc.).",
+    label: "Rastreabilidade completa",
+    desc: "Cada relatório traz URL oficial, data de coleta e ID do registro.",
   },
   {
     icon: ExternalLink,
-    label: "Fontes oficiais",
-    desc: "Cadeia de rastreabilidade com a URL oficial, o ID do registro e a data de coleta.",
+    label: "Fontes verificáveis",
+    desc:
+      "Links diretos para IBGE, Câmara dos Deputados, Receita Federal, CNPJ.ws, IBAMA e outros órgãos.",
   },
   {
-    icon: CheckSquare,
-    label: "Checklist de verificação",
-    desc: "7 orientações antes de fazer uma proposta em leilão judicial.",
+    icon: Printer,
+    label: "Impressão / PDF",
+    desc: "Ctrl+P ou ⌘P para salvar como PDF. O layout de impressão é formatado como documento.",
   },
 ];
+
+// ─── Skeleton loader ──────────────────────────────────────────────────────────
+
+function SkeletonRow() {
+  return (
+    <div
+      className="row"
+      style={{
+        padding: "14px 20px",
+        gap: 14,
+        borderTop: "1px solid var(--border)",
+      }}
+    >
+      <div className="skeleton" style={{ width: 40, height: 40, borderRadius: 10, flexShrink: 0 }} />
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className="skeleton" style={{ height: 14, width: "55%", borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 11, width: "30%", borderRadius: 5 }} />
+      </div>
+      <div className="skeleton" style={{ height: 26, width: 80, borderRadius: 8 }} />
+    </div>
+  );
+}
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
@@ -133,173 +243,30 @@ function EmptyState({ onExplore }: { onExplore?: (() => void) | undefined }) {
             margin: 0,
           }}
         >
-          Abra o <strong>Raio-X</strong> de qualquer lote e clique em{" "}
-          <strong>"Gerar relatório PDF"</strong>. O relatório traz os dados do lote, a fonte
-          oficial, a data de coleta e o score de risco — e fica salvo aqui para reimprimir
+          Em qualquer página de detalhe — empresa, município, parlamentar, lote de leilão,
+          infração ambiental, marca ou processo — clique em{" "}
+          <strong>"Gerar relatório"</strong>. O relatório inclui os dados da entidade, a fonte
+          oficial, a data de coleta e fica salvo aqui para reabrir, reimprimir ou exportar CSV
           quando quiser.
         </p>
       </div>
 
-      <button
-        type="button"
-        className="btn btn--primary"
-        onClick={() => onExplore?.()}
-        style={{ marginTop: 8 }}
-      >
-        <FileText size={15} aria-hidden="true" />
-        Explorar lotes
-      </button>
-    </div>
-  );
-}
-
-// ─── Reports table ────────────────────────────────────────────────────────────
-
-function ReportsTable({ reports }: { reports: ReportEntry[] }) {
-  function goToLot(lotId: string) {
-    navigateSpa(`/app/lotes/${encodeURIComponent(lotId)}`);
-  }
-
-  return (
-    <div className="panel" style={{ overflow: "hidden" }}>
-      <div
-        className="row between"
-        style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)" }}
-      >
-        <div style={{ fontWeight: 700, fontSize: 15 }}>
-          {reports.length === 1
-            ? "1 relatório gerado"
-            : `${reports.length} relatórios gerados`}
-        </div>
-        <span
-          className="badge badge--ok"
-          style={{ fontSize: 11 }}
+      {onExplore !== undefined && (
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={onExplore}
+          style={{ marginTop: 8 }}
         >
-          Histórico local
-        </span>
-      </div>
-
-      <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "inherit", minWidth: 480 }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid var(--border)" }}>
-            {(["Lote", "Gerado em", "Ações"] as const).map((h) => (
-              <th
-                key={h}
-                style={{
-                  padding: "11px 20px",
-                  textAlign: "left",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--t-low)",
-                  letterSpacing: ".07em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {reports.map((report, i) => (
-            <tr
-              key={report.id}
-              style={{ borderTop: i !== 0 ? "1px solid var(--border)" : undefined }}
-            >
-              {/* Lote */}
-              <td style={{ padding: "15px 20px" }}>
-                <div className="row" style={{ gap: 12 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: "var(--surface-2)",
-                      border: "1px solid var(--border)",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      gap: 2,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: 3,
-                        width: 22,
-                        borderRadius: 2,
-                        background: "linear-gradient(90deg,#0B2240,#1D5FE0 70%,#14BBA4)",
-                      }}
-                    />
-                    <FileText
-                      size={16}
-                      style={{ color: "var(--t-mid)" }}
-                      aria-hidden="true"
-                    />
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{report.lotTitle}</div>
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        color: "var(--t-low)",
-                        marginTop: 2,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {report.lotId}
-                    </div>
-                  </div>
-                </div>
-              </td>
-
-              {/* Data */}
-              <td
-                style={{
-                  padding: "15px 20px",
-                  fontSize: 13.5,
-                  color: "var(--t-mid)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {formatDate(report.createdAt)}
-              </td>
-
-              {/* Ações */}
-              <td style={{ padding: "15px 20px" }}>
-                <div className="row" style={{ gap: 7 }}>
-                  <button
-                    type="button"
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => goToLot(report.lotId)}
-                    title="Abrir lote"
-                  >
-                    <ExternalLink size={13} aria-hidden="true" />
-                    Ver lote
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--soft btn--sm"
-                    onClick={() => goToLot(report.lotId)}
-                    title="Abrir o lote para reimprimir o PDF"
-                  >
-                    <Download size={13} aria-hidden="true" />
-                    Reimprimir no lote
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      </div>
+          <FileText size={15} aria-hidden="true" />
+          Explorar lotes
+        </button>
+      )}
     </div>
   );
 }
 
-// ─── What's inside the report panel ──────────────────────────────────────────
+// ─── Sidebar: what reports contain ───────────────────────────────────────────
 
 function ReportContentsPanel() {
   return (
@@ -310,9 +277,17 @@ function ReportContentsPanel() {
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
         O que cada relatório contém
       </div>
-      <p style={{ fontSize: 12, color: "var(--t-low)", lineHeight: 1.5, marginBottom: 12, marginTop: 0 }}>
-        Gerado no Raio-X do lote e salvo localmente no seu navegador. O PDF é obtido via
-        impressão do navegador (Ctrl+P / ⌘P).
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--t-low)",
+          lineHeight: 1.5,
+          marginBottom: 12,
+          marginTop: 0,
+        }}
+      >
+        Gerado em qualquer módulo e salvo localmente no seu navegador. O PDF é obtido via
+        impressão do navegador (Ctrl+P / ⌘P). Os dados nunca saem do seu dispositivo.
       </p>
       {REPORT_CONTENTS.map(({ icon: Icon, label, desc }, i) => (
         <div
@@ -339,11 +314,7 @@ function ReportContentsPanel() {
               marginTop: 1,
             }}
           >
-            <Icon
-              size={15}
-              style={{ color: "var(--brand-ink)" }}
-              aria-hidden="true"
-            />
+            <Icon size={15} style={{ color: "var(--brand-ink)" }} aria-hidden="true" />
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 13.5 }}>{label}</div>
@@ -364,21 +335,241 @@ function ReportContentsPanel() {
   );
 }
 
+// ─── Report row in the list ───────────────────────────────────────────────────
+
+interface ReportRowProps {
+  report: SavedReport;
+  isSelected: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onCsv: () => void;
+  isFirst: boolean;
+}
+
+function ReportRow({
+  report,
+  isSelected,
+  onOpen,
+  onDelete,
+  onCsv,
+  isFirst,
+}: ReportRowProps) {
+  return (
+    <tr style={{ borderTop: !isFirst ? "1px solid var(--border)" : undefined }}>
+      {/* Entity */}
+      <td style={{ padding: "14px 20px" }}>
+        <div className="row" style={{ gap: 12 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              gap: 2,
+            }}
+          >
+            <div
+              style={{
+                height: 3,
+                width: 22,
+                borderRadius: 2,
+                background: "linear-gradient(90deg,var(--brand),var(--accent-2))",
+              }}
+            />
+            <FileText size={16} style={{ color: "var(--t-mid)" }} aria-hidden="true" />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, wordBreak: "break-word" }}>
+              {report.title}
+            </div>
+            <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+              <span className={`badge ${kindBadgeClass(report.kind)}`} style={{ fontSize: 10.5 }}>
+                {report.kindLabel}
+              </span>
+              {report.subtitle !== undefined && (
+                <span style={{ fontSize: 11.5, color: "var(--t-low)", fontFamily: "monospace" }}>
+                  {report.subtitle}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </td>
+
+      {/* Date */}
+      <td
+        style={{
+          padding: "14px 20px",
+          fontSize: 13.5,
+          color: "var(--t-mid)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {formatDate(report.createdAt)}
+      </td>
+
+      {/* Actions */}
+      <td style={{ padding: "14px 20px" }}>
+        <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className={`btn btn--sm ${isSelected ? "btn--primary" : "btn--ghost"}`}
+            onClick={onOpen}
+            title="Abrir relatório"
+          >
+            <ExternalLink size={12} aria-hidden="true" />
+            {isSelected ? "Aberto" : "Abrir"}
+          </button>
+          <button
+            type="button"
+            className="btn btn--soft btn--sm"
+            onClick={onCsv}
+            title="Exportar CSV"
+          >
+            <Download size={12} aria-hidden="true" />
+            CSV
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={onDelete}
+            title="Excluir relatório"
+            style={{ color: "var(--danger)", borderColor: "color-mix(in srgb,var(--danger) 30%,var(--border))" }}
+            aria-label={`Excluir relatório de ${report.title}`}
+          >
+            <Trash2 size={12} aria-hidden="true" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── Reports list panel ───────────────────────────────────────────────────────
+
+interface ReportsListProps {
+  reports: SavedReport[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function ReportsList({ reports, selectedId, onSelect, onDelete }: ReportsListProps) {
+  return (
+    <div className="panel" style={{ overflow: "hidden" }}>
+      <div
+        className="row between"
+        style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)", gap: 12 }}
+      >
+        <div style={{ fontWeight: 700, fontSize: 15 }}>
+          {reports.length === 1
+            ? "1 relatório salvo"
+            : `${reports.length} relatórios salvos`}
+        </div>
+        <span className="badge badge--neutral" style={{ fontSize: 11 }}>
+          Histórico local
+        </span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontFamily: "inherit",
+            minWidth: 480,
+          }}
+        >
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--border)" }}>
+              {(["Entidade", "Gerado em", "Ações"] as const).map((h) => (
+                <th
+                  key={h}
+                  style={{
+                    padding: "10px 20px",
+                    textAlign: "left",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "var(--t-low)",
+                    letterSpacing: ".07em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((report, i) => (
+              <ReportRow
+                key={report.id}
+                report={report}
+                isSelected={report.id === selectedId}
+                isFirst={i === 0}
+                onOpen={() => onSelect(report.id)}
+                onDelete={() => onDelete(report.id)}
+                onCsv={() => downloadCsv(report)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
-  const [reports, setReports] = useState<ReportEntry[]>(() => loadReports());
+  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<SavedReport[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Keep in sync if another tab (or the lot-detail-page) writes to LS
+  // Migrate legacy lot reports and load all reports on mount
+  useEffect(() => {
+    migrateLegacy();
+    setReports(listReports());
+    setLoading(false);
+  }, []);
+
+  // Keep in sync if another tab writes to LS
   useEffect(() => {
     function sync() {
-      setReports(loadReports());
+      setReports(listReports());
     }
     window.addEventListener("storage", sync);
     return () => {
       window.removeEventListener("storage", sync);
     };
   }, []);
+
+  // When a report is deleted, clear selection if it was the selected one
+  function handleDelete(id: string) {
+    deleteReport(id);
+    setReports(listReports());
+    if (selectedId === id) setSelectedId(null);
+  }
+
+  // Selecting a report also scrolls to the detail view on mobile
+  function handleSelect(id: string) {
+    setSelectedId((prev) => (prev === id ? null : id));
+  }
+
+  function handleLotExplore() {
+    navigateSpa("/app/lotes");
+    onExplore?.();
+  }
+
+  const selectedReport = selectedId !== null
+    ? reports.find((r) => r.id === selectedId)
+    : undefined;
 
   const hasReports = reports.length > 0;
 
@@ -390,7 +581,7 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
         style={{ marginBottom: 20, gap: 12, alignItems: "flex-end" }}
       >
         <div>
-          <span className="eyebrow">Leilões judiciais</span>
+          <span className="eyebrow">Todos os módulos</span>
           <h2 style={{ margin: "4px 0 0" }}>Relatórios</h2>
         </div>
         {hasReports && (
@@ -403,26 +594,56 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
               lineHeight: 1.5,
             }}
           >
-            Gerados via <strong>Gerar relatório PDF</strong> no Raio-X de cada lote. Incluem
-            fonte oficial, data de coleta e score de risco. Salvos localmente no navegador.
+            Relatórios individuais de qualquer entidade — empresa, município, parlamentar,
+            lote, infração ambiental, marca ou processo. Salvos localmente; incluem fonte
+            oficial e data de coleta.
           </p>
         )}
       </div>
 
-      {/* ── Two-column layout when there are reports, single column otherwise ── */}
-      {hasReports ? (
+      {/* ── Loading skeletons ──────────────────────────────────────────────── */}
+      {loading && (
         <div className="relatorios-grid">
-          <ReportsTable reports={reports} />
-          <ReportContentsPanel />
-        </div>
-      ) : (
-        <div className="relatorios-grid">
-          <EmptyState onExplore={onExplore} />
+          <div className="panel" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "16px 22px", borderBottom: "1px solid var(--border)" }}>
+              <div className="skeleton" style={{ height: 16, width: 180, borderRadius: 6 }} />
+            </div>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
           <ReportContentsPanel />
         </div>
       )}
 
-      {/* ── Responsive: 2 columns on desktop, single column on mobile ────── */}
+      {/* ── Main content ───────────────────────────────────────────────────── */}
+      {!loading && (
+        <div className="relatorios-grid">
+          {/* Left column: list or empty state */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {hasReports ? (
+              <ReportsList
+                reports={reports}
+                selectedId={selectedId}
+                onSelect={handleSelect}
+                onDelete={handleDelete}
+              />
+            ) : (
+              <EmptyState onExplore={handleLotExplore} />
+            )}
+
+            {/* Selected report detail — shows below list on mobile, inside left col */}
+            {selectedReport !== undefined && (
+              <EntityReport report={selectedReport} />
+            )}
+          </div>
+
+          {/* Right column: sidebar */}
+          <ReportContentsPanel />
+        </div>
+      )}
+
+      {/* ── Responsive grid ───────────────────────────────────────────────── */}
       <style>{`
         .relatorios-grid {
           display: grid;
@@ -430,12 +651,13 @@ export function RelatoriosPage({ onExplore }: RelatoriosPageProps) {
           gap: 20px;
           align-items: start;
         }
-        /* Collapse early: the app sidebar consumes ~280px, so the rigid
-           300px side panel would squeeze the table before "mobile" widths. */
         @media (max-width: 1000px) {
           .relatorios-grid {
             grid-template-columns: 1fr;
           }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .skeleton::after { animation: none !important; }
         }
       `}</style>
     </section>
