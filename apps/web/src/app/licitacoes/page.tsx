@@ -484,7 +484,8 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar licitações.");
+        console.error("[licitacoes] falha ao carregar:", err);
+        setErrorMessage("Não foi possível carregar as licitações. Verifique sua conexão e tente novamente.");
         setIsLoading(false);
       });
 
@@ -584,7 +585,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
 
   // ── Render ──
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Header */}
       <div>
         <span className="eyebrow">Contratações públicas</span>
@@ -611,7 +612,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
           }}
           role="alert"
         >
-          Erro ao carregar dados: {errorMessage}
+          {errorMessage}
         </div>
       )}
 
@@ -723,6 +724,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
       ) : errorMessage !== null ? null : licitacoes.length === 0 ? (
         <div
           className="panel"
+          role="status"
           style={{
             padding: 48,
             textAlign: "center",

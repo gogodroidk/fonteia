@@ -37,6 +37,7 @@ import {
   Maximize2,
   Search,
   Sparkles,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -53,11 +54,14 @@ import {
   searchEntities,
   sanitizeCnpj,
   formatCnpj,
+  resolveUBO,
   EXEMPLO_CNPJ,
   CENTER_SENTINEL,
   type ExpandResult,
   type RawLeaf,
   type SearchHit,
+  type UBOResult,
+  type UBOHop,
 } from "../../features/cerebro/cerebro-api";
 import {
   MODULE_META,
@@ -270,6 +274,11 @@ export function CerebroPage() {
   // Resultados da busca por nome (dropdown para escolher o centro).
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
+
+  // Estado do painel de Beneficiário Final (UBO).
+  const [uboResult, setUboResult] = useState<UBOResult | null>(null);
+  const [uboLoading, setUboLoading] = useState(false);
+  const [showUbo, setShowUbo] = useState(false);
 
   // Camadas ativas (filtro por módulo). Set vazio = todas visíveis (default).
   const [hiddenKinds, setHiddenKinds] = useState<Set<GraphKind>>(new Set());
@@ -814,6 +823,31 @@ export function CerebroPage() {
     },
     [runCnpj, runHit],
   );
+
+  /**
+   * Dispara o BFS de beneficiário final a partir do CNPJ do centro (ou de um nó
+   * com CNPJ). Abre o painel UBO com o resultado — nunca lança, degrada honestamente.
+   */
+  const runUBO = useCallback(async (cnpj: string) => {
+    setUboLoading(true);
+    setShowUbo(true);
+    setUboResult(null);
+    try {
+      const result = await resolveUBO(cnpj);
+      setUboResult(result);
+    } catch {
+      setUboResult({
+        cnpj,
+        empresaNome: formatCnpj(cnpj),
+        beneficiaries: [],
+        incomplete: [],
+        errors: ["Não foi possível consultar a cadeia de propriedade agora."],
+        truncated: false,
+      });
+    } finally {
+      setUboLoading(false);
+    }
+  }, []);
 
   // ── Handlers de ponteiro (drag de nó + pan) ──
   const onPointerDown = useCallback(
@@ -1472,7 +1506,7 @@ export function CerebroPage() {
                 </dl>
               )}
 
-              {/* Ações: fonte oficial + expandir + recentralizar */}
+              {/* Ações: fonte oficial + expandir + recentralizar + UBO */}
               <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
                 {selectedNode.sourceUrl && (
                   <a
@@ -1509,6 +1543,18 @@ export function CerebroPage() {
                       <Crosshair size={13} aria-hidden="true" /> Recentralizar
                     </button>
                   )}
+                {selectedNode.cnpj && (
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    type="button"
+                    onClick={() => void runUBO(selectedNode.cnpj!)}
+                    disabled={isLoading || uboLoading}
+                    title="Descubra as pessoas físicas que controlam esta empresa, percorrendo a cadeia de holdings"
+                  >
+                    <Users size={13} aria-hidden="true" />
+                    {uboLoading && showUbo ? "Investigando…" : "Beneficiário final"}
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -1593,6 +1639,18 @@ export function CerebroPage() {
         {reducedMotion ? " Animação reduzida ativada — o grafo é assentado sem movimento." : ""}
       </p>
 
+      {/* Painel de Beneficiário Final (UBO) — aparece abaixo do grafo */}
+      {showUbo && (
+        <UBOPanel
+          result={uboResult}
+          loading={uboLoading}
+          onClose={() => {
+            setShowUbo(false);
+            setUboResult(null);
+          }}
+        />
+      )}
+
       {/* Estilos locais — responsivo, dropdown, filtros, detalhe e itens da lista */}
       <style>{`
         .cerebro-layout{
@@ -1675,6 +1733,31 @@ export function CerebroPage() {
         @media (prefers-reduced-motion:reduce){
           .cerebro-list-item:hover{transform:none}
         }
+        /* Painel UBO */
+        .ubo-panel{padding:16px 20px}
+        .ubo-notice{
+          padding:10px 14px;border-radius:var(--r-md);font-size:13px;line-height:1.5;
+        }
+        .ubo-notice--warn{
+          background:color-mix(in srgb,var(--warn,#f59e0b) 10%,var(--surface));
+          border:1px solid color-mix(in srgb,var(--warn,#f59e0b) 28%,transparent);
+          color:var(--t-hi);
+        }
+        .ubo-notice--info{
+          background:color-mix(in srgb,var(--brand) 8%,var(--surface));
+          border:1px solid color-mix(in srgb,var(--brand) 18%,transparent);
+          color:var(--t-hi);
+        }
+        .ubo-beneficiary{border-radius:var(--r-md)}
+        .ubo-chain{
+          list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:2px 0;
+          align-items:center;
+        }
+        .ubo-chain li{display:inline;font-size:12px}
+        .ubo-arrow{color:var(--t-low);font-weight:700}
+        @media (max-width:600px){
+          .ubo-panel{padding:12px 14px}
+        }
       `}</style>
     </div>
   );
@@ -1739,6 +1822,332 @@ function RelDot({ rel }: { rel: EdgeKind }) {
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}…`;
+}
+
+// ─── Painel de Beneficiário Final ─────────────────────────────────────────────────
+
+/**
+ * Formata uma cadeia de propriedade como texto legível: "Empresa A → Holding B → João da Silva".
+ */
+function chainLabel(chain: UBOHop[]): string {
+  return chain.map((h, i) => (i === 0 ? h.empresaNome : h.socioNome)).join(" → ");
+}
+
+/**
+ * Painel que exibe o resultado do BFS de Beneficiário Final (UBO).
+ * Renderizado fora do canvas, abaixo do grafo, com linguagem acessível a leigos.
+ */
+function UBOPanel({
+  result,
+  loading,
+  onClose,
+}: {
+  result: UBOResult | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="panel ubo-panel"
+      role="region"
+      aria-label="Beneficiário final — quem manda de verdade"
+    >
+      {/* Cabeçalho */}
+      <div
+        className="row between"
+        style={{ alignItems: "flex-start", gap: 12, marginBottom: 12 }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 4,
+            }}
+          >
+            <Users size={16} style={{ color: "var(--brand-ink)", flexShrink: 0 }} aria-hidden="true" />
+            <span style={{ fontWeight: 800, fontSize: 15, color: "var(--t-hi)" }}>
+              Beneficiário final
+            </span>
+            {result && (
+              <span
+                className="cerebro-list-tag"
+                style={{ alignSelf: "center" }}
+              >
+                {result.beneficiaries.length === 0 && result.incomplete.length === 0
+                  ? "sem dados"
+                  : `${result.beneficiaries.length} PF encontrada${result.beneficiaries.length !== 1 ? "s" : ""}`}
+              </span>
+            )}
+          </div>
+          <p className="small muted" style={{ margin: 0 }}>
+            Quem é o dono de verdade por trás desta empresa? Percorremos a cadeia de
+            sócios — holdings, sub-holdings — até chegar nas pessoas físicas que a
+            controlam. Fonte: Receita Federal (via base pública da BrasilAPI).
+          </p>
+          {result && (
+            <p className="tiny muted" style={{ margin: "6px 0 0" }}>
+              Empresa investigada:{" "}
+              <strong style={{ color: "var(--t-hi)" }}>
+                {result.empresaNome}
+              </strong>{" "}
+              ({formatCnpj(result.cnpj)}) ·{" "}
+              <a
+                href={`https://brasilapi.com.br/api/cnpj/v1/${result.cnpj}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link tiny"
+              >
+                Fonte
+              </a>
+            </p>
+          )}
+        </div>
+        <button
+          className="btn btn--icon btn--ghost btn--sm"
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar painel de beneficiário final"
+          style={{ flexShrink: 0, marginTop: 2 }}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Conteúdo */}
+      {loading && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "20px 0",
+            color: "var(--t-mid)",
+          }}
+          aria-live="polite"
+        >
+          <Loader2 size={20} className="spin" aria-hidden="true" />
+          <span className="small">
+            Percorrendo a cadeia de propriedade… (pode levar alguns segundos)
+          </span>
+        </div>
+      )}
+
+      {!loading && result && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Aviso de truncamento */}
+          {result.truncated && (
+            <div className="ubo-notice ubo-notice--warn">
+              A investigação parou ao atingir o limite de {" "}
+              <strong>40 nós</strong> visitados. Pode haver mais sócios não exibidos —
+              a estrutura desta empresa é muito extensa para varrer por completo.
+            </div>
+          )}
+
+          {/* Erros não-fatais */}
+          {result.errors.length > 0 && (
+            <div className="ubo-notice ubo-notice--warn">
+              {result.errors.join(" · ")}
+            </div>
+          )}
+
+          {/* Beneficiários encontrados */}
+          {result.beneficiaries.length > 0 && (
+            <div>
+              <div
+                className="tiny"
+                style={{ fontWeight: 700, color: "var(--t-mid)", marginBottom: 8 }}
+              >
+                Pessoas físicas identificadas ({result.beneficiaries.length})
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                role="list"
+                aria-label="Beneficiários finais encontrados"
+              >
+                {result.beneficiaries.map((b, i) => (
+                  <div
+                    key={`${norm(b.nome)}-${i}`}
+                    className="inset ubo-beneficiary"
+                    role="listitem"
+                    style={{ padding: "10px 12px" }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 4,
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          background:
+                            "color-mix(in srgb, var(--brand) 14%, var(--surface))",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Users
+                          size={14}
+                          style={{ color: "var(--brand-ink)" }}
+                          aria-hidden="true"
+                        />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: 13.5,
+                            color: "var(--t-hi)",
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {b.nome}
+                        </div>
+                        {b.qualificacao && (
+                          <div className="tiny muted" style={{ marginTop: 1 }}>
+                            {b.qualificacao}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Cadeia de propriedade */}
+                    {b.chain.length > 1 && (
+                      <div style={{ marginTop: 6 }}>
+                        <div
+                          className="tiny"
+                          style={{ fontWeight: 600, color: "var(--t-low)", marginBottom: 4 }}
+                        >
+                          Caminho de controle
+                        </div>
+                        <ol
+                          className="ubo-chain"
+                          aria-label={`Cadeia de propriedade até ${b.nome}`}
+                        >
+                          {b.chain.map((hop, hi) => (
+                            <li key={`${hop.empresaCnpj}-${hi}`}>
+                              <a
+                                href={hop.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="link tiny"
+                                title={`Fonte: ${hop.sourceUrl}`}
+                              >
+                                {hop.empresaNome}
+                              </a>
+                              <span className="tiny muted">
+                                {" "}
+                                ({formatCnpj(hop.empresaCnpj)})
+                              </span>
+                              {hi < b.chain.length - 1 && (
+                                <span
+                                  aria-hidden="true"
+                                  className="ubo-arrow"
+                                >
+                                  {" "}
+                                  →{" "}
+                                </span>
+                              )}
+                              {hi === b.chain.length - 1 && (
+                                <span className="tiny muted">
+                                  {" "}
+                                  · sócio: <strong style={{ color: "var(--t-hi)" }}>{hop.socioNome}</strong>
+                                  {hop.qualificacao ? ` (${hop.qualificacao})` : ""}
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Cadeias incompletas */}
+          {result.incomplete.length > 0 && (
+            <div>
+              <div
+                className="tiny"
+                style={{ fontWeight: 700, color: "var(--t-mid)", marginBottom: 6 }}
+              >
+                Cadeias incompletas ({result.incomplete.length}) — sem dado público disponível
+              </div>
+              <div className="ubo-notice ubo-notice--info">
+                Nos ramos abaixo, encontramos uma empresa sócia (pessoa jurídica), mas
+                o CNPJ dela não estava disponível na base pública para continuar a
+                investigação. Isso é normal em estruturas com holdings estrangeiras ou
+                quando a Receita Federal não divulgou o dado.
+              </div>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}
+              >
+                {result.incomplete.map((chain, i) => {
+                  const lastHop = chain[chain.length - 1];
+                  return (
+                    <div
+                      key={`incomplete-${i}`}
+                      className="inset"
+                      style={{ padding: "8px 12px", opacity: 0.8 }}
+                    >
+                      <div className="small" style={{ color: "var(--t-hi)", overflowWrap: "anywhere" }}>
+                        {chainLabel(chain)}
+                      </div>
+                      {lastHop && (
+                        <div className="tiny muted" style={{ marginTop: 3 }}>
+                          Parou em:{" "}
+                          <strong>{lastHop.socioNome}</strong>
+                          {lastHop.tipo === "PJ" && " (empresa sócia sem CNPJ na base)"}
+                          {" · "}
+                          <a
+                            href={lastHop.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="link tiny"
+                          >
+                            Fonte
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Estado vazio honesto */}
+          {result.beneficiaries.length === 0 &&
+            result.incomplete.length === 0 &&
+            result.errors.length === 0 && (
+              <div className="ubo-notice ubo-notice--info">
+                Não encontramos QSA (quadro de sócios) para esta empresa na base atual.
+                Isso pode indicar que a empresa ainda não foi coletada, ou que é uma
+                entidade pública sem sócios (ex.: autarquia, fundação pública).
+                Evidência insuficiente — não fabricamos dados.
+              </div>
+            )}
+
+          {/* Nota de rastreabilidade */}
+          <p className="tiny muted" style={{ margin: 0, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+            Fonte oficial: Receita Federal do Brasil via BrasilAPI (espelho público da
+            base de CNPJ). Dados sujeitos à atualização e limitações da divulgação pública.
+            Esta investigação usa apenas dados abertos — não acessa fontes privadas.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**

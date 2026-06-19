@@ -1654,3 +1654,345 @@ export async function expandLeaf(
 
 /** CNPJ de exemplo para o estado inicial — escolhido por ter rede rica de dados. */
 export const EXEMPLO_CNPJ = "00000000000191"; // Banco do Brasil S.A.
+
+// ─── API pública: Beneficiário Final (UBO) ───────────────────────────────────────
+
+/**
+ * Teto de profundidade do BFS de propriedade societária. Protege contra loops
+ * (participação cruzada entre holdings) e contra buscas longas demais.
+ *   4 níveis = A → B → C → D → PF (suficiente para quase toda estrutura brasileira).
+ */
+const UBO_MAX_DEPTH = 4;
+
+/**
+ * Teto total de nós visitados durante o BFS (inclui PJ e PF). Impede que um
+ * conglomerado gigante (ex.: grupo com 200 holdings) paralise o browser.
+ */
+const UBO_MAX_NODES = 40;
+
+/**
+ * Um salto na cadeia de propriedade: de qual empresa veio → qual sócio encontrado.
+ * A cadeia completa é um array ordenado de UBOHop (do centro até o beneficiário).
+ */
+export interface UBOHop {
+  /** CNPJ da empresa que tem este sócio em seu QSA (14 dígitos). */
+  empresaCnpj: string;
+  /** Razão social da empresa (quando disponível na base). */
+  empresaNome: string;
+  /** Nome do sócio encontrado nesta empresa. */
+  socioNome: string;
+  /** Qualificação do sócio (ex.: "Sócio-Administrador"). */
+  qualificacao: string;
+  /** "PF" = pessoa física (fim da cadeia) | "PJ" = pessoa jurídica (continua). */
+  tipo: "PF" | "PJ";
+  /**
+   * CNPJ do sócio quando ele próprio é uma empresa (PJ). Ausente quando não
+   * disponível na base pública — indica cadeia incompleta.
+   */
+  socioEmpresaCnpj?: string | undefined;
+  /** Link da fonte oficial deste registro (BrasilAPI/Minha Receita). */
+  sourceUrl: string;
+}
+
+/**
+ * Um beneficiário final encontrado: a pessoa física no fim de uma cadeia + a
+ * cadeia completa de sociedade que leva até ela a partir da empresa consultada.
+ */
+export interface UBOBeneficiary {
+  /** Nome da pessoa física. */
+  nome: string;
+  /** Qualificação na última empresa da cadeia. */
+  qualificacao: string;
+  /**
+   * Cadeia de saltos da empresa-centro até esta pessoa. O primeiro hop é sempre a
+   * empresa-centro; o último é o hop em que `tipo === "PF"`.
+   */
+  chain: UBOHop[];
+}
+
+/**
+ * Resultado completo do `resolveUBO`: beneficiários encontrados + diagnóstico honesto.
+ */
+export interface UBOResult {
+  /** CNPJ da empresa consultada (14 dígitos). */
+  cnpj: string;
+  /** Razão social da empresa consultada (quando disponível). */
+  empresaNome: string;
+  /** Beneficiários finais identificados (pessoas físicas). */
+  beneficiaries: UBOBeneficiary[];
+  /**
+   * Ramos da cadeia que ficaram incompletos — cadeia parou antes de chegar em PF
+   * porque não havia CNPJ disponível na base pública para o sócio PJ.
+   * Cada item é uma cadeia parcial até o ponto de interrupção.
+   */
+  incomplete: UBOHop[][];
+  /**
+   * Erros não-fatais encontrados durante o BFS (ex.: falha ao buscar uma empresa).
+   * O resultado pode ser parcial mas honesto.
+   */
+  errors: string[];
+  /**
+   * true quando o teto de nós (UBO_MAX_NODES) foi atingido antes de completar o
+   * grafo inteiro — avisa o usuário que pode haver mais sócios não exibidos.
+   */
+  truncated: boolean;
+}
+
+/**
+ * Busca o registro `company` de um CNPJ no D1 e devolve as linhas cruas (a mesma
+ * lógica de `fetchKindByCnpj` mas restrita ao kind `company`). Retorna [] em falha.
+ */
+async function fetchCompanyRows(
+  cnpj: string,
+  fetcher: typeof fetch,
+): Promise<D1EntityRow[]> {
+  try {
+    const { rows } = await fetchD1Entities({ kind: "company", cnpj, limit: 5 }, fetcher);
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extrai os sócios do QSA de um conjunto de linhas `company`, classificando cada
+ * um como PF ou PJ via o campo `identificador` (armazenado pelo ingest-brasilapi:
+ *   "1" = Pessoa Física, "2" = Pessoa Jurídica, "3" = Estrangeiro sem CNPJ).
+ * O CNPJ do sócio PJ é extraído do campo `raw.qsa[i].cnpj_cpf_do_socio` (Minha
+ * Receita) quando disponível — o BrasilAPI não o expõe no qsa normalizado.
+ */
+interface QsaMember {
+  nome: string;
+  qualificacao: string;
+  tipo: "PF" | "PJ" | "unknown";
+  cnpjPj: string; // "" quando PF ou quando PJ sem CNPJ público
+}
+
+function extractQsa(rows: D1EntityRow[]): QsaMember[] {
+  const members: QsaMember[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const qsa = attr(row, "qsa");
+    const rawObj = attr(row, "raw") as Record<string, unknown> | null | undefined;
+    const rawQsa = Array.isArray(rawObj?.["qsa"])
+      ? (rawObj!["qsa"] as Array<Record<string, unknown>>)
+      : [];
+
+    if (!Array.isArray(qsa)) continue;
+    qsa.forEach((s, i) => {
+      if (s == null || typeof s !== "object") return;
+      const m = s as Record<string, unknown>;
+      const nome = str(m["nomeSocio"]);
+      if (nome === "") return;
+      const key = norm(nome);
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      const identificador = str(m["identificador"]);
+      // "2" = PJ no schema do ingest-brasilapi. Outros casos → PF (ou desconhecido).
+      let tipo: "PF" | "PJ" | "unknown" = "unknown";
+      if (identificador === "2") tipo = "PJ";
+      else if (identificador === "1" || identificador === "3") tipo = "PF";
+
+      // Tenta extrair o CNPJ do sócio PJ a partir do campo raw da Minha Receita.
+      let cnpjPj = "";
+      if (tipo === "PJ") {
+        const rawSocio = rawQsa[i] as Record<string, unknown> | undefined;
+        const docRaw = str(rawSocio?.["cnpj_cpf_do_socio"]);
+        cnpjPj = validCnpj(docRaw);
+      }
+
+      members.push({ nome, qualificacao: str(m["qualificacao"]), tipo, cnpjPj });
+    });
+  }
+  return members;
+}
+
+/**
+ * BFS/DFS iterativo que percorre a cadeia de propriedade a partir de um CNPJ,
+ * coletando os beneficiários finais (PF) e as cadeias incompletas.
+ * Bounded: respeita UBO_MAX_DEPTH e UBO_MAX_NODES.
+ *
+ * Cada item da fila é uma entrada (cnpj, razaoSocial, cadeia atual até aqui).
+ */
+async function bfsOwnership(
+  startCnpj: string,
+  startNome: string,
+  fetcher: typeof fetch,
+): Promise<{
+  beneficiaries: UBOBeneficiary[];
+  incomplete: UBOHop[][];
+  errors: string[];
+  truncated: boolean;
+}> {
+  const beneficiaries: UBOBeneficiary[] = [];
+  const incomplete: UBOHop[][] = [];
+  const errors: string[] = [];
+  let nodesVisited = 0;
+  let truncated = false;
+
+  // Conjunto de CNPJs já visitados (evita loops de participação cruzada).
+  const visitedCnpjs = new Set<string>([startCnpj]);
+
+  // Fila do BFS: [ { cnpj, nome, chain, depth } ]
+  interface QueueItem {
+    cnpj: string;
+    nome: string;
+    chain: UBOHop[];
+    depth: number;
+  }
+  const queue: QueueItem[] = [{ cnpj: startCnpj, nome: startNome, chain: [], depth: 0 }];
+
+  while (queue.length > 0) {
+    const item = queue.shift();
+    if (!item) break;
+
+    if (nodesVisited >= UBO_MAX_NODES) {
+      truncated = true;
+      break;
+    }
+    nodesVisited++;
+
+    const { cnpj, nome, chain, depth } = item;
+    const sourceUrl = `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`;
+
+    // Busca o cadastro desta empresa no D1.
+    const rows = await fetchCompanyRows(cnpj, fetcher);
+    if (rows.length === 0) {
+      // Sem dados no D1 para esta empresa — cadeia incompleta neste ramo.
+      if (chain.length > 0) {
+        incomplete.push(chain);
+      }
+      continue;
+    }
+
+    // Razão social real (pode diferir do `nome` estimado).
+    const razao =
+      str(attr(rows[0]!, "razaoSocial")) || nome || formatCnpj(cnpj);
+
+    const members = extractQsa(rows);
+    if (members.length === 0) {
+      // Empresa existe no D1 mas sem QSA — cadeia incompleta neste ramo.
+      if (chain.length > 0) {
+        incomplete.push(chain);
+      }
+      continue;
+    }
+
+    for (const member of members) {
+      if (nodesVisited >= UBO_MAX_NODES) {
+        truncated = true;
+        break;
+      }
+
+      const hop: UBOHop = {
+        empresaCnpj: cnpj,
+        empresaNome: razao,
+        socioNome: member.nome,
+        qualificacao: member.qualificacao,
+        tipo: member.tipo === "unknown" ? "PF" : member.tipo, // incerteza → PF (conservador)
+        socioEmpresaCnpj: member.cnpjPj || undefined,
+        sourceUrl,
+      };
+      const currentChain = [...chain, hop];
+
+      if (member.tipo !== "PJ") {
+        // Pessoa física (ou desconhecida) = beneficiário final.
+        beneficiaries.push({
+          nome: member.nome,
+          qualificacao: member.qualificacao,
+          chain: currentChain,
+        });
+        continue;
+      }
+
+      // Sócio é PJ. Precisamos do CNPJ dele para continuar o BFS.
+      if (member.cnpjPj === "") {
+        // CNPJ do sócio PJ não está na base pública → cadeia incompleta neste ramo.
+        incomplete.push(currentChain);
+        continue;
+      }
+
+      // Loop: este CNPJ já foi visitado (participação cruzada).
+      if (visitedCnpjs.has(member.cnpjPj)) {
+        incomplete.push(currentChain);
+        continue;
+      }
+
+      // Profundidade máxima atingida.
+      if (depth + 1 >= UBO_MAX_DEPTH) {
+        incomplete.push(currentChain);
+        continue;
+      }
+
+      visitedCnpjs.add(member.cnpjPj);
+      queue.push({
+        cnpj: member.cnpjPj,
+        nome: member.nome, // nome do sócio PJ como estimativa provisória
+        chain: currentChain,
+        depth: depth + 1,
+      });
+    }
+  }
+
+  return { beneficiaries, incomplete, errors, truncated };
+}
+
+/**
+ * Descobre o "dono de verdade" por trás de uma empresa: percorre a cadeia de
+ * propriedade societária (QSA), recursivamente por sócios PJ (holding → sub-holding
+ * → PF), até os beneficiários finais — as pessoas físicas que controlam a empresa.
+ *
+ * Limitações honestas:
+ *   - O campo `cnpj_cpf_do_socio` (CNPJ do sócio PJ) vem da Minha Receita e pode
+ *     não estar disponível para todas as empresas na base atual. Nesses casos o
+ *     ramo é marcado como "cadeia incompleta".
+ *   - Empresas com participação cruzada (A→B→A) param no segundo loop detectado.
+ *   - O BFS tem teto de profundidade (4 níveis) e de nós visitados (40) para
+ *     proteger a performance.
+ *   - Nenhum dado é fabricado: onde não há dado público, declaramos honestamente.
+ *
+ * @param rawCnpj CNPJ da empresa a investigar (com ou sem máscara).
+ * @param fetcher Injeção de fetch (default: global fetch).
+ */
+export async function resolveUBO(
+  rawCnpj: string,
+  fetcher: typeof fetch = fetch,
+): Promise<UBOResult> {
+  const cnpj = sanitizeCnpj(rawCnpj);
+  if (cnpj === "") {
+    return {
+      cnpj: "",
+      empresaNome: "",
+      beneficiaries: [],
+      incomplete: [],
+      errors: ["CNPJ inválido."],
+      truncated: false,
+    };
+  }
+
+  // Busca o nome da empresa-raiz para exibir no resultado.
+  const rootRows = await fetchCompanyRows(cnpj, fetcher);
+  const empresaNome =
+    rootRows.length > 0
+      ? str(attr(rootRows[0]!, "razaoSocial")) || formatCnpj(cnpj)
+      : formatCnpj(cnpj);
+
+  try {
+    const { beneficiaries, incomplete, errors, truncated } = await bfsOwnership(
+      cnpj,
+      empresaNome,
+      fetcher,
+    );
+    return { cnpj, empresaNome, beneficiaries, incomplete, errors, truncated };
+  } catch (error) {
+    return {
+      cnpj,
+      empresaNome,
+      beneficiaries: [],
+      incomplete: [],
+      errors: [toErrorMessage(error)],
+      truncated: false,
+    };
+  }
+}
