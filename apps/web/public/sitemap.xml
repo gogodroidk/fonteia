@@ -37,29 +37,29 @@
   </url>
 
   <url>
-    <loc>https://fontebrasil.online/entrar</loc>
-    <lastmod>2026-06-13</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-
-  <url>
     <loc>https://fontebrasil.online/privacidade</loc>
-    <lastmod>2026-06-13</lastmod>
+    <lastmod>2026-06-18</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
     <loc>https://fontebrasil.online/termos</loc>
-    <lastmod>2026-06-13</lastmod>
+    <lastmod>2026-06-18</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
     <loc>https://fontebrasil.online/cookies</loc>
-    <lastmod>2026-06-13</lastmod>
+    <lastmod>2026-06-18</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url>
+    <loc>https://fontebrasil.online/central-privacidade</loc>
+    <lastmod>2026-06-18</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>

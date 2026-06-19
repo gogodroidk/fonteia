@@ -87,6 +87,10 @@ export const PRODUCT_MODULES: ProductModule[] = [
     status: "active",
     targetPersona: "Empreendedores, agências, startups e advogados de PI",
     promise: "Avaliar marcas, classes, conflitos e prazos com dados do INPI.",
+    // Dinâmico: as marcas são ingeridas da RPI (kind='trademark') semana a semana
+    // e a busca é por CNPJ/titular — não há um total fixo indexado como nos demais
+    // módulos. Mantido em 0 para não exibir contagem fabricada.
+    recordCount: 0,
     badge: "INPI",
     badgeColor: "#7C3AED",
   },

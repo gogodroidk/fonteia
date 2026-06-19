@@ -5,6 +5,29 @@ import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import { LogoMark } from "../../components/ui/logo-mark";
 import { TURNSTILE_SITE_KEY, isTurnstileEnabled } from "../../config/turnstile";
 
+// Injeta <meta name="robots" content="noindex"> para impedir indexação da página de login.
+function useNoIndex() {
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const head = document.head;
+    let el = head.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const prev = el?.getAttribute("content") ?? null;
+    if (!el) {
+      el = document.createElement("meta");
+      el.setAttribute("name", "robots");
+      head.appendChild(el);
+    }
+    el.setAttribute("content", "noindex");
+    return () => {
+      if (prev !== null && el) {
+        el.setAttribute("content", prev);
+      } else if (el) {
+        el.remove();
+      }
+    };
+  }, []);
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AuthMode = "login" | "signup";
@@ -243,6 +266,8 @@ function LeftPanel({ mode }: { mode: AuthMode }) {
 function Spinner() {
   return (
     <span
+      role="status"
+      aria-label="Aguardando…"
       style={{
         display: "inline-block",
         width: 17,
@@ -309,7 +334,7 @@ function PasswordField({
           aria-pressed={visible}
           style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--t-low)", padding: 8, display: "flex", alignItems: "center", justifyContent: "center", minWidth: 36, minHeight: 36 }}
         >
-          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+          {visible ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
         </button>
       </div>
     </div>
@@ -514,6 +539,7 @@ function TurnstileWidget({ onToken, onError, onExpire, widgetIdRef }: TurnstileW
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function LoginPage({ onGoToLanding }: LoginPageProps) {
+  useNoIndex();
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, demoMode } = useAuth();
 
   const [mode, setMode] = useState<AuthMode>("signup");
@@ -677,7 +703,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
             className="btn btn--ghost btn--sm"
             style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
-            <ArrowLeft size={14} />
+            <ArrowLeft size={14} aria-hidden="true" />
             Voltar ao site
           </button>
           <ThemeToggle />
@@ -771,7 +797,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 gap: 9,
               }}
             >
-              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+              <AlertCircle size={15} aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }} />
               <span>{error}</span>
             </div>
           )}
@@ -794,7 +820,7 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                 gap: 8,
               }}
             >
-              <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+              <CheckCircle2 size={15} aria-hidden="true" style={{ flexShrink: 0 }} />
               <span>{successMsg}</span>
             </div>
           )}

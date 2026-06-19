@@ -1,4 +1,5 @@
 import { LogoMark } from "../../components/ui/logo-mark";
+import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import {
   useSeo,
   articleJsonLd,
@@ -279,6 +280,7 @@ export function SobrePage() {
           aria-label="Navegação principal"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
+          <ThemeToggle />
           <a href="/para-quem" className="btn btn--ghost btn--sm">
             Para quem
           </a>
@@ -349,10 +351,10 @@ export function SobrePage() {
             Não somos um leiloeiro, não compramos nem vendemos bens, e não inventamos dados.
           </P>
           <P>
-            O primeiro módulo em produção cobre{" "}
-            <strong style={{ color: "var(--t-hi)" }}>leilões judiciais e da Receita Federal</strong>
-            . Os demais módulos — licitações, empresas, jurídico, ambiental, política e municípios
-            — estão em desenvolvimento e serão liberados progressivamente.
+            Todos os módulos estão{" "}
+            <strong style={{ color: "var(--t-hi)" }}>ativos e em produção</strong>
+            : leilões da Receita Federal, licitações, empresas, jurídico, ambiental, política,
+            municípios e sanções — cada um com dados reais de fontes oficiais.
           </P>
         </header>
 
@@ -445,51 +447,51 @@ export function SobrePage() {
           >
             {[
               {
-                label: "Leilões judiciais e Receita Federal",
+                label: "Leilões da Receita Federal",
                 status: "Em produção",
                 statusOk: true,
                 detail: "1.065 lotes · SLE/Receita Federal",
               },
               {
                 label: "Licitações e contratos públicos",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "153.945 contratos · 1.051 editais · PNCP",
               },
               {
                 label: "Empresas e CNPJ",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "461 empresas indexadas · Receita Federal",
               },
               {
                 label: "Jurídico e processos",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "280 processos · CNJ",
               },
               {
                 label: "Ambiental",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "1.500 casos · IBAMA",
               },
               {
                 label: "Política e legislativo",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "4.000 proposições · 594 parlamentares · Câmara/Senado",
               },
               {
                 label: "Municípios",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "5.571 municípios · IBGE",
               },
               {
                 label: "Sanções e transparência",
-                status: "Em desenvolvimento",
-                statusOk: false,
+                status: "Em produção",
+                statusOk: true,
                 detail: "1.592 sanções · Portal da Transparência",
               },
             ].map(({ label, status, statusOk, detail }) => (

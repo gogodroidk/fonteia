@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, FileText, Loader2, Scale, Search, X } from "lucide-react";
-import { listProposicoes, type ProposicaoItem } from "../../features/juridico/juridico-api";
 import {
   assuntoPrincipal,
+  listProposicoes,
   listProcessos,
+  type ProposicaoItem,
   type ProcessoJudicialItem,
 } from "../../features/juridico/juridico-api";
 import { FonteDots } from "../../components/ui";
@@ -411,7 +412,8 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
   // ── Paginação por scroll ──
   const [visibleCountProp, setVisibleCountProp] = useState(PAGE_SIZE);
   const [visibleCountProc, setVisibleCountProc] = useState(PAGE_SIZE);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const sentinelPropRef = useRef<HTMLDivElement | null>(null);
+  const sentinelProcRef = useRef<HTMLDivElement | null>(null);
 
   // ── Load proposições ──
   useEffect(() => {
@@ -532,26 +534,37 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
     setVisibleCountProc(PAGE_SIZE);
   }, [queryProc, tribunal]);
 
-  // Carrega mais quando o sentinela entra na viewport.
-  const currentFilteredLength = activeTab === "proposicoes" ? filteredProp.length : filteredProc.length;
+  // Carrega mais quando o sentinela de proposições entra na viewport.
   useEffect(() => {
-    const node = sentinelRef.current;
+    const node = sentinelPropRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          if (activeTab === "proposicoes") {
-            setVisibleCountProp((current) => Math.min(current + PAGE_SIZE, filteredProp.length));
-          } else {
-            setVisibleCountProc((current) => Math.min(current + PAGE_SIZE, filteredProc.length));
-          }
+          setVisibleCountProp((current) => Math.min(current + PAGE_SIZE, filteredProp.length));
         }
       },
       { rootMargin: "600px 0px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [activeTab, currentFilteredLength, filteredProp.length, filteredProc.length]);
+  }, [filteredProp.length]);
+
+  // Carrega mais quando o sentinela de processos entra na viewport.
+  useEffect(() => {
+    const node = sentinelProcRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCountProc((current) => Math.min(current + PAGE_SIZE, filteredProc.length));
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [filteredProc.length]);
 
   const visibleProp = filteredProp.slice(0, visibleCountProp);
   const hasMoreProp = visibleCountProp < filteredProp.length;
@@ -757,7 +770,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               </div>
               {hasMoreProp && (
                 <div
-                  ref={sentinelRef}
+                  ref={sentinelPropRef}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -899,7 +912,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
               </div>
               {hasMoreProc && (
                 <div
-                  ref={sentinelRef}
+                  ref={sentinelProcRef}
                   style={{
                     display: "flex",
                     alignItems: "center",

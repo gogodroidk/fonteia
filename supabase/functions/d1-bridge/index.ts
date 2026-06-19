@@ -454,7 +454,7 @@ async function handleMigrate(request: Request, url: URL): Promise<Response> {
 
 // ───────────────────────────────────────────────────────────────────────────
 // Rota /query (público, só leitura). SELECT parametrizado no D1.
-//   ?kind= (exato)  ?cnpj= (exato)  ?q= (name LIKE)  ?limit=1..100  ?offset=
+//   ?kind= (exato)  ?cnpj= (exato)  ?q= (name LIKE)  ?limit=1..1000  ?offset=
 // ───────────────────────────────────────────────────────────────────────────
 const REPARSE_JSON_COLS = new Set(["external_ids", "attributes", "source_ids"]);
 
@@ -482,7 +482,7 @@ async function handleQuery(url: URL): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").trim();
 
   const limitRaw = Number(url.searchParams.get("limit"));
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 100) : 25;
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.floor(limitRaw), 1), 1000) : 25;
   const offsetRaw = Number(url.searchParams.get("offset"));
   const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0;
 

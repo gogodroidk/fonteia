@@ -1,4 +1,5 @@
 import { LogoMark } from "../../components/ui/logo-mark";
+import { ThemeToggle } from "../../components/ui/ThemeToggle";
 import {
   useSeo,
   breadcrumbJsonLd,
@@ -191,6 +192,7 @@ export function ContatoPage() {
           aria-label="Navegação principal"
           style={{ display: "flex", gap: "10px", alignItems: "center" }}
         >
+          <ThemeToggle />
           <a href="/sobre" className="btn btn--ghost btn--sm">
             Sobre
           </a>

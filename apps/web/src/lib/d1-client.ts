@@ -308,8 +308,13 @@ export async function fetchAllD1Entities<A = Record<string, unknown>>(
   // Quando o D1 falhar uma vez, "trava" no Supabase para as páginas seguintes.
   let stickyToSupabase = false;
 
+  // Avança o offset pelo número REAL de linhas recebidas — NUNCA por `limit`. O
+  // servidor (d1-bridge) tem teto próprio de página; somar `limit` quando ele
+  // devolve menos fazia o offset "pular" linhas e truncava os módulos
+  // silenciosamente (cada módulo carregava só ~100 de milhares). Paramos quando
+  // uma página volta vazia — robusto a qualquer teto de página do servidor.
+  let offset = 0;
   for (let page = 0; page < maxPages; page++) {
-    const offset = page * limit;
     const pageParams: FetchD1Params = { ...params, limit, offset };
 
     let batch: Array<D1EntityRow<A>>;
@@ -324,7 +329,8 @@ export async function fetchAllD1Entities<A = Record<string, unknown>>(
     }
 
     rows.push(...batch);
-    if (batch.length < limit) break;
+    if (batch.length === 0) break;
+    offset += batch.length;
 
     if (page === maxPages - 1) {
       console.warn(
