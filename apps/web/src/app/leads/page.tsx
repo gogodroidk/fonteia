@@ -9,12 +9,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Brain,
   Building2,
   Check,
   ChevronDown,
   ChevronUp,
   Copy,
+  Download,
   ExternalLink,
+  Filter,
   Loader2,
   Mail,
   MapPin,
@@ -26,7 +29,13 @@ import {
 } from "lucide-react";
 
 import { listLeads, type Lead } from "../../features/leads/leads-api";
-import { inferServicos, inferSetor } from "../../features/leads/leads-heuristics";
+import {
+  inferGatilhoLabel,
+  inferMotivo,
+  inferServicos,
+  inferSetor,
+  type GatilhoLead,
+} from "../../features/leads/leads-heuristics";
 import { gerarMensagens } from "../../features/leads/leads-templates";
 import { navigateSpa } from "../_nav";
 
@@ -36,6 +45,8 @@ const PAGE_SIZE = 20;
 
 type RecenciaFilter = "todas" | "7d" | "30d" | "90d";
 type ValorFilter = "todos" | "10k" | "100k" | "500k" | "1m";
+type GatilhoFilter = "todos" | GatilhoLead;
+type SortOrder = "recente" | "valor_desc" | "valor_asc" | "az";
 
 const RECENCIA_OPTIONS: ReadonlyArray<readonly [RecenciaFilter, string]> = [
   ["todas", "Qualquer data"],
@@ -60,6 +71,21 @@ const VALOR_MIN: Record<ValorFilter, number> = {
   "1m": 1_000_000,
 };
 
+const GATILHO_OPTIONS: ReadonlyArray<readonly [GatilhoFilter, string]> = [
+  ["todos", "Todos os motivos"],
+  ["alto_valor", "Alto valor (R$ 500k+)"],
+  ["licitacao_recorrente", "Comprador recorrente"],
+  ["orgao_estrategico", "Órgão federal"],
+  ["contrato_vencedor", "Contrato vencido"],
+];
+
+const SORT_OPTIONS: ReadonlyArray<readonly [SortOrder, string]> = [
+  ["recente", "Mais recentes"],
+  ["valor_desc", "Maior valor"],
+  ["valor_asc", "Menor valor"],
+  ["az", "A → Z"],
+];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function normalizeForSearch(value: string): string {
@@ -68,11 +94,6 @@ function normalizeForSearch(value: string): string {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
-}
-
-function formatBRLFull(n: number): string {
-  if (n <= 0) return "";
-  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 });
 }
 
 function formatDataCurta(iso: string): string {
@@ -105,7 +126,6 @@ function isWithinDays(isoDate: string, days: number): boolean {
 
 function buildPncpUrl(numeroControlePNCP: string): string {
   if (!numeroControlePNCP) return "https://pncp.gov.br/app/contratos";
-  // Formato esperado: CNPJ-TIPO-SEQ/ANO → URL pública do PNCP
   return `https://pncp.gov.br/app/contratos/${encodeURIComponent(numeroControlePNCP)}`;
 }
 
@@ -116,6 +136,37 @@ function matchesSearch(lead: Lead, q: string): boolean {
     [lead.razaoSocial, lead.cnpj, lead.orgao, lead.objeto, lead.municipio, lead.uf].join(" "),
   );
   return query.split(/\s+/).every((term) => haystack.includes(term));
+}
+
+function exportCsv(rows: Lead[]): void {
+  if (typeof window === "undefined") return;
+  const header = ["Empresa", "CNPJ", "Órgão", "Objeto", "Valor", "UF", "Município", "Modalidade", "Data"];
+  const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const lines = [
+    header.map(escape).join(","),
+    ...rows.map((l) =>
+      [
+        l.razaoSocial,
+        l.cnpj,
+        l.orgao,
+        l.objeto,
+        l.valorGlobal > 0 ? String(l.valorGlobal) : "",
+        l.uf,
+        l.municipio,
+        l.modalidade,
+        l.dataVigenciaInicio,
+      ]
+        .map(escape)
+        .join(",")
+    ),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leads-fonteia-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -266,12 +317,15 @@ function MensagensDrawer({ lead, servicoLabel }: MensagensDrawerProps) {
 
 interface LeadCardProps {
   lead: Lead;
+  index: number;
 }
 
-function LeadCard({ lead }: LeadCardProps) {
+function LeadCard({ lead, index }: LeadCardProps) {
   const [showMensagens, setShowMensagens] = useState(false);
   const servicos = inferServicos(lead.objeto);
   const setor = inferSetor(lead.objeto);
+  const motivo = inferMotivo(lead);
+
   const local =
     lead.municipio && lead.uf
       ? `${lead.municipio}/${lead.uf}`
@@ -296,7 +350,15 @@ function LeadCard({ lead }: LeadCardProps) {
     : null;
 
   return (
-    <article className="card card--hover" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <article
+      className="card card--hover rise"
+      style={{
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        animationDelay: `${Math.min(index, 8) * 45}ms`,
+      }}
+    >
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
 
         {/* Top: setor badge */}
@@ -342,30 +404,66 @@ function LeadCard({ lead }: LeadCardProps) {
         <div
           className="panel inset"
           style={{
-            padding: "10px 14px",
+            padding: "12px 14px",
             background: "color-mix(in srgb, var(--accent) 8%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--accent) 20%, transparent)",
             borderRadius: "var(--r-md)",
             display: "flex",
             flexDirection: "column",
-            gap: 4,
+            gap: 6,
           }}
         >
-          <div
-            className="tiny"
-            style={{ fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.05em" }}
-          >
-            Motivo do lead
+          <div className="row" style={{ gap: 8, alignItems: "center" }}>
+            <span
+              className="badge badge--accent"
+              style={{ fontSize: 10.5, padding: "3px 8px" }}
+            >
+              {inferGatilhoLabel(motivo.gatilho)}
+            </span>
+            <span
+              className="tiny"
+              style={{
+                fontWeight: 700,
+                color: "var(--accent-ink)",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Por que agora
+            </span>
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t-hi)", lineHeight: 1.4 }}>
-            Ganhou contrato
-            {lead.valorGlobal > 0 && (
-              <> de <span className="num" style={{ color: "var(--accent)", fontWeight: 800 }}>{formatBRLFull(lead.valorGlobal)}</span></>
-            )}
-            {" — "}
-            {lead.orgao}
-            {dataDisplay && ` (${dataDisplay})`}
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t-hi)", lineHeight: 1.35 }}>
+            {motivo.titulo}
           </div>
+          <div style={{ fontSize: 12.5, color: "var(--t-mid)", lineHeight: 1.5 }}>
+            {motivo.descricao}
+          </div>
+          {motivo.evidencia !== undefined && motivo.evidencia.length > 0 && (
+            <div className="row" style={{ gap: 5, marginTop: 2 }}>
+              <span className="tiny muted">Evidência:</span>
+              <span className="tiny" style={{ fontWeight: 700, color: "var(--t-hi)" }}>
+                {motivo.evidencia}
+              </span>
+              {lead.numeroControlePNCP !== "" && (
+                <a
+                  href={buildPncpUrl(lead.numeroControlePNCP)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tiny"
+                  style={{
+                    marginLeft: "auto",
+                    color: "var(--t-low)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                  title="Ver contrato no PNCP"
+                >
+                  PNCP <ExternalLink size={10} aria-hidden="true" />
+                </a>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Objeto (truncado) */}
@@ -457,46 +555,77 @@ function LeadCard({ lead }: LeadCardProps) {
           )}
         </div>
 
-        {/* Rodapé: Raio-X + PNCP */}
-        <div className="row between wrap" style={{ gap: 8, marginTop: "auto", paddingTop: 4 }}>
-          {raiox ? (
-            <button
-              type="button"
-              className="btn btn--primary btn--sm"
-              style={{
-                fontSize: 12.5,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-              }}
-              onClick={() => navigateSpa(raiox)}
-            >
-              <Search size={13} aria-hidden="true" />
-              Ver Raio-X
-            </button>
-          ) : (
-            <span />
-          )}
+        {/* Rodapé: Raio-X + Cérebro (esquerda) | CNPJ copy + PNCP (direita) */}
+        <div
+          className="row between wrap"
+          style={{ gap: 8, marginTop: "auto", paddingTop: 4 }}
+        >
+          {/* Grupo esquerdo */}
+          <div className="row" style={{ gap: 6 }}>
+            {raiox !== null ? (
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                style={{
+                  fontSize: 12.5,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                onClick={() => navigateSpa(raiox)}
+              >
+                <Search size={13} aria-hidden="true" />
+                Ver Raio-X
+              </button>
+            ) : (
+              <span />
+            )}
+            {lead.cnpj !== "" && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{
+                  fontSize: 12.5,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                onClick={() =>
+                  navigateSpa(`/app/cerebro?cnpj=${encodeURIComponent(lead.cnpj)}`)
+                }
+                title="Abrir no Cérebro"
+              >
+                <Brain size={13} aria-hidden="true" />
+                Cérebro
+              </button>
+            )}
+          </div>
 
-          {lead.numeroControlePNCP && (
-            <a
-              href={pncpUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="tiny"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                color: "var(--t-low)",
-                fontWeight: 600,
-                textDecoration: "none",
-              }}
-            >
-              PNCP
-              <ExternalLink size={11} aria-hidden="true" />
-            </a>
-          )}
+          {/* Grupo direito */}
+          <div className="row" style={{ gap: 6 }}>
+            {lead.cnpj !== "" && (
+              <CopyButton text={lead.cnpj} label="CNPJ" />
+            )}
+            {lead.numeroControlePNCP && (
+              <a
+                href={pncpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="tiny"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  color: "var(--t-low)",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                PNCP
+                <ExternalLink size={11} aria-hidden="true" />
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </article>
@@ -517,7 +646,7 @@ function FilterSelect<T extends string>({
   onChange: (next: T) => void;
 }) {
   return (
-    <label className="chip" style={{ gap: 8, paddingRight: 10 }}>
+    <label className="chip" style={{ gap: 8, paddingRight: 10, flexShrink: 0 }}>
       <span style={{ color: "var(--t-low)", fontWeight: 600 }}>{label}</span>
       <select
         value={value}
@@ -578,6 +707,19 @@ function EmptySourceState() {
         A integração com o PNCP está sendo ligada. Em breve cada contrato assinado vai gerar um lead
         automático aqui. Volte em alguns minutos.
       </p>
+      <p className="tiny muted" style={{ margin: 0 }}>
+        Os dados vêm do{" "}
+        <a
+          href="https://pncp.gov.br"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="link"
+          style={{ display: "inline-flex", alignItems: "center", gap: 3 }}
+        >
+          PNCP (Portal Nacional de Contratações Públicas)
+          <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      </p>
     </div>
   );
 }
@@ -637,6 +779,8 @@ export function LeadsPage() {
   const [uf, setUf] = useState("todas");
   const [valor, setValor] = useState<ValorFilter>("todos");
   const [recencia, setRecencia] = useState<RecenciaFilter>("todas");
+  const [gatilho, setGatilho] = useState<GatilhoFilter>("todos");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("recente");
 
   // ── Pagination ──
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -677,9 +821,9 @@ export function LeadsPage() {
     return [["todas", "Todas UF"], ...distinct.map((u) => [u, u] as const)];
   }, [leads]);
 
-  // ── Filtered ──
+  // ── Filtered + sorted ──
   const filtered = useMemo<Lead[]>(() => {
-    return leads.filter((l) => {
+    const base = leads.filter((l) => {
       if (!matchesSearch(l, query)) return false;
       if (uf !== "todas" && l.uf !== uf) return false;
       if (valor !== "todos" && l.valorGlobal < VALOR_MIN[valor]) return false;
@@ -687,17 +831,46 @@ export function LeadsPage() {
         const days = recencia === "7d" ? 7 : recencia === "30d" ? 30 : 90;
         if (!isWithinDays(l.createdAt, days)) return false;
       }
+      if (gatilho !== "todos") {
+        if (inferMotivo(l).gatilho !== gatilho) return false;
+      }
       return true;
     });
-  }, [leads, query, uf, valor, recencia]);
+
+    // Sort
+    const sorted = [...base];
+    switch (sortOrder) {
+      case "recente":
+        sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        break;
+      case "valor_desc":
+        sorted.sort((a, b) => b.valorGlobal - a.valorGlobal);
+        break;
+      case "valor_asc":
+        // push zero-value to end
+        sorted.sort((a, b) => {
+          if (a.valorGlobal === 0 && b.valorGlobal === 0) return 0;
+          if (a.valorGlobal === 0) return 1;
+          if (b.valorGlobal === 0) return -1;
+          return a.valorGlobal - b.valorGlobal;
+        });
+        break;
+      case "az":
+        sorted.sort((a, b) => a.razaoSocial.localeCompare(b.razaoSocial, "pt-BR"));
+        break;
+    }
+
+    return sorted;
+  }, [leads, query, uf, valor, recencia, gatilho, sortOrder]);
 
   // Reinicia paginação ao mudar filtros
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, uf, valor, recencia]);
+  }, [query, uf, valor, recencia, gatilho, sortOrder]);
 
   // Infinite scroll
   useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(
@@ -720,10 +893,17 @@ export function LeadsPage() {
     setUf("todas");
     setValor("todos");
     setRecencia("todas");
+    setGatilho("todos");
+    setSortOrder("recente");
   }
 
   const hasActiveFilters =
-    query !== "" || uf !== "todas" || valor !== "todos" || recencia !== "todas";
+    query !== "" ||
+    uf !== "todas" ||
+    valor !== "todos" ||
+    recencia !== "todas" ||
+    gatilho !== "todos" ||
+    sortOrder !== "recente";
 
   // ── Render ──
   return (
@@ -763,6 +943,22 @@ export function LeadsPage() {
         className="panel"
         style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}
       >
+        {/* Filter bar header */}
+        <div className="row" style={{ gap: 6, marginBottom: 4 }}>
+          <Filter size={14} style={{ color: "var(--t-low)" }} aria-hidden="true" />
+          <span
+            className="tiny"
+            style={{
+              color: "var(--t-low)",
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}
+          >
+            Filtros
+          </span>
+        </div>
+
         {/* Search */}
         <div className="searchbar">
           <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
@@ -785,13 +981,25 @@ export function LeadsPage() {
           )}
         </div>
 
-        {/* Selects */}
-        <div className="row wrap" style={{ gap: 10 }}>
+        {/* Selects — scrollable horizontal row on mobile */}
+        <div
+          className="row"
+          style={{
+            gap: 10,
+            overflowX: "auto",
+            flexWrap: "nowrap",
+            scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+            paddingBottom: 2,
+          }}
+        >
           {ufOptions.length > 1 && (
             <FilterSelect label="UF" value={uf} options={ufOptions} onChange={setUf} />
           )}
           <FilterSelect label="Valor" value={valor} options={VALOR_OPTIONS} onChange={setValor} />
           <FilterSelect label="Recência" value={recencia} options={RECENCIA_OPTIONS} onChange={setRecencia} />
+          <FilterSelect label="Motivo" value={gatilho} options={GATILHO_OPTIONS} onChange={setGatilho} />
+          <FilterSelect label="Ordenar" value={sortOrder} options={SORT_OPTIONS} onChange={setSortOrder} />
         </div>
       </div>
 
@@ -805,11 +1013,25 @@ export function LeadsPage() {
             {filtered.length === 1 ? "lead encontrado" : "leads encontrados"}
             {filtered.length > visible.length ? ` · mostrando ${visible.length}` : ""}
           </span>
-          {hasActiveFilters && (
-            <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
-              Limpar filtros
-            </button>
-          )}
+          <div className="row" style={{ gap: 8 }}>
+            {filtered.length > 0 && (
+              <button
+                className="btn btn--ghost btn--sm"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                onClick={() => exportCsv(filtered)}
+                type="button"
+                title="Exportar lista atual como CSV"
+              >
+                <Download size={13} aria-hidden="true" />
+                Exportar CSV
+              </button>
+            )}
+            {hasActiveFilters && (
+              <button className="btn btn--ghost btn--sm" onClick={clearFilters} type="button">
+                Limpar filtros
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -835,8 +1057,8 @@ export function LeadsPage() {
             className="grid"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}
           >
-            {visible.map((lead) => (
-              <LeadCard key={lead.id} lead={lead} />
+            {visible.map((lead, index) => (
+              <LeadCard key={lead.id} lead={lead} index={index} />
             ))}
           </div>
           {hasMore && (
@@ -863,7 +1085,15 @@ export function LeadsPage() {
       {/* Source attribution (discreto, rodapé) */}
       {!isLoading && leads.length > 0 && sourceMessage && (
         <p className="tiny muted" style={{ textAlign: "center", marginTop: 8 }}>
-          {sourceMessage} · Fonte: PNCP (Portal Nacional de Contratações Públicas)
+          {sourceMessage} · Fonte:{" "}
+          <a
+            href="https://pncp.gov.br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link"
+          >
+            PNCP (Portal Nacional de Contratações Públicas)
+          </a>
         </p>
       )}
     </div>

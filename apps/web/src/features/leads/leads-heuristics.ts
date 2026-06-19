@@ -11,6 +11,127 @@
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+// ─── Motivo / Gatilho ────────────────────────────────────────────────────────
+
+export type GatilhoLead =
+  | "contrato_vencedor"
+  | "alto_valor"
+  | "licitacao_recorrente"
+  | "orgao_estrategico"
+  | "novo_fornecedor";
+
+export interface MotivoLead {
+  /** Headline em pt-BR em linguagem simples */
+  titulo: string;
+  /** Explicação em 1 frase para o usuário leigo */
+  descricao: string;
+  /** Categoria heurística que disparou */
+  gatilho: GatilhoLead;
+  /** Dado concreto do lead (ex: "R$ 2,4 M", "Pregão Eletrônico") */
+  evidencia?: string | undefined;
+}
+
+// ─── Internal helper ─────────────────────────────────────────────────────────
+
+function normStr(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+function formatBRL(n: number): string {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
+// ─── Public: inferMotivo ──────────────────────────────────────────────────────
+
+/**
+ * Retorna o motivo principal pelo qual um lead é relevante.
+ * Prioridade: alto_valor > licitacao_recorrente > orgao_estrategico > contrato_vencedor.
+ */
+export function inferMotivo(lead: {
+  razaoSocial: string;
+  orgao: string;
+  objeto: string;
+  valorGlobal: number;
+  modalidade: string;
+  dataVigenciaInicio: string;
+}): MotivoLead {
+  // Alto valor: R$ 500k+
+  if (lead.valorGlobal >= 500_000) {
+    return {
+      gatilho: "alto_valor",
+      titulo: "Contrato de alto valor — nova demanda urgente",
+      descricao:
+        "Esta empresa acabou de vencer um contrato milionário com o governo. Tem budget para investir em fornecedores estratégicos.",
+      evidencia: formatBRL(lead.valorGlobal),
+    };
+  }
+
+  // Comprador recorrente via pregão
+  if (normStr(lead.modalidade).includes("pregao")) {
+    return {
+      gatilho: "licitacao_recorrente",
+      titulo: "Comprador recorrente via Pregão",
+      descricao:
+        "Esta empresa participa de pregões eletrônicos regularmente — está acostumada a buscar fornecedores no mercado.",
+      evidencia: lead.modalidade,
+    };
+  }
+
+  // Órgão federal estratégico
+  const orgaoNorm = normStr(lead.orgao);
+  if (
+    orgaoNorm.includes("ministerio") ||
+    orgaoNorm.includes("federal") ||
+    orgaoNorm.includes("uniao") ||
+    orgaoNorm.includes("nacional")
+  ) {
+    return {
+      gatilho: "orgao_estrategico",
+      titulo: "Fornece para órgão federal estratégico",
+      descricao:
+        "Contratos com órgãos federais exigem fornecedores homologados e acompanhamento especializado.",
+      evidencia: lead.orgao.slice(0, 60),
+    };
+  }
+
+  // Base: contrato vencedor (valor >= 100k enriquece a descrição)
+  if (lead.valorGlobal >= 100_000) {
+    return {
+      gatilho: "contrato_vencedor",
+      titulo: "Ganhou contrato público recente",
+      descricao:
+        "Uma empresa que acabou de assinar com o governo tem caixa novo e demandas abertas para a execução.",
+      evidencia: lead.orgao.slice(0, 60),
+    };
+  }
+
+  return {
+    gatilho: "contrato_vencedor",
+    titulo: "Acaba de assinar contrato público",
+    descricao:
+      "Empresa em fase de execução do contrato — precisará de fornecedores para cumprir as entregas.",
+    evidencia: lead.orgao.slice(0, 60),
+  };
+}
+
+/**
+ * Retorna o label de exibição para cada tipo de gatilho.
+ */
+export function inferGatilhoLabel(gatilho: GatilhoLead): string {
+  switch (gatilho) {
+    case "contrato_vencedor":
+      return "Contrato vencido";
+    case "alto_valor":
+      return "Alto valor";
+    case "licitacao_recorrente":
+      return "Comprador recorrente";
+    case "orgao_estrategico":
+      return "Órgão federal";
+    case "novo_fornecedor":
+      return "Novo fornecedor";
+  }
+}
+
 export interface ServicioSugerivel {
   label: string;
   /** Emoji curto só para ícone textual no card */

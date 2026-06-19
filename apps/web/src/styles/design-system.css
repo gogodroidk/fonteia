@@ -411,3 +411,203 @@ html {
     box-shadow: none;
   }
 }
+
+/* ── Form controls & filters (dark-mode safe) 2026-06 ───────────────────────
+   Purely additive. All colors via var() tokens — zero hardcoded hex.
+   Specificity kept low (element / class selectors only) so existing
+   more-specific rules (.alert-modal-field select, .chip select inline
+   styles, .searchbar input) continue to win naturally.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ---- Native <select> base ------------------------------------------------ */
+/*
+   The custom chevron is an inline SVG data URI. The fill colour is derived
+   from --t-mid (#9FB0C8 in dark, #56657D in light) encoded as URL-safe hex.
+   We encode two separate URIs (one per theme) via :root and [data-theme=dark].
+   Only the background-image line changes between themes — everything else is
+   shared on the element rule.
+*/
+:root {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%2356657D' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%239FB0C8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* Base element rule — applies to every <select> that has no more-specific
+   override. Components that set background/border via inline styles or a
+   tighter class selector (e.g. .alert-modal-field select, .chip select)
+   continue to take precedence. */
+select {
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--t-hi);
+  background-color: var(--surface);
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 36px 9px 12px;
+  min-height: 40px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  outline: none;
+  line-height: 1.4;
+}
+select:hover {
+  border-color: var(--border-2);
+}
+select:focus-visible {
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* <option> — sets the popup list background/text for browsers that honour it
+   (Firefox on Windows/Linux does; Chrome OS-level popups vary). Still worth
+   setting: it's the only lever we have without a custom dropdown. */
+option {
+  background: var(--surface);
+  color: var(--t-hi);
+}
+option:checked {
+  background: color-mix(in srgb, var(--brand) 14%, var(--surface));
+  color: var(--brand-ink);
+}
+
+/* ---- .filter-select: select used as a standalone filter control ---------- */
+/* Use this class when you want an explicitly-visible bordered select that
+   is not embedded inside a .chip label. The .chip-embedded pattern (border:
+   none, background: transparent inline) remains unchanged. */
+.filter-select {
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-width: 120px;
+}
+.filter-select:hover { border-color: var(--border-2); }
+.filter-select:focus-visible {
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+/* ---- Base date / number / text inputs (bare, no class) ------------------- */
+/* .input and .searchbar input are already styled. This covers bare <input>
+   elements (e.g. type="date", type="number", type="text") that appear in
+   filter bars without any utility class. We use a low-specificity
+   attribute selector so existing class-based rules stay dominant. */
+input[type="date"],
+input[type="number"],
+input[type="search"],
+input[type="text"]:not(.input):not([class]) {
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--t-hi);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  min-height: 40px;
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  /* color-scheme lets the browser paint native date-picker UI in the right
+     theme on Chromium — crucial for dark mode on Windows/Android */
+  color-scheme: light;
+}
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="search"],
+[data-theme="dark"] input[type="text"]:not(.input):not([class]) {
+  color-scheme: dark;
+}
+input[type="date"]:hover,
+input[type="number"]:hover,
+input[type="search"]:hover,
+input[type="text"]:not(.input):not([class]):hover {
+  border-color: var(--border-2);
+}
+input[type="date"]:focus-visible,
+input[type="number"]:focus-visible,
+input[type="search"]:focus-visible,
+input[type="text"]:not(.input):not([class]):focus-visible {
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+input[type="date"]::placeholder,
+input[type="number"]::placeholder,
+input[type="search"]::placeholder,
+input[type="text"]:not(.input):not([class])::placeholder {
+  color: var(--t-low);
+}
+
+/* ---- .filter-bar / .filters — filter row container ---------------------- */
+/* A horizontal wrapping row for filter controls (chips, selects, date inputs).
+   Use either .filter-bar or .filters — both resolve to the same layout. */
+.filter-bar,
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+/* Tighten the gap on very small viewports */
+@media (max-width: 479px) {
+  .filter-bar,
+  .filters {
+    gap: 6px;
+    padding: 8px 0;
+  }
+}
+
+/* ---- .chip — ensure token-based colours in filter context ---------------- */
+/* .chip is already defined above; these declarations reinforce dark-mode
+   safety without changing existing specificity. Only additive properties
+   are listed so the original definition still takes precedence on
+   everything not mentioned here. */
+.chip {
+  /* Ensure the chip surface never falls back to browser default white */
+  background: var(--surface);
+  color: var(--t-mid);
+  border: 1px solid var(--border);
+}
+.chip:hover {
+  border-color: var(--border-2);
+  color: var(--t-hi);
+}
+.chip--on {
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  border-color: var(--brand-ink);
+  color: var(--brand-ink);
+}
+
+/* Ensure the embedded <select> inside a .chip inherits its colours and
+   doesn't pick up the global select background — the inline styles in the
+   TSX already set background:transparent, but these declarations provide a
+   safe CSS-only fallback. */
+.chip select {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  min-height: unset;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--t-hi);
+}
+.chip select:hover,
+.chip select:focus-visible {
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* ---- Reduced-motion: form controls need no extra guard ------------------- */
+/* transitions on form controls are already short (0.18s); no animation to
+   disable. The global prefers-reduced-motion block at line ~380 already
+   sets transition:none!important for everything else when needed. */

@@ -570,7 +570,7 @@ function AppShell({ path, navigate }: AppShellProps) {
         {/* sidebar desktop */}
         <aside
           className="shell-sidebar-desktop"
-          style={{ width: sidebarWidth, flex: "0 0 auto", borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", height: "100dvh", position: "sticky", top: 0, transition: "width .2s", overflow: "hidden", zIndex: 20 }}
+          style={{ width: sidebarWidth, flex: "0 0 auto", borderRight: "1px solid var(--border)", background: "var(--surface)", display: "flex", flexDirection: "column", height: "100dvh", position: "sticky", top: 0, transition: "width .2s", overflowX: "hidden", overflowY: "auto", zIndex: 20 }}
         >
           {sidebarInner(false)}
         </aside>
