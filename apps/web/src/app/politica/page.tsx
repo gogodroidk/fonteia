@@ -1,40 +1,66 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CamaraDeputado } from "@fonteia/sources";
-import { ExternalLink, Landmark, Loader2, Mail, MapPin, Search, User, Vote, X } from "lucide-react";
-import { listDeputados, listVotacoes, type VotacaoItem } from "../../features/politica/politica-api";
+import {
+  ExternalLink,
+  Landmark,
+  Loader2,
+  Mail,
+  MapPin,
+  Search,
+  User,
+  Vote,
+  X,
+} from "lucide-react";
+import type { CasaLegislativa, Parlamentar } from "../../features/politica/politica-api";
+import {
+  listDeputados,
+  listVotacoes,
+  type VotacaoItem,
+} from "../../features/politica/politica-api";
 import { FonteDots } from "../../components/ui";
 
-// Quantos deputados renderizar por vez (o scroll carrega mais sozinho).
+// Quantos parlamentares renderizar por vez (scroll infinito carrega mais).
 const PAGE_SIZE = 30;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PoliticaPageProps {
-  onSelectDeputado?: ((deputado: CamaraDeputado) => void) | undefined;
+  // Mantém assinatura original: CamaraDeputado é supertype de Parlamentar
+  // (Parlamentar estende CamaraDeputado), portanto compatível com callers existentes.
+  onSelectDeputado?: ((deputado: Parlamentar) => void) | undefined;
 }
 
-type SortKey = "nome" | "partido" | "uf";
+type SortKey = "nome" | "partido" | "uf" | "casa";
 
-type PageTab = "deputados" | "votacoes";
+type PageTab = "parlamentares" | "votacoes";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-// Fonte oficial: Câmara dos Deputados — Dados Abertos. Cor própria (verde institucional).
 const CAMARA_COR = "#1F8A4C";
+const SENADO_COR = "#1F4D8A";
 
 const FONTE_DOTS_CAMARA = [
   { sigla: "CD", cor: CAMARA_COR, nome: "Câmara dos Deputados — Dados Abertos" },
+];
+
+const FONTE_DOTS_SENADO = [
+  { sigla: "SF", cor: SENADO_COR, nome: "Senado Federal — Dados Abertos" },
 ];
 
 const SORT_OPTIONS: ReadonlyArray<readonly [SortKey, string]> = [
   ["nome", "Nome (A–Z)"],
   ["partido", "Partido"],
   ["uf", "UF"],
+  ["casa", "Casa"],
+];
+
+const CASA_OPTIONS: ReadonlyArray<readonly [string, string]> = [
+  ["todas", "Todas"],
+  ["camara", "Câmara"],
+  ["senado", "Senado"],
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Remove acentos e baixa caixa para busca tolerante. */
 function normalizeForSearch(value: string): string {
   return value
     .normalize("NFD")
@@ -43,33 +69,33 @@ function normalizeForSearch(value: string): string {
     .trim();
 }
 
-/** Iniciais do nome para o fallback do avatar quando não há foto. */
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
 }
 
-/** Página oficial do deputado na Câmara. */
-function camaraUrl(deputado: CamaraDeputado): string {
-  return `https://www.camara.leg.br/deputados/${deputado.id}`;
+function parlamentarUrl(p: Parlamentar): string {
+  if (p.casa === "senado" && p.urlPagina) return p.urlPagina;
+  return `https://www.camara.leg.br/deputados/${p.id}`;
 }
 
-/**
- * Busca por múltiplos termos (AND), tolerante a acento: cada termo precisa
- * aparecer em algum campo (nome, partido, UF).
- */
-function matchesSearch(deputado: CamaraDeputado, q: string): boolean {
+function casaLabel(casa: CasaLegislativa): string {
+  if (casa === "camara") return "Deputado(a)";
+  if (casa === "senado") return "Senador(a)";
+  return "Parlamentar";
+}
+
+function matchesSearch(p: Parlamentar, q: string): boolean {
   const query = normalizeForSearch(q);
   if (query === "") return true;
   const haystack = normalizeForSearch(
-    [deputado.nome, deputado.partido, deputado.uf].join(" "),
+    [p.nome, p.partido, p.uf, p.casa === "senado" ? "senado" : "camara"].join(" "),
   );
   return query.split(/\s+/).every((term) => haystack.includes(term));
 }
 
-/** Formata yyyy-mm-dd (ou ISO com hora) para dd/mm/yyyy. */
 function formatDateShort(raw: string): string {
-  const datePart = raw.slice(0, 10); // "yyyy-mm-dd"
+  const datePart = raw.slice(0, 10);
   const [yyyy, mm, dd] = datePart.split("-");
   if (!yyyy || !mm || !dd) return raw;
   return `${dd}/${mm}/${yyyy}`;
@@ -81,7 +107,10 @@ function SkeletonCard() {
   return (
     <div className="card card--pad" aria-hidden="true">
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div className="skeleton" style={{ width: 52, height: 52, borderRadius: "50%", flexShrink: 0 }} />
+        <div
+          className="skeleton"
+          style={{ width: 52, height: 52, borderRadius: "50%", flexShrink: 0 }}
+        />
         <div style={{ flex: 1 }}>
           <div className="skeleton" style={{ height: 14, width: "75%", marginBottom: 8 }} />
           <div className="skeleton" style={{ height: 11, width: "45%" }} />
@@ -91,17 +120,42 @@ function SkeletonCard() {
   );
 }
 
-// ─── Deputado card ───────────────────────────────────────────────────────────
+// ─── Casa badge ──────────────────────────────────────────────────────────────
 
-interface DeputadoCardProps {
-  deputado: CamaraDeputado;
+function CasaBadge({ casa }: { casa: CasaLegislativa }) {
+  const isCamara = casa === "camara";
+  const color = isCamara ? CAMARA_COR : casa === "senado" ? SENADO_COR : "var(--t-low)";
+  const label = isCamara ? "Câmara" : casa === "senado" ? "Senado" : "Outro";
+  return (
+    <span
+      className="badge"
+      style={{
+        fontWeight: 700,
+        fontSize: 11,
+        color,
+        background: `color-mix(in srgb, ${color} 12%, var(--surface))`,
+        border: `1px solid color-mix(in srgb, ${color} 28%, transparent)`,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+// ─── Parlamentar card ─────────────────────────────────────────────────────────
+
+interface ParlamentarCardProps {
+  parlamentar: Parlamentar;
   onSelect: (() => void) | undefined;
 }
 
-function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
+function ParlamentarCard({ parlamentar: p, onSelect }: ParlamentarCardProps) {
   const [imgError, setImgError] = useState(false);
-  const local = deputado.uf !== "" ? deputado.uf : "Brasil";
-  const cardLabel = `Deputado ${deputado.nome}${deputado.partido ? ` — ${deputado.partido}` : ""}${deputado.uf ? `/${deputado.uf}` : ""}`;
+  const local = p.uf !== "" ? p.uf : "Brasil";
+  const role = casaLabel(p.casa);
+  const cardLabel = `${role} ${p.nome}${p.partido ? ` — ${p.partido}` : ""}${p.uf ? `/${p.uf}` : ""}`;
+  const fontes = p.casa === "senado" ? FONTE_DOTS_SENADO : FONTE_DOTS_CAMARA;
+  const linkLabel = p.casa === "senado" ? "Ver no Senado" : "Ver na Câmara";
 
   return (
     <article
@@ -127,12 +181,14 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
       }
       aria-label={cardLabel}
     >
-      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-        {/* Topo: foto + nome + partido/UF */}
+      <div
+        style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}
+      >
+        {/* Topo: foto + nome + partido/UF + casa */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {deputado.foto !== "" && !imgError ? (
+          {p.foto !== "" && !imgError ? (
             <img
-              src={deputado.foto}
+              src={p.foto}
               alt=""
               loading="lazy"
               onError={() => setImgError(true)}
@@ -164,7 +220,7 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
                 border: "1px solid var(--border)",
               }}
             >
-              {initialsOf(deputado.nome)}
+              {initialsOf(p.nome)}
             </div>
           )}
           <div style={{ minWidth: 0, flex: 1 }}>
@@ -180,14 +236,18 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: "vertical",
               }}
-              title={deputado.nome}
+              title={p.nome}
             >
-              {deputado.nome || "Nome não informado"}
+              {p.nome || "Nome não informado"}
             </div>
-            <div className="row" style={{ gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-              {deputado.partido !== "" && (
+            <div
+              className="row"
+              style={{ gap: 6, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}
+            >
+              <CasaBadge casa={p.casa} />
+              {p.partido !== "" && (
                 <span className="badge badge--neutral" style={{ fontWeight: 700 }}>
-                  {deputado.partido}
+                  {p.partido}
                 </span>
               )}
               <span
@@ -202,9 +262,9 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
         </div>
 
         {/* E-mail institucional */}
-        {deputado.email !== "" && (
+        {p.email !== "" && (
           <a
-            href={`mailto:${deputado.email}`}
+            href={`mailto:${p.email}`}
             onClick={(e) => e.stopPropagation()}
             className="tiny"
             style={{
@@ -215,11 +275,11 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
               textDecoration: "none",
               overflow: "hidden",
             }}
-            title={deputado.email}
+            title={p.email}
           >
             <Mail size={13} style={{ flexShrink: 0, color: "var(--t-low)" }} aria-hidden="true" />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {deputado.email}
+              {p.email}
             </span>
           </a>
         )}
@@ -230,7 +290,7 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
           style={{ gap: 6, marginTop: "auto", paddingTop: 4, alignItems: "center" }}
         >
           <a
-            href={camaraUrl(deputado)}
+            href={parlamentarUrl(p)}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
@@ -244,17 +304,17 @@ function DeputadoCard({ deputado, onSelect }: DeputadoCardProps) {
               textDecoration: "none",
             }}
           >
-            Ver na Câmara
+            {linkLabel}
             <ExternalLink size={12} aria-hidden="true" />
           </a>
-          <FonteDots fontes={FONTE_DOTS_CAMARA} size={20} />
+          <FonteDots fontes={fontes} size={20} />
         </div>
       </div>
     </article>
   );
 }
 
-// ─── Select control (mobile-friendly native select styled como chip) ──────────
+// ─── FilterSelect ─────────────────────────────────────────────────────────────
 
 function FilterSelect<T extends string>({
   label,
@@ -294,9 +354,84 @@ function FilterSelect<T extends string>({
   );
 }
 
+// ─── Casa tab chips ───────────────────────────────────────────────────────────
+
+interface CasaTabsProps {
+  active: string;
+  camaraCount: number;
+  senadoCount: number;
+  onChange: (next: string) => void;
+}
+
+function CasaTabs({ active, camaraCount, senadoCount, onChange }: CasaTabsProps) {
+  const total = camaraCount + senadoCount;
+
+  const items: Array<{ key: string; label: string; count: number; color: string }> = [
+    { key: "todas", label: "Todas", count: total, color: "var(--brand-ink)" },
+    { key: "camara", label: "Câmara", count: camaraCount, color: CAMARA_COR },
+    { key: "senado", label: "Senado", count: senadoCount, color: SENADO_COR },
+  ];
+
+  return (
+    <div
+      className="row"
+      style={{ gap: 8, flexWrap: "wrap" }}
+      role="group"
+      aria-label="Filtrar por casa legislativa"
+    >
+      {items.map(({ key, label, count, color }) => {
+        const isActive = active === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            aria-pressed={isActive}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "7px 14px",
+              borderRadius: 999,
+              border: isActive
+                ? `1.5px solid ${color}`
+                : "1.5px solid var(--border)",
+              background: isActive
+                ? `color-mix(in srgb, ${color} 12%, var(--surface))`
+                : "var(--surface)",
+              color: isActive ? color : "var(--t-mid)",
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {label}
+            <span
+              style={{
+                fontSize: 11,
+                fontVariantNumeric: "tabular-nums",
+                fontWeight: 600,
+                padding: "1px 6px",
+                borderRadius: 999,
+                background: isActive
+                  ? `color-mix(in srgb, ${color} 18%, var(--surface))`
+                  : "var(--surface-2, color-mix(in srgb, var(--border) 50%, var(--surface)))",
+                color: isActive ? color : "var(--t-low)",
+              }}
+            >
+              {count}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Empty (filters) state ────────────────────────────────────────────────────
 
-function EmptyState({ onClear }: { onClear: () => void }) {
+function EmptyFiltersState({ onClear }: { onClear: () => void }) {
   return (
     <div
       className="panel"
@@ -324,13 +459,52 @@ function EmptyState({ onClear }: { onClear: () => void }) {
       >
         <User size={28} />
       </div>
-      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum deputado com esses filtros</div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum parlamentar com esses filtros</div>
       <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
-        Tente ampliar a busca ou trocar o partido / a UF.
+        Tente ampliar a busca ou trocar o partido / a UF / a casa.
       </p>
       <button className="btn btn--ghost btn--sm" onClick={onClear} type="button">
         Limpar filtros
       </button>
+    </div>
+  );
+}
+
+// ─── Senado empty-state (ingestion not yet run) ───────────────────────────────
+
+function SenadoEmptyState() {
+  return (
+    <div
+      className="panel"
+      style={{
+        padding: 48,
+        textAlign: "center",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: "50%",
+          background: `color-mix(in srgb, ${SENADO_COR} 10%, var(--surface))`,
+          color: SENADO_COR,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Landmark size={28} />
+      </div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Coleta do Senado em andamento</div>
+      <p className="muted small" style={{ margin: 0, maxWidth: 380 }}>
+        Os dados dos senadores ainda estão sendo sincronizados. Volte em breve — a coleta roda
+        periodicamente.
+      </p>
     </div>
   );
 }
@@ -348,7 +522,9 @@ function VotacaoCard({ votacao }: { votacao: VotacaoItem }) {
 
   return (
     <article className="card card--hover" style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+      <div
+        style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}
+      >
         {/* Top row: data + órgão + resultado */}
         <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className="tiny muted" style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -378,7 +554,9 @@ function VotacaoCard({ votacao }: { votacao: VotacaoItem }) {
         {proposicao?.ementa && (
           <div>
             {siglaLabel && (
-              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--t-hi)", marginRight: 6 }}>
+              <span
+                style={{ fontWeight: 700, fontSize: 13, color: "var(--t-hi)", marginRight: 6 }}
+              >
                 {siglaLabel}
               </span>
             )}
@@ -402,13 +580,17 @@ function VotacaoCard({ votacao }: { votacao: VotacaoItem }) {
           <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a" }}>
             {placarSim} Sim
           </span>
-          <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">·</span>
+          <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">
+            ·
+          </span>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626" }}>
             {placarNao} Não
           </span>
           {placarAbstencoes > 0 && (
             <>
-              <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">·</span>
+              <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">
+                ·
+              </span>
               <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>
                 {placarAbstencoes} Abs.
               </span>
@@ -429,15 +611,16 @@ function VotacaoCard({ votacao }: { votacao: VotacaoItem }) {
 
 export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
   // ── Tab state ──
-  const [pageTab, setPageTab] = useState<PageTab>("deputados");
+  const [pageTab, setPageTab] = useState<PageTab>("parlamentares");
 
-  // ── Deputados data state ──
-  const [deputados, setDeputados] = useState<CamaraDeputado[]>([]);
+  // ── Parlamentares data state ──
+  const [parlamentares, setParlamentares] = useState<Parlamentar[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // ── Filter/sort state ──
   const [query, setQuery] = useState("");
+  const [casa, setCasa] = useState("todas");
   const [partido, setPartido] = useState("todos");
   const [uf, setUf] = useState("todas");
   const [sortKey, setSortKey] = useState<SortKey>("nome");
@@ -452,7 +635,7 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
   const [errorVotacoes, setErrorVotacoes] = useState<string | null>(null);
   const hasLoadedVotacoes = useRef(false);
 
-  // ── Load deputados on mount ──
+  // ── Load parlamentares on mount ──
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
@@ -461,12 +644,12 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
     listDeputados()
       .then((result) => {
         if (cancelled) return;
-        setDeputados(result.deputados);
+        setParlamentares(result.deputados);
         setIsLoading(false);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar deputados.");
+        setErrorMessage(err instanceof Error ? err.message : "Erro ao carregar parlamentares.");
         setIsLoading(false);
       });
 
@@ -502,39 +685,63 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
     };
   }, [pageTab]);
 
-  // ── Derived filter option lists ──
+  // ── Counts per casa (from raw unfiltered list) ──
+  const camaraCount = useMemo(
+    () => parlamentares.filter((p) => p.casa === "camara").length,
+    [parlamentares],
+  );
+  const senadoCount = useMemo(
+    () => parlamentares.filter((p) => p.casa === "senado").length,
+    [parlamentares],
+  );
+
+  // ── Filter option lists derived from all parlamentares (not filtered subset) ──
   const partidoOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const source =
+      casa === "todas"
+        ? parlamentares
+        : parlamentares.filter((p) => p.casa === (casa as CasaLegislativa));
     const distinct = Array.from(
       new Set(
-        deputados
-          .map((d) => d.partido?.trim())
-          .filter((p): p is string => typeof p === "string" && p.length > 0),
+        source
+          .map((p) => p.partido?.trim())
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
       ),
     ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return [["todos", "Todos"], ...distinct.map((p) => [p, p] as const)];
-  }, [deputados]);
+    return [["todos", "Todos"], ...distinct.map((v) => [v, v] as const)];
+  }, [parlamentares, casa]);
 
   const ufOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const source =
+      casa === "todas"
+        ? parlamentares
+        : parlamentares.filter((p) => p.casa === (casa as CasaLegislativa));
     const distinct = Array.from(
       new Set(
-        deputados
-          .map((d) => d.uf?.trim())
-          .filter((u): u is string => typeof u === "string" && u.length > 0),
+        source
+          .map((p) => p.uf?.trim())
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
       ),
     ).sort((a, b) => a.localeCompare(b, "pt-BR"));
-    return [["todas", "Todas"], ...distinct.map((u) => [u, u] as const)];
-  }, [deputados]);
+    return [["todas", "Todas"], ...distinct.map((v) => [v, v] as const)];
+  }, [parlamentares, casa]);
 
   // ── Filtered + sorted list ──
-  const filtered = useMemo<CamaraDeputado[]>(() => {
-    const list = deputados.filter((d) => {
-      if (!matchesSearch(d, query)) return false;
-      if (partido !== "todos" && d.partido !== partido) return false;
-      if (uf !== "todas" && d.uf !== uf) return false;
+  const filtered = useMemo<Parlamentar[]>(() => {
+    const list = parlamentares.filter((p) => {
+      if (!matchesSearch(p, query)) return false;
+      if (casa !== "todas" && p.casa !== casa) return false;
+      if (partido !== "todos" && p.partido !== partido) return false;
+      if (uf !== "todas" && p.uf !== uf) return false;
       return true;
     });
 
     return [...list].sort((a, b) => {
+      if (sortKey === "casa") {
+        const byCasa = a.casa.localeCompare(b.casa, "pt-BR");
+        if (byCasa !== 0) return byCasa;
+        return a.nome.localeCompare(b.nome, "pt-BR");
+      }
       if (sortKey === "partido") {
         const byPartido = a.partido.localeCompare(b.partido, "pt-BR");
         if (byPartido !== 0) return byPartido;
@@ -547,14 +754,20 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
       }
       return a.nome.localeCompare(b.nome, "pt-BR");
     });
-  }, [deputados, query, partido, uf, sortKey]);
+  }, [parlamentares, query, casa, partido, uf, sortKey]);
 
-  // Reinicia a janela ao mudar busca/filtros/ordenação.
+  // Reset visible window on filter/sort change.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, partido, uf, sortKey]);
+  }, [query, casa, partido, uf, sortKey]);
 
-  // Carrega mais quando o sentinela entra na viewport.
+  // Reset partido/uf when casa changes to avoid stuck filters.
+  useEffect(() => {
+    setPartido("todos");
+    setUf("todas");
+  }, [casa]);
+
+  // Infinite scroll sentinel.
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node) return;
@@ -573,15 +786,23 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
 
+  // Whether the user chose Senado but there are none yet (ingestion not run).
+  const senadoFilteredButEmpty = casa === "senado" && senadoCount === 0 && !isLoading;
+
   function clearFilters() {
     setQuery("");
+    setCasa("todas");
     setPartido("todos");
     setUf("todas");
     setSortKey("nome");
   }
 
   const hasActiveFilters =
-    query !== "" || partido !== "todos" || uf !== "todas" || sortKey !== "nome";
+    query !== "" ||
+    casa !== "todas" ||
+    partido !== "todos" ||
+    uf !== "todas" ||
+    sortKey !== "nome";
 
   // ── Tab bar styles ──
   const tabStyle = (tab: PageTab): React.CSSProperties => ({
@@ -613,14 +834,14 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
       >
         <button
           role="tab"
-          aria-selected={pageTab === "deputados"}
-          aria-controls="tabpanel-deputados"
-          id="tab-deputados"
-          style={tabStyle("deputados")}
-          onClick={() => setPageTab("deputados")}
+          aria-selected={pageTab === "parlamentares"}
+          aria-controls="tabpanel-parlamentares"
+          id="tab-parlamentares"
+          style={tabStyle("parlamentares")}
+          onClick={() => setPageTab("parlamentares")}
           type="button"
         >
-          Deputados
+          Parlamentares
         </button>
         <button
           role="tab"
@@ -635,23 +856,27 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
         </button>
       </div>
 
-      {/* ── Deputados tab ── */}
+      {/* ── Parlamentares tab ── */}
       <div
         role="tabpanel"
-        id="tabpanel-deputados"
-        aria-labelledby="tab-deputados"
-        hidden={pageTab !== "deputados"}
-        style={{ display: pageTab === "deputados" ? "flex" : "none", flexDirection: "column", gap: 16 }}
+        id="tabpanel-parlamentares"
+        aria-labelledby="tab-parlamentares"
+        hidden={pageTab !== "parlamentares"}
+        style={{
+          display: pageTab === "parlamentares" ? "flex" : "none",
+          flexDirection: "column",
+          gap: 16,
+        }}
       >
         {/* Header */}
         <div>
-          <span className="eyebrow">Política — Câmara dos Deputados</span>
+          <span className="eyebrow">Política — Congresso Nacional</span>
           <h2 className="h2" style={{ marginTop: 4 }}>
-            Deputados Federais em exercício
+            Parlamentares em exercício
           </h2>
           <p className="muted small" style={{ marginTop: 4, maxWidth: 560 }}>
-            Os deputados federais em exercício na legislatura atual, com partido, UF e contato —
-            direto dos Dados Abertos da Câmara dos Deputados.
+            Deputados federais e senadores em exercício no Congresso Nacional — direto dos Dados
+            Abertos da Câmara e do Senado Federal.
           </p>
         </div>
 
@@ -673,6 +898,16 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
           </div>
         )}
 
+        {/* Casa tabs (only when data loaded) */}
+        {!isLoading && errorMessage === null && parlamentares.length > 0 && (
+          <CasaTabs
+            active={casa}
+            camaraCount={camaraCount}
+            senadoCount={senadoCount}
+            onChange={setCasa}
+          />
+        )}
+
         {/* Filter bar */}
         <div
           className="panel"
@@ -680,12 +915,16 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
         >
           {/* Search */}
           <div className="searchbar">
-            <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
+            <Search
+              size={16}
+              style={{ color: "var(--t-low)", flexShrink: 0 }}
+              aria-hidden="true"
+            />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nome, partido ou UF…"
-              aria-label="Buscar deputados"
+              placeholder="Buscar por nome, partido, UF ou casa…"
+              aria-label="Buscar parlamentares"
             />
             {query !== "" && (
               <button
@@ -702,6 +941,13 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
 
           {/* Filter selects */}
           <div className="row wrap" style={{ gap: 10 }}>
+            {/* Casa select (fallback for mobile/search) */}
+            <FilterSelect
+              label="Casa"
+              value={casa}
+              options={CASA_OPTIONS}
+              onChange={setCasa}
+            />
             {partidoOptions.length > 1 && (
               <FilterSelect
                 label="Partido"
@@ -717,7 +963,9 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
 
           {/* Sort chips */}
           <div className="row wrap" style={{ gap: 7 }}>
-            <span style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, alignSelf: "center" }}>
+            <span
+              style={{ fontSize: 12, color: "var(--t-low)", fontWeight: 600, alignSelf: "center" }}
+            >
               Ordenar por:
             </span>
             {SORT_OPTIONS.map(([value, label]) => (
@@ -736,13 +984,16 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
         </div>
 
         {/* Count row */}
-        {!isLoading && errorMessage === null && deputados.length > 0 && (
+        {!isLoading && errorMessage === null && parlamentares.length > 0 && (
           <div className="row between wrap" style={{ gap: 8 }}>
             <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
-              <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+              <b
+                className="num"
+                style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}
+              >
                 {filtered.length}
               </b>{" "}
-              {filtered.length === 1 ? "deputado encontrado" : "deputados encontrados"}
+              {filtered.length === 1 ? "parlamentar encontrado" : "parlamentares encontrados"}
               {filtered.length > visible.length ? ` · mostrando ${visible.length}` : ""}
             </span>
             {hasActiveFilters && (
@@ -759,13 +1010,13 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
             className="grid"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
             aria-busy="true"
-            aria-label="Carregando deputados…"
+            aria-label="Carregando parlamentares…"
           >
             {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
-        ) : errorMessage !== null ? null : deputados.length === 0 ? (
+        ) : errorMessage !== null ? null : parlamentares.length === 0 ? (
           <div
             className="panel"
             style={{
@@ -778,26 +1029,27 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
             }}
           >
             <Landmark size={28} style={{ color: "var(--t-low)" }} aria-hidden="true" />
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum deputado disponível no momento</div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum parlamentar disponível</div>
             <p className="muted small" style={{ margin: 0, maxWidth: 360 }}>
-              A coleta da Câmara roda periodicamente. Volte em breve ou aguarde a próxima sincronização.
+              A coleta da Câmara e do Senado roda periodicamente. Volte em breve ou aguarde a
+              próxima sincronização.
             </p>
           </div>
+        ) : senadoFilteredButEmpty ? (
+          <SenadoEmptyState />
         ) : filtered.length === 0 ? (
-          <EmptyState onClear={clearFilters} />
+          <EmptyFiltersState onClear={clearFilters} />
         ) : (
           <>
             <div
               className="grid"
               style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}
             >
-              {visible.map((deputado) => (
-                <DeputadoCard
-                  key={deputado.id}
-                  deputado={deputado}
-                  onSelect={
-                    onSelectDeputado !== undefined ? () => onSelectDeputado(deputado) : undefined
-                  }
+              {visible.map((p) => (
+                <ParlamentarCard
+                  key={`${p.casa}-${p.id}`}
+                  parlamentar={p}
+                  onSelect={onSelectDeputado !== undefined ? () => onSelectDeputado(p) : undefined}
                 />
               ))}
             </div>
@@ -816,7 +1068,7 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
                 aria-hidden="true"
               >
                 <Loader2 size={16} className="spin" />
-                Carregando mais deputados…
+                Carregando mais parlamentares…
               </div>
             )}
           </>
@@ -829,7 +1081,11 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
         id="tabpanel-votacoes"
         aria-labelledby="tab-votacoes"
         hidden={pageTab !== "votacoes"}
-        style={{ display: pageTab === "votacoes" ? "flex" : "none", flexDirection: "column", gap: 16 }}
+        style={{
+          display: pageTab === "votacoes" ? "flex" : "none",
+          flexDirection: "column",
+          gap: 16,
+        }}
       >
         {/* Header */}
         <div>
@@ -901,7 +1157,10 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
           <>
             {/* Count row */}
             <div style={{ fontSize: 13, color: "var(--t-mid)" }}>
-              <b className="num" style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}>
+              <b
+                className="num"
+                style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}
+              >
                 {votacoes.length}
               </b>{" "}
               {votacoes.length === 1 ? "votação encontrada" : "votações encontradas"}

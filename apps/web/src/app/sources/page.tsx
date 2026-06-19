@@ -5,15 +5,44 @@ import { CountUp } from "../../components/ui/CountUp";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 
 // ---------------------------------------------------------------------------
-// Derived stats from SOURCE_CATALOG
+// Status overrides — applied HERE (not in packages/sources) because the
+// package is shared domain territory. Only flip when the module truly has
+// ingested data confirmed in production (CLAUDE.md § Estado real, 2026-06).
+//
+// Sources with real data in the platform:
+//   leilões        → receita-leiloes-sle  (already fragile_operational / runtime overrides to connected)
+//   licitações     → pncp-consulta        (already connected in catalog)
+//   empresas       → compras-gov-dados-abertos (already connected)
+//   política/câmara → camara-dados-abertos → connected  ← FLIPPED (deputados, CEAP, votações ingeridos)
+//   jurídico        → cnj-datajud         → connected  ← FLIPPED (DataJud ingerido)
+//   INPI            → inpi-dados-abertos  → connected  ← FLIPPED (29.5k marcas RPI ingeridas)
+//   ambiental       → ibama-dados-abertos → connected  ← FLIPPED (IBAMA ambiental ingerido)
+//   municípios/IBGE não têm entrada própria no catálogo ainda; outros (Senado,
+//   INPE, TSE, ANA, Tesouro, DOU) NÃO têm dados ingeridos — permanecem como estão.
 // ---------------------------------------------------------------------------
 
-const TOTAL_SOURCES = SOURCE_CATALOG.length;
-const CONNECTED_SOURCES = SOURCE_CATALOG.filter(
+const STATUS_OVERRIDES: Partial<Record<string, SourceStatus>> = {
+  "camara-dados-abertos": "connected",
+  "cnj-datajud": "connected",
+  "inpi-dados-abertos": "connected",
+  "ibama-dados-abertos": "connected",
+};
+
+// ---------------------------------------------------------------------------
+// Derived stats — computed AFTER merging overrides so counters are accurate
+// ---------------------------------------------------------------------------
+
+const CATALOG_WITH_OVERRIDES = SOURCE_CATALOG.map((s) => ({
+  ...s,
+  status: (STATUS_OVERRIDES[s.id] ?? s.status) as SourceStatus,
+}));
+
+const TOTAL_SOURCES = CATALOG_WITH_OVERRIDES.length;
+const CONNECTED_SOURCES = CATALOG_WITH_OVERRIDES.filter(
   (s) => s.status === "connected" || s.status === "fragile_operational",
 ).length;
 
-const GOVT_SOURCES = SOURCE_CATALOG.filter(
+const GOVT_SOURCES = CATALOG_WITH_OVERRIDES.filter(
   (s) => s.reliability === "official_stable" || s.reliability === "official_fragile",
 ).length;
 const PCT_GOVT = Math.round((GOVT_SOURCES / TOTAL_SOURCES) * 100);
@@ -59,7 +88,7 @@ function moduleLabel(id: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Reliability dot
+// Reliability helpers
 // ---------------------------------------------------------------------------
 
 function reliabilityDot(level: PublicSource["reliability"]): string {
@@ -76,7 +105,7 @@ function reliabilityLabel(level: PublicSource["reliability"]): string {
 }
 
 // ---------------------------------------------------------------------------
-// StatusBadge (local, TS-strict, no external deps)
+// StatusBadge
 // ---------------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: SourceStatus }) {
@@ -95,7 +124,7 @@ function StatusBadge({ status }: { status: SourceStatus }) {
 }
 
 // ---------------------------------------------------------------------------
-// SourceRow
+// SourceRow — table variant (desktop)
 // ---------------------------------------------------------------------------
 
 function SourceRow({
@@ -105,7 +134,7 @@ function SourceRow({
   runtimeStatus,
   checkLoading,
 }: {
-  source: PublicSource;
+  source: PublicSource & { status: SourceStatus };
   index: number;
   isActive: boolean;
   runtimeStatus: SourceStatus | undefined;
@@ -146,7 +175,7 @@ function SourceRow({
         </div>
       </td>
 
-      {/* Status — runtime override when available, static catalog otherwise */}
+      {/* Status — runtime override when available, catalog (+ static overrides) otherwise */}
       <td style={{ padding: "15px 20px" }}>
         {isActive && checkLoading ? (
           <span className="badge badge--neutral" style={{ color: "var(--t-mid)" }}>
@@ -200,6 +229,122 @@ function SourceRow({
 }
 
 // ---------------------------------------------------------------------------
+// SourceCard — card variant (mobile / narrow viewport)
+// ---------------------------------------------------------------------------
+
+function SourceCard({
+  source,
+  isActive,
+  runtimeStatus,
+  checkLoading,
+}: {
+  source: PublicSource & { status: SourceStatus };
+  isActive: boolean;
+  runtimeStatus: SourceStatus | undefined;
+  checkLoading: boolean;
+}) {
+  const effectiveStatus: SourceStatus = runtimeStatus ?? source.status;
+  const modules = source.modules.map(moduleLabel).join(", ");
+  const dotColor = reliabilityDot(source.reliability);
+  const reliabilityText = reliabilityLabel(source.reliability);
+
+  return (
+    <div
+      className="sources-card"
+      style={{
+        padding: "16px 18px",
+        borderBottom: "1px solid var(--border)",
+        background: isActive ? "color-mix(in srgb,var(--brand) 4%,transparent)" : undefined,
+      }}
+    >
+      {/* Header row: name + status */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 10,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              color: "var(--t-hi)",
+              lineHeight: 1.3,
+              wordBreak: "break-word",
+            }}
+          >
+            {source.name}
+            {isActive ? (
+              <span
+                className="badge badge--ok"
+                style={{ marginLeft: 8, fontSize: 10 }}
+              >
+                módulo ativo
+              </span>
+            ) : null}
+          </div>
+          <div
+            className="tiny"
+            style={{ color: "var(--t-low)", fontWeight: 500, marginTop: 2 }}
+          >
+            {source.owner}
+          </div>
+        </div>
+
+        {/* Status badge */}
+        <div style={{ flexShrink: 0 }}>
+          {isActive && checkLoading ? (
+            <span className="badge badge--neutral" style={{ color: "var(--t-mid)" }}>
+              verificando…
+            </span>
+          ) : (
+            <StatusBadge status={effectiveStatus} />
+          )}
+        </div>
+      </div>
+
+      {/* Meta row: modules + reliability + link */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "8px 20px",
+          alignItems: "center",
+        }}
+      >
+        <span className="tiny" style={{ color: "var(--t-mid)", fontWeight: 500 }}>
+          {modules}
+        </span>
+
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 5 }}
+          title={reliabilityText}
+        >
+          <span className="dot" style={{ background: dotColor, flexShrink: 0 }} />
+          <span className="tiny" style={{ color: "var(--t-mid)" }}>
+            {reliabilityText}
+          </span>
+        </div>
+
+        <a
+          href={source.sourceUrl}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="tiny link"
+          style={{ fontWeight: 600, marginLeft: "auto" }}
+        >
+          Acessar fonte
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SourcesPage
 // ---------------------------------------------------------------------------
 
@@ -214,7 +359,7 @@ export function SourcesPage() {
   // como "descontinuado" nesses casos destrói a credibilidade do produto. Por
   // isso, sem dados, mantemos o status estático do catálogo ("operacional
   // frágil"), em vez de aplicar um override enganoso. As demais fontes mantêm o
-  // status estático — sem requisições extras.
+  // status estático ou os overrides declarados em STATUS_OVERRIDES acima.
   const [runtimeStatus, setRuntimeStatus] = useState<Record<string, SourceStatus>>({});
   const [checkLoading, setCheckLoading] = useState(true);
 
@@ -252,6 +397,33 @@ export function SourcesPage() {
         gap: 20,
       }}
     >
+      {/*
+        Scoped responsive styles for this page only.
+        - .sources-table-wrap: desktop = normal table; mobile = hidden (cards shown instead)
+        - .sources-cards-wrap: mobile = shown; desktop = hidden
+        Breakpoint 640px matches the point where a 5-column table gets cramped.
+      */}
+      <style>{`
+        .sources-table-wrap { display: block; }
+        .sources-cards-wrap { display: none; }
+        @media (max-width: 640px) {
+          .sources-table-wrap { display: none; }
+          .sources-cards-wrap { display: block; }
+        }
+        /* On narrow viewports where table is still shown (641px–768px),
+           ensure horizontal scroll is obvious with a fade hint. */
+        @media (min-width: 641px) and (max-width: 900px) {
+          .sources-table-scroll {
+            -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent 100%);
+            mask-image: linear-gradient(90deg, #000 80%, transparent 100%);
+          }
+        }
+        /* Last row in card list has no bottom border (panel clips it) */
+        .sources-card:last-child {
+          border-bottom: none;
+        }
+      `}</style>
+
       {/* ── Hero ─────────────────────────────────────── */}
       <div
         className="panel rise"
@@ -296,9 +468,10 @@ export function SourcesPage() {
               className="muted small"
               style={{ marginTop: 10, lineHeight: 1.65, maxWidth: 480 }}
             >
-              Hoje uma fonte oficial está conectada e alimentando a plataforma:
-              a Receita Federal (Sistema de Leilões Eletrônicos). Os demais órgãos
-              estão em integração. Cada número tem origem rastreável e auditável.
+              8 módulos com dados reais: leilões (Receita Federal), licitações/contratos
+              (PNCP), empresas (CNPJ), municípios (IBGE), política (Câmara dos Deputados),
+              ambiental (IBAMA), jurídico (CNJ DataJud) e marcas (INPI). Cada número tem
+              origem rastreável e auditável.
             </p>
           </div>
 
@@ -349,7 +522,7 @@ export function SourcesPage() {
         </div>
       </div>
 
-      {/* ── Tabela de fontes ─────────────────────────── */}
+      {/* ── Fontes cadastradas ────────────────────────── */}
       <div className="panel rise" style={{ overflow: "hidden" }}>
         {/* header bar */}
         <div
@@ -372,52 +545,70 @@ export function SourcesPage() {
           </span>
         </div>
 
-        {/* table */}
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontFamily: "inherit",
-            }}
-            aria-label="Catálogo de fontes públicas"
+        {/* ── DESKTOP: scrollable table ─────────────────── */}
+        <div className="sources-table-wrap">
+          <div
+            className="sources-table-scroll"
+            style={{ overflowX: "auto" }}
           >
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                {(
-                  ["Fonte / Órgão", "Status", "Módulos", "Confiabilidade", "Link oficial"] as const
-                ).map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: "11px 20px",
-                      textAlign: "left",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: "var(--t-low)",
-                      letterSpacing: "0.07em",
-                      textTransform: "uppercase",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontFamily: "inherit",
+              }}
+              aria-label="Catálogo de fontes públicas"
+            >
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  {(
+                    ["Fonte / Órgão", "Status", "Módulos", "Confiabilidade", "Link oficial"] as const
+                  ).map((h) => (
+                    <th
+                      key={h}
+                      style={{
+                        padding: "11px 20px",
+                        textAlign: "left",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--t-low)",
+                        letterSpacing: "0.07em",
+                        textTransform: "uppercase",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {CATALOG_WITH_OVERRIDES.map((source, i) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    index={i}
+                    isActive={source.id === activeSourceId}
+                    runtimeStatus={runtimeStatus[source.id]}
+                    checkLoading={checkLoading}
+                  />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {SOURCE_CATALOG.map((source, i) => (
-                <SourceRow
-                  key={source.id}
-                  source={source}
-                  index={i}
-                  isActive={source.id === activeSourceId}
-                  runtimeStatus={runtimeStatus[source.id]}
-                  checkLoading={checkLoading}
-                />
-              ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ── MOBILE: stacked cards ─────────────────────── */}
+        <div className="sources-cards-wrap" aria-label="Catálogo de fontes públicas">
+          {CATALOG_WITH_OVERRIDES.map((source) => (
+            <SourceCard
+              key={source.id}
+              source={source}
+              isActive={source.id === activeSourceId}
+              runtimeStatus={runtimeStatus[source.id]}
+              checkLoading={checkLoading}
+            />
+          ))}
         </div>
       </div>
 

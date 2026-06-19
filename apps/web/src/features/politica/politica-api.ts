@@ -3,9 +3,57 @@ import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
 
 export type PoliticaDataSource = "supabase" | "empty";
 
+// ─── Casa (house of the legislator) ─────────────────────────────────────────
+
+/** Casa legislativa derivada do sourceId ou do campo attributes.casa. */
+export type CasaLegislativa = "camara" | "senado" | "outro";
+
+function deriveCasa(sourceId: unknown, attrCasa: unknown): CasaLegislativa {
+  // Prefer an explicit attributes.casa written by the ingestor.
+  if (typeof attrCasa === "string") {
+    if (attrCasa === "camara") return "camara";
+    if (attrCasa === "senado") return "senado";
+  }
+  // Fall back to sourceId.
+  if (typeof sourceId === "string") {
+    if (sourceId === "camara-dados-abertos") return "camara";
+    if (sourceId === "senado-dados-abertos") return "senado";
+  }
+  return "outro";
+}
+
+// ─── Parlamentar (unified across houses) ─────────────────────────────────────
+
+/**
+ * Parlamentar normalizado — superset de CamaraDeputado.
+ *
+ * `CamaraDeputado` keeps all its original fields intact; we add `casa` and
+ * optional Senado-specific fields without removing anything, so callers that
+ * consume the old shape continue to work.
+ *
+ * NOTE: For Câmara rows `nome` is the parliamentary name; for Senado rows
+ * the ingestor stores NomeParlamentar in `nome` at the top-level of attributes.
+ */
+export interface Parlamentar extends CamaraDeputado {
+  /** Casa legislativa do mandato. */
+  casa: CasaLegislativa;
+  /** URL da página oficial no portal da casa (Senado usa urlPagina). */
+  urlPagina?: string | undefined;
+  /** Nome completo (Senado: NomeCompletoParlamentar). */
+  nomeCompleto?: string | undefined;
+}
+
+// ─── PoliticaLoadResult ───────────────────────────────────────────────────────
+
 export interface PoliticaLoadResult {
   source: PoliticaDataSource;
-  deputados: CamaraDeputado[];
+  /** Todos os parlamentares — Câmara + Senado (quando ingeridos). */
+  deputados: Parlamentar[];
+  /**
+   * @deprecated Use `deputados` instead. Kept for backwards-compat with
+   * existing callers that destructure `{ deputados }` as CamaraDeputado[].
+   * Contains the same array as `deputados`.
+   */
   message: string;
   lastSyncedAt?: string | undefined;
   errors?: string[] | undefined;
@@ -16,52 +64,131 @@ function toErrorMessage(error: unknown): string {
 }
 
 // Máximo de páginas por requisição — protege contra loop infinito.
-// Com pageSize=1000 e maxPages=2 buscamos até 2.000 deputados (são ~513).
-const MAX_SUPABASE_PAGES = 2;
+// Com pageSize=1000 e maxPages=3 buscamos até 3.000 parlamentares (Câmara
+// ~513 + Senado ~81 = ~594 no total quando ambas as ingestões tiverem rodado).
+const MAX_SUPABASE_PAGES = 3;
 
-async function fetchSupabaseDeputados(
+/**
+ * Normaliza qualquer linha de kind="politician" para Parlamentar.
+ *
+ * Câmara: attributes é CamaraDeputado { id, sourceId, nome, partido, uf, foto, email }.
+ * Senado: attributes é o payload do ingest-senado {
+ *   id, sourceId, nome, partido, uf, email, foto, urlPagina,
+ *   attributes: { casa, partido, uf, email, foto, ... }, raw
+ * }.
+ *
+ * Ambos têm nome/partido/uf/email/foto no topo de attributes, portanto a
+ * leitura é uniforme.
+ *
+ * NOTE: Senado depende de ingest-senado ter rodado. Se a ingestão ainda não
+ * ocorreu, apenas a Câmara aparece — isso é correto e esperado.
+ */
+function normalizePolitician(
+  attrs: Record<string, unknown>,
+  rowId: string,
+): Parlamentar {
+  const sourceId = attrs["sourceId"];
+  const attrNested = attrs["attributes"];
+  const attrCasa =
+    typeof attrNested === "object" && attrNested !== null
+      ? (attrNested as Record<string, unknown>)["casa"]
+      : undefined;
+
+  const casa = deriveCasa(sourceId, attrCasa);
+
+  // Common scalar fields — safe with exactOptionalPropertyTypes because we
+  // always produce a string (never leave as undefined for required fields).
+  const id = typeof attrs["id"] === "string" && attrs["id"] !== "" ? attrs["id"] : rowId;
+  const nome = typeof attrs["nome"] === "string" ? attrs["nome"] : "";
+  const partido = typeof attrs["partido"] === "string" ? attrs["partido"] : "";
+  const uf = typeof attrs["uf"] === "string" ? attrs["uf"] : "";
+  const foto = typeof attrs["foto"] === "string" ? attrs["foto"] : "";
+  const email = typeof attrs["email"] === "string" ? attrs["email"] : "";
+  const urlPagina =
+    typeof attrs["urlPagina"] === "string" && attrs["urlPagina"] !== ""
+      ? attrs["urlPagina"]
+      : undefined;
+  const nomeCompleto =
+    typeof attrs["nomeCompleto"] === "string" && attrs["nomeCompleto"] !== ""
+      ? attrs["nomeCompleto"]
+      : undefined;
+
+  return {
+    id,
+    sourceId: typeof sourceId === "string" ? sourceId : "",
+    nome,
+    partido,
+    uf,
+    foto,
+    email,
+    casa,
+    ...(urlPagina !== undefined ? { urlPagina } : {}),
+    ...(nomeCompleto !== undefined ? { nomeCompleto } : {}),
+  };
+}
+
+async function fetchAllParlamentares(
   fetcher: typeof fetch,
-): Promise<{ deputados: CamaraDeputado[]; lastSyncedAt?: string | undefined }> {
-  // kind = politician é a entidade de deputado/político (ENTITY_KINDS).
-  const { rows } = await fetchAllD1Entities<CamaraDeputado>(
+): Promise<{ parlamentares: Parlamentar[]; lastSyncedAt?: string | undefined }> {
+  // kind = politician abrange deputados (camara-dados-abertos) e senadores
+  // (senado-dados-abertos). Nenhum filtro de sourceId — aceitamos tudo.
+  const { rows } = await fetchAllD1Entities<Record<string, unknown>>(
     { kind: "politician" },
     { maxPages: MAX_SUPABASE_PAGES, fetcher },
   );
 
-  // Garante que só pegamos deputados da Câmara (entities mistura outras fontes).
-  const deputados = rows
-    .map((r) => r.attributes)
-    .filter((item) => item?.sourceId === "camara-dados-abertos");
+  const parlamentares = rows
+    .filter((r) => r.attributes != null)
+    .map((r) => normalizePolitician(r.attributes, r.id));
 
-  return { deputados, lastSyncedAt: firstUpdatedAt(rows) };
+  return { parlamentares, lastSyncedAt: firstUpdatedAt(rows) };
 }
 
+/**
+ * Carrega TODOS os parlamentares em exercício de TODAS as casas disponíveis
+ * no D1 (Câmara e Senado quando ingerido).
+ *
+ * Degrada graciosamente: se apenas a Câmara estiver disponível (Senado ainda
+ * não ingerido), retorna somente os deputados. Nunca fabrica senadores.
+ */
 export async function listDeputados(fetcher: typeof fetch = fetch): Promise<PoliticaLoadResult> {
   const errors: string[] = [];
 
   try {
-    const { deputados, lastSyncedAt } = await fetchSupabaseDeputados(fetcher);
+    const { parlamentares, lastSyncedAt } = await fetchAllParlamentares(fetcher);
 
-    if (deputados.length > 0) {
+    if (parlamentares.length > 0) {
+      const camaraCount = parlamentares.filter((p) => p.casa === "camara").length;
+      const senadoCount = parlamentares.filter((p) => p.casa === "senado").length;
+
+      const parts: string[] = [];
+      if (camaraCount > 0) parts.push(`${camaraCount} deputados`);
+      if (senadoCount > 0) parts.push(`${senadoCount} senadores`);
+
       return {
         source: "supabase",
-        deputados,
-        message: "Deputados em exercício carregados do Supabase público com dados da Câmara.",
+        deputados: parlamentares,
+        message:
+          parts.length > 0
+            ? `${parts.join(" e ")} em exercício carregados do D1.`
+            : "Parlamentares carregados do D1.",
         lastSyncedAt,
       };
     }
   } catch (error) {
-    errors.push(`Supabase: ${toErrorMessage(error)}`);
+    errors.push(`D1: ${toErrorMessage(error)}`);
   }
 
   return {
     source: "empty",
     deputados: [],
-    message: "Nenhum deputado disponível no momento. A coleta da Câmara roda periodicamente.",
+    message:
+      "Nenhum parlamentar disponível no momento. A coleta da Câmara e do Senado roda periodicamente.",
     errors,
   };
 }
 
+/** Alias mantido para compatibilidade com importadores existentes. */
 export const loadDeputados = listDeputados;
 
 // ─── parliamentary_expense ───────────────────────────────────────────────────
