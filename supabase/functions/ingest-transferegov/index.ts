@@ -13,18 +13,22 @@
 // Content-Range ("0-49/12345"). Nenhum token é necessário.
 //
 // Fluxo por execução (≤150s / Edge Function):
-//   1. Varre os módulos requisitados (padrão: faf,ted) em sequência.
-//   2. Para cada módulo, busca até maxPaginas páginas a partir de ?offset= cursor.
-//   3. Normaliza cada item: kind="public_contract", attributes JSON, sourceUrl.
+//   1. Processa UM módulo por vez, na ordem (padrão: faf, depois ted).
+//   2. Para o módulo corrente, busca até maxPaginas páginas a partir do offset
+//      do cursor; só avança para o próximo módulo quando o atual se esgota.
+//   3. Normaliza cada item: kind="federal_transfer" (atribuído pela RPC),
+//      attributes JSON, sourceUrl.
 //   4. Grava em lotes de RPC_BATCH via RPC public.ingest_transferegov (upsert por id).
-//   5. Retorna progresso parcial com nextCursor para retomada sem duplicação.
+//   5. Retorna progresso com nextCursor ("modulo:offset") para retomada sem
+//      duplicação NEM regressão (o cursor preserva o progresso por módulo).
 //
 // Idempotente: id = "<modulo>:<id_plano_acao>" — a RPC faz upsert por esse id,
 //   portanto rodar de novo na mesma janela não duplica.
 //
 // Secrets:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — injetados automaticamente pelo Supabase.
-//   INGEST_CRON_SECRET                       — opcional; se definido, exige Bearer correspondente.
+//   INGEST_CRON_SECRET                       — opcional; se definido, exige o header
+//                                              x-ingest-cron-secret (não o Authorization).
 //
 // Parâmetros de query (todos opcionais):
 //   ?modulos=faf,ted  — módulos a coletar (faf=Fundo a Fundo, ted=TED; default: faf,ted)
@@ -32,13 +36,14 @@
 //   ?maxPaginas=N     — teto de páginas por módulo (0 = todas; default 5)
 //   ?cursor=faf:200   — retoma a partir do offset indicado ("modulo:offset")
 //
-// Deploy: Edge Functions -> "ingest-transferegov". Verify JWT LIGADO
-//   (o cron/admin manda Authorization com o INGEST_CRON_SECRET, igual às outras).
+// Deploy: Edge Functions -> "ingest-transferegov" com verify_jwt = true (igual
+//   às demais ingest-*). O cron manda Authorization: Bearer <ANON_KEY>; o segredo
+//   OPCIONAL INGEST_CRON_SECRET viaja em header próprio (x-ingest-cron-secret).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry, sleep } from "../_shared/http.ts";
-import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { hasValidCronSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 import { extractCnpj, parseDateBrt } from "../_shared/br.ts";
 
@@ -340,10 +345,11 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
 
-  // Defense-in-depth: se INGEST_CRON_SECRET estiver definido, exige Bearer correspondente.
+  // Auth: o gateway valida o JWT (verify_jwt=true). Defense-in-depth opcional:
+  // se INGEST_CRON_SECRET estiver definido, exige o header x-ingest-cron-secret.
   const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
   if (cronSecret) {
-    if (!hasValidBearerSecret(req, cronSecret)) {
+    if (!hasValidCronSecret(req, cronSecret)) {
       return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
     }
   } else {
@@ -390,72 +396,76 @@ Deno.serve(async (req) => {
     let nextCursor: string | null = null;
     let processedPages = 0;
 
-    for (const modulo of modulos) {
-      // Calcula offset inicial a partir do cursor
-      let startOffset = 0;
-      if (cursorParam) {
-        const [cursorModulo, cursorOffset] = cursorParam.split(":");
-        if (cursorModulo === modulo && cursorOffset) {
-          startOffset = Number(cursorOffset) || 0;
-        }
-      }
+    // Cursor de retomada: "modulo:offset". Módulos ANTES do módulo do cursor já
+    // foram concluídos em execuções anteriores -> são pulados. O módulo do cursor
+    // recomeça em cursorOffset; módulos posteriores começam em 0. Assim NUNCA
+    // reiniciamos um módulo já avançado nem sobrescrevemos o progresso de outro.
+    let cursorModulo: string | null = null;
+    let cursorOffset = 0;
+    if (cursorParam) {
+      const [cm, co] = cursorParam.split(":");
+      if (cm) cursorModulo = cm.trim().toLowerCase();
+      cursorOffset = Math.max(0, Number(co) || 0);
+    }
+    let startModuloIdx = 0;
+    if (cursorModulo) {
+      const idx = modulos.indexOf(cursorModulo as Modulo);
+      if (idx >= 0) startModuloIdx = idx;
+    }
 
+    // maxPaginas é o ORÇAMENTO de páginas desta invocação (0 = ilimitado).
+    let budgetLeft = maxPaginas; // só decrementa quando maxPaginas > 0
+
+    // Processa um módulo por vez; só avança quando o atual se esgota.
+    outer:
+    for (let mi = startModuloIdx; mi < modulos.length; mi++) {
+      const modulo = modulos[mi]!;
       const baseUrl = modulo === "faf" ? BASE_FAF : BASE_TED;
       const endpoint = "plano_acao";
-      let offset = startOffset;
-      let paginasDesse = 0;
-      let totalKnown: number | null = null;
+      // Só o módulo do cursor recomeça no offset salvo; os demais começam em 0.
+      let offset = modulo === cursorModulo ? cursorOffset : 0;
 
       while (true) {
-        // Respeita o teto de páginas por módulo (0 = ilimitado)
-        if (maxPaginas > 0 && paginasDesse >= maxPaginas) {
-          // Há mais dados — registra nextCursor para retomada
+        // Orçamento de páginas esgotado: salva a posição EXATA e encerra.
+        if (maxPaginas > 0 && budgetLeft <= 0) {
           nextCursor = `${modulo}:${offset}`;
-          break;
+          break outer;
         }
 
         let page: PgRestPage;
         try {
           page = await fetchPage(baseUrl, endpoint, apiLimit, offset);
         } catch (e) {
+          // Falha persistente (após retries): salva a posição deste módulo para
+          // retomar daqui — não regride, não pula para outro módulo.
           errors.push({ modulo, offset, error: String(e) });
-          break; // Não insiste nesse módulo se a página falhou
-        }
-
-        if (totalKnown === null && page.total !== null) {
-          totalKnown = page.total;
+          nextCursor = `${modulo}:${offset}`;
+          break outer;
         }
 
         if (page.items.length === 0) {
-          // Dataset esgotado para este módulo
-          break;
+          break; // dataset do módulo esgotado -> próximo módulo (offset 0)
         }
 
         for (const raw of page.items) {
           try {
-            let item: TransferegovItem;
-            if (modulo === "faf") {
-              item = normalizeFaf(raw as RawPlanoAcaoFaf, collectedAt);
-            } else {
-              item = normalizeTed(raw as RawPlanoAcaoTed, collectedAt);
-            }
+            const item = modulo === "faf"
+              ? normalizeFaf(raw as RawPlanoAcaoFaf, collectedAt)
+              : normalizeTed(raw as RawPlanoAcaoTed, collectedAt);
             if (seen.has(item.id)) continue;
             seen.add(item.id);
             allItems.push(item);
           } catch (normErr) {
             // Registro mal formado — registra e continua
-            errors.push({
-              modulo,
-              offset,
-              error: `normalize: ${String(normErr)}`,
-            });
+            errors.push({ modulo, offset, error: `normalize: ${String(normErr)}` });
           }
         }
 
         processedPages += 1;
+        if (maxPaginas > 0) budgetLeft -= 1;
         offset += page.items.length;
 
-        // Se a página veio incompleta, chegamos ao fim do dataset
+        // Página incompleta = fim do dataset deste módulo.
         if (page.items.length < apiLimit) break;
 
         if (RATE_MS > 0) await sleep(RATE_MS);

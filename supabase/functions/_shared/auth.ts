@@ -37,6 +37,25 @@ export function hasValidBearerSecret(req: Request, secret: string): boolean {
 }
 
 /**
+ * Header dedicado para o segredo de cron das funcoes ingest-*.
+ *
+ * Por que NAO usar o Authorization: quando `verify_jwt = true` (padrao das
+ * ingest-*), o gateway do Supabase consome o header Authorization para validar
+ * um JWT real (o cron manda a anon key, igual as demais ingest-*). Se o segredo
+ * de cron fosse colocado no Authorization, o gateway o rejeitaria como JWT
+ * invalido (401) ANTES de a funcao rodar. Logo, o segredo opcional de
+ * defense-in-depth viaja em um header proprio que o gateway ignora.
+ */
+export const INGEST_CRON_SECRET_HEADER = "x-ingest-cron-secret";
+
+/** true se o header `x-ingest-cron-secret` bate com o segredo compartilhado. */
+export function hasValidCronSecret(req: Request, secret: string): boolean {
+  if (!secret) return false;
+  const provided = req.headers.get(INGEST_CRON_SECRET_HEADER) ?? "";
+  return provided.length > 0 && safeEqual(provided, secret);
+}
+
+/**
  * Decodifica o claim `sub` do JWT SEM verificar a assinatura.
  * APENAS para compor chave de rate-limit. NUNCA usar para autorizacao.
  */

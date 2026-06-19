@@ -4,16 +4,23 @@
 // Fonte pública, sem autenticação, suporta HTTP Range:
 //   https://dataserver-coids.inpe.br/queimadas/queimadas/focos/csv/mensal/Brasil/focos_mensal_br_YYYYMM.csv
 //
+// IMPORTANTE: o CSV mensal de meses de pico (estação seca) chega a ~400 MB
+// (ex.: 2024-09 ≈ 408 MB). NÃO cabe em uma única invocação de 150s, então a
+// janela por byte-offset é OBRIGATÓRIA e os totais de cada município precisam
+// ser ACUMULADOS entre janelas — nunca sobrescritos.
+//
 // Estratégia (aggregação por município, dentro do budget de 150s/Edge Function):
 //   1. Determina o mês-alvo via ?anoMes=YYYYMM (default: mês corrente).
 //   2. Faz Range-fetches de CHUNK_BYTES por vez até esgotar a janela máxima
 //      (DEFAULT_WINDOW_BYTES) ou o arquivo completo.
 //   3. Parseia o CSV (comma-separated, UTF-8) linha a linha.
-//   4. Agrega por municipio_id: conta focos, soma FRP, captura bioma dominante,
-//      estado, max risco_fogo, max numero_dias_sem_chuva.
+//   4. Agrega por municipio_id NESTA janela: conta focos, soma FRP (+contagem),
+//      histograma de biomas, estado, max risco_fogo, max numero_dias_sem_chuva.
 //   5. Grava como entities (kind="environmental_alert") via RPC
-//      public.ingest_inpe_queimadas — um registro por município/mês.
-//      id = "queimadas:<municipio_id>:<anoMes>" — upsert idempotente.
+//      public.ingest_inpe_queimadas — um registro por município/mês. A RPC faz
+//      MERGE ADITIVO por id, somando os parciais desta janela aos das anteriores
+//      (totalFocos, frpSum, frpCount, biomas) e recalculando frpMedio/bioma
+//      dominante. id = "queimadas:<municipio_id>:<anoMes>".
 //
 // CSV schema (comma-delimited, linha 1 = header):
 //   id, lat, lon, data_hora_gmt, satelite, municipio, estado, pais,
@@ -29,22 +36,28 @@
 //
 // Cursor de retomada: se o arquivo exceder a janela, a resposta inclui:
 //   { nextCursor: "YYYYMM:<byteOffset>" }
-// O chamador passa ?anoMes=YYYYMM&offset=<byteOffset> na próxima chamada.
+// O chamador passa ?anoMes=YYYYMM&offset=<byteOffset> na próxima chamada. O
+// byteOffset aponta para o INÍCIO da linha incompleta da janela (rewind pelo
+// tamanho do leftover), de modo que nenhuma linha-fronteira seja perdida nem
+// quebrada entre janelas.
 //
-// Idempotência: id = "queimadas:<municipio_id>:<anoMes>" — a RPC faz upsert por
-//   esse id, portanto reprocessar o mesmo mês/janela não duplica registros.
+// Idempotência: cada item carrega `windowKey` (= byte-offset inicial da janela).
+//   A RPC registra as janelas já mescladas por município e IGNORA janelas
+//   repetidas. Logo, reprocessar a mesma janela não duplica nem inflaciona os
+//   totais — o merge aditivo continua idempotente.
 //
 // Degradação elegante: falha de rede/parse -> { ok:false, error:... } com 502.
 //   Nunca retorna 200 com erro escondido.
 //
 // Secrets:
 //   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY — injetados pelo Supabase.
-//   INGEST_CRON_SECRET — opcional; se definido, exige Bearer correspondente.
+//   INGEST_CRON_SECRET — opcional; se definido, exige o header
+//     x-ingest-cron-secret (NÃO o Authorization, que carrega o JWT do gateway).
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithTimeout } from "../_shared/http.ts";
-import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { hasValidCronSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 // ── Constantes ──────────────────────────────────────────────────────────────
@@ -70,11 +83,14 @@ interface MunicipioAggregate {
   municipio: string;        // nome do município
   estado: string;           // nome do estado por extenso
   uf: string;               // sigla derivada dos 2 primeiros dígitos do estado_id
-  bioma: string;            // bioma dominante (maior contagem)
-  totalFocos: number;       // quantidade de focos detectados no mês
-  frpTotal: number;         // soma do Fire Radiative Power (FRP) em MW
-  frpMedio: number;         // média do FRP
-  maxRiscoFogo: number;     // maior valor de risco_fogo no mês (0–1)
+  // Parciais BRUTOS desta janela. O bioma dominante, o frpTotal e o frpMedio
+  // NÃO são calculados aqui: a RPC soma os parciais entre janelas e só então
+  // deriva esses valores (senão a média/dominância sairiam erradas por janela).
+  biomas: Record<string, number>; // histograma bioma -> contagem (nesta janela)
+  totalFocos: number;       // focos detectados nesta janela
+  frpSum: number;           // soma bruta do Fire Radiative Power (FRP) em MW
+  frpCount: number;         // nº de focos com frp > 0 (para a média ponderada)
+  maxRiscoFogo: number;     // maior valor de risco_fogo nesta janela (0–1)
   maxDiasSemChuva: number;  // máximo de numero_dias_sem_chuva
   anoMes: string;           // "YYYYMM"
   sourceUrl: string;        // URL do CSV mensal
@@ -297,27 +313,15 @@ function finalizeAggregates(
 ): MunicipioAggregate[] {
   const out: MunicipioAggregate[] = [];
   for (const [municipioId, acc] of accum) {
-    // Bioma dominante: maior contagem
-    let biomaDominante = "Não informado";
-    let biomaMax = 0;
-    for (const [b, cnt] of Object.entries(acc.biomas)) {
-      if (cnt > biomaMax) {
-        biomaMax = cnt;
-        biomaDominante = b;
-      }
-    }
-
     out.push({
       municipioId,
       municipio: acc.municipio || "Não informado",
       estado: acc.estado || "Não informado",
       uf: acc.uf,
-      bioma: biomaDominante,
+      biomas: acc.biomas,
       totalFocos: acc.totalFocos,
-      frpTotal: Math.round(acc.frpSum * 10) / 10,
-      frpMedio: acc.frpCount > 0
-        ? Math.round((acc.frpSum / acc.frpCount) * 10) / 10
-        : 0,
+      frpSum: Math.round(acc.frpSum * 1000) / 1000,
+      frpCount: acc.frpCount,
       maxRiscoFogo: Math.round(acc.maxRiscoFogo * 1000) / 1000,
       maxDiasSemChuva: acc.maxDiasSemChuva,
       anoMes,
@@ -343,17 +347,20 @@ interface RpcItem {
   municipio: string;
   estado: string;
   uf: string;
-  bioma: string;
+  // Parciais brutos desta janela — a RPC soma e deriva bioma/frpTotal/frpMedio.
   totalFocos: number;
-  frpTotal: number;
-  frpMedio: number;
+  frpSum: number;
+  frpCount: number;
   maxRiscoFogo: number;
   maxDiasSemChuva: number;
+  biomas: Record<string, number>;
+  // Identidade da janela (= byte-offset inicial). A RPC ignora janelas repetidas.
+  windowKey: string;
   sourceUrl: string;
   collectedAt: string;
 }
 
-function toRpcItem(agg: MunicipioAggregate): RpcItem {
+function toRpcItem(agg: MunicipioAggregate, windowKey: string): RpcItem {
   return {
     // id idempotente: fonte:municipio_id:anoMes
     id: `queimadas:${agg.municipioId}:${agg.anoMes}`,
@@ -366,12 +373,13 @@ function toRpcItem(agg: MunicipioAggregate): RpcItem {
     municipio: agg.municipio,
     estado: agg.estado,
     uf: agg.uf,
-    bioma: agg.bioma,
     totalFocos: agg.totalFocos,
-    frpTotal: agg.frpTotal,
-    frpMedio: agg.frpMedio,
+    frpSum: agg.frpSum,
+    frpCount: agg.frpCount,
     maxRiscoFogo: agg.maxRiscoFogo,
     maxDiasSemChuva: agg.maxDiasSemChuva,
+    biomas: agg.biomas,
+    windowKey,
     sourceUrl: agg.sourceUrl,
     collectedAt: agg.collectedAt,
   };
@@ -383,10 +391,11 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
 
-  // Auth gate: se INGEST_CRON_SECRET definido, exige Bearer correspondente.
+  // Auth: o gateway valida o JWT (verify_jwt=true). Defense-in-depth opcional:
+  // se INGEST_CRON_SECRET definido, exige o header x-ingest-cron-secret.
   const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
   if (cronSecret) {
-    if (!hasValidBearerSecret(req, cronSecret)) {
+    if (!hasValidCronSecret(req, cronSecret)) {
       return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
     }
   } else {
@@ -409,9 +418,12 @@ Deno.serve(async (req) => {
     0,
     Number(reqUrl.searchParams.get("offset") ?? "") || 0,
   );
+  // limit = teto de municípios persistidos (0 = todos). Default 0: para "todos
+  // do Brasil" precisamos de TODOS os municípios — truncar perderia focos dos
+  // municípios fora do corte e deixaria o merge entre janelas incompleto.
   const limit = Math.max(
     0,
-    Number(reqUrl.searchParams.get("limit") ?? "") || RPC_BATCH,
+    Number(reqUrl.searchParams.get("limit") ?? "") || 0,
   );
 
   const fileUrl = csvFileUrl(anoMes);
@@ -506,8 +518,17 @@ Deno.serve(async (req) => {
     // Finaliza os agregados
     const aggregates = finalizeAggregates(accum, anoMes, fileUrl, collectedAt, limit);
 
-    // Calcula nextCursor para retomada (só se o arquivo não foi esgotado)
-    const nextCursor = fileExhausted ? null : `${anoMes}:${bytePos}`;
+    // Calcula nextCursor para retomada (só se o arquivo não foi esgotado).
+    // Recua o offset para o INÍCIO da linha incompleta (tamanho do leftover em
+    // bytes UTF-8): assim a linha-fronteira é lida inteira na próxima janela, sem
+    // ser perdida nem quebrada. O fallback garante progresso (offset > startOffset).
+    let nextCursor: string | null = null;
+    if (!fileExhausted) {
+      const leftoverBytes = new TextEncoder().encode(leftover).length;
+      const rewound = bytePos - leftoverBytes;
+      const resumeOffset = rewound > startOffset ? rewound : bytePos;
+      nextCursor = `${anoMes}:${resumeOffset}`;
+    }
 
     // Persiste em lotes via RPC
     const supabase = createClient(
@@ -518,8 +539,12 @@ Deno.serve(async (req) => {
     let ingested = 0;
     const rpcErrors: string[] = [];
 
+    // Identidade desta janela (= byte-offset inicial). A RPC usa isto para
+    // mesclar parciais entre janelas SEM dupla-contagem ao reprocessar.
+    const windowKey = String(startOffset);
+
     for (let i = 0; i < aggregates.length; i += RPC_BATCH) {
-      const batch = aggregates.slice(i, i + RPC_BATCH).map(toRpcItem);
+      const batch = aggregates.slice(i, i + RPC_BATCH).map((a) => toRpcItem(a, windowKey));
       const { data, error } = await supabase.rpc("ingest_inpe_queimadas", {
         p_payload: { collectedAt, items: batch },
       });
@@ -544,9 +569,9 @@ Deno.serve(async (req) => {
       id: `queimadas:${a.municipioId}:${a.anoMes}`,
       municipio: a.municipio,
       uf: a.uf,
-      bioma: a.bioma,
       totalFocos: a.totalFocos,
-      frpMedio: a.frpMedio,
+      frpSum: a.frpSum,
+      frpCount: a.frpCount,
       maxRiscoFogo: a.maxRiscoFogo,
     }));
 

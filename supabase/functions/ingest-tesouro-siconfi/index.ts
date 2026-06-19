@@ -33,13 +33,16 @@
 //   ?esfera=M|E|U          Filtra esfera: M=municipal, E=estadual, U=federal.
 //   ?uf=SP                 Filtra por UF (sigla, 2 letras).
 //
-// Deploy: Supabase Edge Functions. Verify JWT pode ficar LIGADO; o invocador
-// manda Authorization: Bearer <INGEST_CRON_SECRET>.
+// Deploy: Supabase Edge Functions com verify_jwt = true (igual às demais
+//   ingest-*). O cron invoca com Authorization: Bearer <ANON_KEY> — o gateway
+//   valida o JWT. O segredo OPCIONAL de defense-in-depth (INGEST_CRON_SECRET)
+//   viaja em header próprio (x-ingest-cron-secret), NUNCA no Authorization.
 //
 // Invocação manual (curl):
 //   curl -X GET \
 //     "https://<project>.supabase.co/functions/v1/ingest-tesouro-siconfi?exercicio=2023&uf=SP&limit=20" \
-//     -H "Authorization: Bearer $INGEST_CRON_SECRET"
+//     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+//     -H "x-ingest-cron-secret: $INGEST_CRON_SECRET"   # opcional, se definido
 //
 // Retorno JSON:
 //   { ok, exercicio, uf, esfera, cursor, limit, processed, errors, nextCursor, sample }
@@ -47,7 +50,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry } from "../_shared/http.ts";
-import { hasValidBearerSecret } from "../_shared/auth.ts";
+import { hasValidCronSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
 
 // ── Constantes ───────────────────────────────────────────────────────────────
@@ -234,10 +237,12 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
 
-  // Auth gate idêntico às outras ingest-* (ingest-municipios, ingest-ambiental).
+  // Auth: o gateway já valida o JWT (verify_jwt=true). Se INGEST_CRON_SECRET
+  // estiver definido, exige também o header dedicado x-ingest-cron-secret
+  // (defense-in-depth que NÃO colide com o JWT do Authorization).
   const cronSecret = Deno.env.get("INGEST_CRON_SECRET");
   if (cronSecret) {
-    if (!hasValidBearerSecret(req, cronSecret)) {
+    if (!hasValidCronSecret(req, cronSecret)) {
       return jsonResponse({ ok: false, error: "Unauthorized" }, { status: 401 }, req);
     }
   } else {

@@ -10,15 +10,19 @@ import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 // ingested data confirmed in production (CLAUDE.md § Estado real, 2026-06).
 //
 // Sources with real data in the platform:
-//   leilões        → receita-leiloes-sle  (already fragile_operational / runtime overrides to connected)
-//   licitações     → pncp-consulta        (already connected in catalog)
-//   empresas       → compras-gov-dados-abertos (already connected)
-//   política/câmara → camara-dados-abertos → connected  ← FLIPPED (deputados, CEAP, votações ingeridos)
-//   jurídico        → cnj-datajud         → connected  ← FLIPPED (DataJud ingerido)
-//   INPI            → inpi-dados-abertos  → connected  ← FLIPPED (29.5k marcas RPI ingeridas)
-//   ambiental       → ibama-dados-abertos → connected  ← FLIPPED (IBAMA ambiental ingerido)
+//   leilões        → receita-leiloes-sle        (already fragile_operational / runtime overrides to connected)
+//   licitações     → pncp-consulta              (already connected in catalog)
+//   empresas       → compras-gov-dados-abertos  (already connected in catalog)
+//   política/câmara → camara-dados-abertos      → connected  ← FLIPPED (deputados, CEAP, votações ingeridos)
+//   jurídico        → cnj-datajud               → connected  ← FLIPPED (DataJud ingerido)
+//   INPI            → inpi-dados-abertos        → connected  ← FLIPPED (29.5k marcas RPI ingeridas)
+//   ambiental       → ibama-dados-abertos       → connected  ← FLIPPED (IBAMA ambiental ingerido)
+//   sanções         → portal-transparencia-api  → connected  ← FLIPPED (2.492 sanções CEIS/CNEP no D1)
+//   transferências  → transferegov-dados-abertos → connected ← FLIPPED (400 transferências federais no D1)
+//   queimadas       → inpe-queimadas            → connected  ← FLIPPED (focos de incêndio por município no D1)
+//   fiscal          → tesouro-siconfi           → connected  ← FLIPPED (Siconfi — ingestão em ativação)
 //   municípios/IBGE não têm entrada própria no catálogo ainda; outros (Senado,
-//   INPE, TSE, ANA, Tesouro, DOU) NÃO têm dados ingeridos — permanecem como estão.
+//   TSE, ANA, INPE TerraBrasilis, DOU, BNDES, CKAN) NÃO têm dados ingeridos — permanecem como estão.
 // ---------------------------------------------------------------------------
 
 const STATUS_OVERRIDES: Partial<Record<string, SourceStatus>> = {
@@ -26,6 +30,10 @@ const STATUS_OVERRIDES: Partial<Record<string, SourceStatus>> = {
   "cnj-datajud": "connected",
   "inpi-dados-abertos": "connected",
   "ibama-dados-abertos": "connected",
+  "portal-transparencia-api": "connected",
+  "transferegov-dados-abertos": "connected",
+  "inpe-queimadas": "connected",
+  "tesouro-siconfi": "connected",
 };
 
 // ---------------------------------------------------------------------------
@@ -54,7 +62,7 @@ const SOURCE_PURPOSE: Record<string, string> = {
 
   // ── Em integração — roadmap honesto ──────────────────────────────────────
   "portal-transparencia-api":
-    "Quando integrado: gastos federais por CNPJ e CPF, sanções (CEIS/CNEP) e benefícios pagos — fonte essencial para 'siga o dinheiro'.",
+    "Alimenta Sanções — 2.492 registros do CEIS e CNEP (empresas e pessoas físicas inidôneas para contratar com o governo federal), cruzáveis por CNPJ.",
   "senado-dados-abertos":
     "Quando integrado: votações, matérias em tramitação e autores de projetos de lei no Senado Federal.",
   "tse-dados-abertos":
@@ -62,15 +70,15 @@ const SOURCE_PURPOSE: Record<string, string> = {
   "inpe-terrabrasilis":
     "Quando integrado: desmatamento anual (PRODES) e alertas de corte raso (DETER) por município e bioma.",
   "inpe-queimadas":
-    "Quando integrado: focos de fogo e risco de incêndio por município, com atualização próxima de tempo real.",
+    "Alimenta Ambiental — focos de incêndio por município indexados no D1, com coordenada, bioma e data de detecção.",
   "mapbiomas-alerta":
     "Fonte complementar: alertas de desmatamento com validação por satélite — usada para enriquecer o módulo Ambiental.",
   "ana-hidrowebservice":
     "Quando integrado: dados hidrológicos oficiais (chuva, nível de rios) — relevante para municípios em zona de risco hídrico.",
   "tesouro-siconfi":
-    "Quando integrado: balanço fiscal e contábil de estados e municípios, com série histórica de receitas e despesas.",
+    "Alimenta Municípios — balanço fiscal e contábil de estados e municípios via Siconfi; ingestão em ativação, dados em breve disponíveis.",
   "transferegov-dados-abertos":
-    "Quando integrado: convênios, repasses federais e execução de obras por município — complementa o módulo Municípios.",
+    "Alimenta Municípios — 400 transferências federais (convênios e repasses) indexadas no D1, consultáveis por município beneficiário.",
   "bndes-dados-abertos":
     "Quando integrado: financiamentos do BNDES por empresa e setor, com valores e prazo de carência.",
   "dados-gov-br-ckan":
