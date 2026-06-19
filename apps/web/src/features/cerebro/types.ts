@@ -31,7 +31,10 @@ export type GraphKind =
   // ── Novos kinds (ingeridos em paralelo — degradam sem quebrar quando vazios) ──
   | "parliamentary_expense" // despesas/cota parlamentar (CEAP) — "siga o dinheiro"
   | "legislative_vote" // votações nominais da Câmara
-  | "company"; // enriquecimento BrasilAPI por CNPJ (CNAE, QSA, capital…)
+  | "company" // enriquecimento BrasilAPI por CNPJ (CNAE, QSA, capital…)
+  | "environmental_alert"  // focos de incêndio INPE (queimadas por município)
+  | "fiscal_report"        // relatório fiscal SICONFI/Tesouro Nacional
+  | "federal_transfer";    // transferências federais Transferegov
 
 /**
  * Tipo lógico de um nó no grafo. `entity` é o nó central (empresa/pessoa).
@@ -236,6 +239,24 @@ export const MODULE_META: Record<NodeKind, ModuleMeta> = {
     color: "#2DD4BF", // teal (enriquecimento cadastral — família empresas)
     fonte: "BrasilAPI — Cadastro CNPJ (espelho Receita Federal)",
   },
+  environmental_alert: {
+    kind: "environmental_alert",
+    label: "Alerta de queimada (INPE)",
+    color: "#F97316", // laranja fogo — família de risco/alerta
+    fonte: "INPE — Programa de Queimadas",
+  },
+  fiscal_report: {
+    kind: "fiscal_report",
+    label: "Relatório fiscal (SICONFI)",
+    color: "#6366F1", // índigo — finanças públicas
+    fonte: "Tesouro Nacional — SICONFI (DCA)",
+  },
+  federal_transfer: {
+    kind: "federal_transfer",
+    label: "Transferência federal",
+    color: "#10B981", // esmeralda — repasse de recursos
+    fonte: "Ministério da Fazenda — Transferegov",
+  },
   person: {
     kind: "person",
     label: "Pessoa / sócio (QSA)",
@@ -255,6 +276,9 @@ export const LEGEND_ORDER: NodeKind[] = [
   "parliamentary_expense",
   "legal_process",
   "environmental_infraction",
+  "environmental_alert",
+  "fiscal_report",
+  "federal_transfer",
   "trademark",
   "organization",
   "municipality",
