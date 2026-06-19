@@ -66,6 +66,18 @@ verify_jwt = true
 [functions.ingest-tce-sp]
 verify_jwt = true
 
+# Coletores cron-only: verify_jwt=true (o gateway valida o JWT — o cron manda a
+# anon key, igual às demais ingest-*). O segredo OPCIONAL INGEST_CRON_SECRET, se
+# definido, é verificado DENTRO da função via header x-ingest-cron-secret.
+[functions.ingest-tesouro-siconfi]
+verify_jwt = true
+
+[functions.ingest-transferegov]
+verify_jwt = true
+
+[functions.ingest-inpe-queimadas]
+verify_jwt = true
+
 # Proxy InfoSimples (agregador PAGO). verify_jwt=false: a autorizacao e feita
 # DENTRO da funcao (apikey publishable + sessao verificada + plano pago), igual
 # a "fonteia"/"empresas-cnpj". O gateway nao deve rejeitar o token de sessao.
