@@ -114,9 +114,9 @@ const FAQ_SECOES: FaqData[] = [
             A Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Reunimos
             registros de fontes oficiais do governo — Receita Federal, PNCP, CNJ, IBAMA, Câmara,
             Senado, Portal Transparência, IBGE — em um painel único, organizado e rastreável. São
-            ~170 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051
-            licitações, 280 processos, 1.592 sanções e mais. A IA nunca inventa — cada dado tem
-            link direto à fonte oficial.
+            ~217 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051
+            licitações, 29.500 marcas INPI, 1.592 sanções, 280 processos e mais. A IA nunca
+            inventa — cada dado tem link direto à fonte oficial.
           </>
         ),
       },
@@ -244,6 +244,21 @@ const FAQ_SECOES: FaqData[] = [
     secao: "Módulos Licitações, Empresas e Jurídico",
     itens: [
       {
+        pergunta: "O que é o PNCP e como a Fonte.ia usa os dados dele?",
+        resposta: (
+          <>
+            O PNCP (Portal Nacional de Contratações Públicas) é o repositório oficial de licitações
+            e contratos públicos criado pela Lei 14.133/2021 (Nova Lei de Licitações). Órgãos
+            federais, estaduais e municipais são obrigados a publicar licitações e contratos ali.
+            A Fonte.ia indexa os dados do PNCP e disponibiliza 153.945 contratos e 1.051
+            licitações, cada um com link direto à publicação original.{" "}
+            <a href="https://pncp.gov.br/" target="_blank" rel="noopener noreferrer" className="link">
+              Fonte oficial: pncp.gov.br
+            </a>
+          </>
+        ),
+      },
+      {
         pergunta: "O módulo de licitações cobre quais órgãos?",
         resposta: (
           <>
@@ -252,6 +267,21 @@ const FAQ_SECOES: FaqData[] = [
             e 1.051 licitações disponíveis. Editais de órgãos que não publicam no PNCP ainda não
             são cobertos — verificamos as fontes disponíveis e informamos a cobertura de cada
             pesquisa.
+          </>
+        ),
+      },
+      {
+        pergunta: "Como consultar o CNPJ de uma empresa na Fonte.ia?",
+        resposta: (
+          <>
+            O módulo Empresas permite buscar um CNPJ e ver situação cadastral, sócios,
+            administradores, endereço, atividade principal e data de abertura — dados da Receita
+            Federal via CNPJ.ws. Além disso, o módulo Sanções cruza o mesmo CNPJ com as listas do
+            Portal da Transparência (CEIS, CNEP, CEPIM) e o módulo Licitações mostra o histórico de
+            contratos públicos. São 461 empresas indexadas hoje, com crescimento diário.{" "}
+            <a href="https://portaldatransparencia.gov.br/sancoes" target="_blank" rel="noopener noreferrer" className="link">
+              Sanções: Portal da Transparência (CGU)
+            </a>
           </>
         ),
       },
@@ -267,13 +297,62 @@ const FAQ_SECOES: FaqData[] = [
         ),
       },
       {
+        pergunta: "Quais sanções uma empresa pode ter e como verificar?",
+        resposta: (
+          <>
+            A Controladoria-Geral da União (CGU) mantém três listas públicas: (1) CEIS — Cadastro
+            de Empresas Inidôneas e Suspensas: impede contratação com o poder público; (2) CNEP —
+            Cadastro Nacional de Empresas Punidas: empresas punidas por ato lesivo à administração
+            pública (Lei Anticorrupção); (3) CEPIM — Cadastro de Entidades Privadas Sem Fins
+            Lucrativos Impedidas. A Fonte.ia indexa as três listas (1.592 registros) e exibe para
+            cada CNPJ consultado o status e o link à publicação original no Portal da Transparência.{" "}
+            <a href="https://portaldatransparencia.gov.br/sancoes" target="_blank" rel="noopener noreferrer" className="link">
+              Fonte oficial: portaldatransparencia.gov.br/sancoes
+            </a>
+          </>
+        ),
+      },
+      {
         pergunta: "O módulo Jurídico cobre todo o Judiciário?",
         resposta: (
           <>
-            Indexamos 280 processos do CNJ que são públicos e acessíveis via API. Processos em
-            segredo de Justiça ou de sistemas estaduais sem integração com o DataJud do CNJ não são
-            cobertos. Indicamos claramente a cobertura e o link ao tribunal original em cada
-            processo exibido.
+            Indexamos 280 processos do CNJ que são públicos e acessíveis via API do DataJud.
+            Processos em segredo de Justiça ou de sistemas estaduais sem integração com o DataJud
+            não são cobertos. Indicamos claramente a cobertura e o link ao tribunal original em
+            cada processo exibido.{" "}
+            <a href="https://www.cnj.jus.br/sistemas/datajud/" target="_blank" rel="noopener noreferrer" className="link">
+              Fonte oficial: CNJ DataJud
+            </a>
+          </>
+        ),
+      },
+      {
+        pergunta: "A Fonte.ia tem dados de marcas registradas no INPI?",
+        resposta: (
+          <>
+            Sim. O módulo INPI indexa 29.500 marcas da Revista da Propriedade Industrial (RPI),
+            publicada semanalmente pelo Instituto Nacional da Propriedade Industrial. É possível
+            buscar por nome de marca, titular ou CNPJ e ver o status do registro (deferido,
+            indeferido, em análise), a classe NCL e a data de publicação. Cada resultado linka ao
+            número do processo no INPI.{" "}
+            <a href="https://www.gov.br/inpi/" target="_blank" rel="noopener noreferrer" className="link">
+              Fonte oficial: gov.br/inpi
+            </a>
+          </>
+        ),
+      },
+      {
+        pergunta: "O módulo Política mostra os dados de votações dos parlamentares?",
+        resposta: (
+          <>
+            Sim. A Fonte.ia usa a API de Dados Abertos da Câmara dos Deputados para indexar os 513
+            deputados federais e 81 senadores, suas votações em proposições, despesas da CEAP (Cota
+            para o Exercício da Atividade Parlamentar) e os fornecedores que receberam verba da
+            cota. São mais de 4.000 proposições indexadas. Cada dado tem link à fonte da Câmara ou
+            do Senado.{" "}
+            <a href="https://dadosabertos.camara.leg.br/" target="_blank" rel="noopener noreferrer" className="link">
+              Fonte oficial: dadosabertos.camara.leg.br
+            </a>
           </>
         ),
       },
@@ -316,7 +395,7 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "O que é a Fonte.ia e o que ela faz?",
     answer:
-      "A Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Reunimos registros de fontes oficiais do governo — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal Transparência, IBGE — em um painel único, organizado e rastreável. São ~170 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051 licitações, 280 processos, 1.592 sanções e mais. A IA nunca inventa — cada dado tem link direto à fonte oficial.",
+      "A Fonte.ia é uma plataforma SaaS brasileira de inteligência de dados públicos. Reunimos registros de fontes oficiais do governo — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal Transparência, IBGE, INPI — em um painel único, organizado e rastreável. São ~217 mil registros disponíveis: 1.065 lotes de leilão, 153.945 contratos, 1.051 licitações, 280 processos, 1.592 sanções, 29.500 marcas INPI e mais. A IA nunca inventa — cada dado tem link direto à fonte oficial.",
   },
   {
     question: "Quanto custa a Fonte.ia? Existe plano gratuito?",
@@ -336,7 +415,7 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
   {
     question: "De onde vêm os dados da Fonte.ia?",
     answer:
-      "De fontes oficiais do governo brasileiro, acessadas via APIs públicas e portais de dados abertos: Receita Federal (SLE – leilões), PNCP (licitações e contratos), CNJ (processos judiciais), IBAMA (autos ambientais), Câmara e Senado Federal (proposições e parlamentares), Portal da Transparência (sanções), CNPJ.ws (dados de empresas), IBGE (municípios). Todos os dados são públicos por força da Lei de Acesso à Informação (12.527/2011).",
+      "De fontes oficiais do governo brasileiro, acessadas via APIs públicas e portais de dados abertos: Receita Federal (SLE – leilões), PNCP (licitações e contratos), CNJ/DataJud (processos judiciais), IBAMA (autos ambientais), Câmara e Senado Federal (proposições e parlamentares), Portal da Transparência/CGU (sanções), CNPJ.ws (dados de empresas), IBGE (municípios), INPI/RPI (marcas). Todos os dados são públicos por força da Lei de Acesso à Informação (12.527/2011).",
   },
   {
     question: "Como garantem que os dados são corretos e atualizados?",
@@ -364,9 +443,19 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
       "Os leilões são realizados por leiloeiros oficiais habilitados pela Receita Federal, com editais publicados no SLE oficial. O risco está nas características do bem: vendido \"no estado em que se encontra\", sem garantia de funcionamento e sem direito de devolução. Cuidado com sites não oficiais que simulam leilões da Receita — acesse sempre pelo SLE oficial. A Fonte.ia só exibe dados do SLE e linka ao edital original.",
   },
   {
+    question: "O que é o PNCP e como a Fonte.ia usa os dados dele?",
+    answer:
+      "O PNCP (Portal Nacional de Contratações Públicas) é o repositório oficial de licitações e contratos públicos criado pela Lei 14.133/2021 (Nova Lei de Licitações). A Fonte.ia indexa os dados do PNCP e disponibiliza 153.945 contratos e 1.051 licitações, cada um com link direto à publicação original em pncp.gov.br.",
+  },
+  {
     question: "O módulo de licitações cobre quais órgãos?",
     answer:
       "Indexamos os dados do PNCP (Portal Nacional de Contratações Públicas), que agrega licitações e contratos de órgãos federais, estaduais e municipais. São 153.945 contratos e 1.051 licitações disponíveis. Editais de órgãos que não publicam no PNCP ainda não são cobertos — verificamos as fontes disponíveis e informamos a cobertura de cada pesquisa.",
+  },
+  {
+    question: "Como consultar o CNPJ de uma empresa na Fonte.ia?",
+    answer:
+      "O módulo Empresas permite buscar um CNPJ e ver situação cadastral, sócios, administradores, endereço, atividade principal e data de abertura — dados da Receita Federal via CNPJ.ws. Além disso, o módulo Sanções cruza o mesmo CNPJ com as listas do Portal da Transparência (CEIS, CNEP, CEPIM) e o módulo Licitações mostra o histórico de contratos públicos. São 461 empresas indexadas hoje, com crescimento diário.",
   },
   {
     question: "Posso usar a Fonte.ia para fazer due diligence de fornecedores?",
@@ -374,9 +463,24 @@ const FAQ_JSON_LD_ITEMS: ReadonlyArray<{ question: string; answer: string }> = [
       "Sim. O módulo Empresas (461 registros, via CNPJ.ws) e o módulo Sanções (1.592 registros do Portal Transparência — CEIS, CNEP, CEPIM) permitem verificar se um CNPJ tem sanções e seu histórico de contratos públicos. Cada dado tem link à fonte oficial para uso em relatórios auditáveis.",
   },
   {
+    question: "Quais sanções uma empresa pode ter e como verificar?",
+    answer:
+      "A CGU mantém três listas públicas: CEIS (empresas inidôneas e suspensas), CNEP (empresas punidas pela Lei Anticorrupção) e CEPIM (entidades privadas sem fins lucrativos impedidas). A Fonte.ia indexa as três listas (1.592 registros) e exibe para cada CNPJ consultado o status e o link à publicação original no Portal da Transparência (portaldatransparencia.gov.br/sancoes).",
+  },
+  {
     question: "O módulo Jurídico cobre todo o Judiciário?",
     answer:
-      "Indexamos 280 processos do CNJ que são públicos e acessíveis via API. Processos em segredo de Justiça ou de sistemas estaduais sem integração com o DataJud do CNJ não são cobertos. Indicamos claramente a cobertura e o link ao tribunal original em cada processo exibido.",
+      "Indexamos 280 processos do CNJ que são públicos e acessíveis via API do DataJud (cnj.jus.br/sistemas/datajud). Processos em segredo de Justiça ou de sistemas estaduais sem integração com o DataJud não são cobertos. Indicamos claramente a cobertura e o link ao tribunal original em cada processo exibido.",
+  },
+  {
+    question: "A Fonte.ia tem dados de marcas registradas no INPI?",
+    answer:
+      "Sim. O módulo INPI indexa 29.500 marcas da Revista da Propriedade Industrial (RPI), publicada semanalmente pelo Instituto Nacional da Propriedade Industrial. É possível buscar por nome de marca, titular ou CNPJ e ver o status do registro (deferido, indeferido, em análise), a classe NCL e a data de publicação. Cada resultado linka ao número do processo no INPI (gov.br/inpi).",
+  },
+  {
+    question: "O módulo Política mostra os dados de votações dos parlamentares?",
+    answer:
+      "Sim. A Fonte.ia usa a API de Dados Abertos da Câmara dos Deputados (dadosabertos.camara.leg.br) para indexar os 513 deputados federais e 81 senadores, suas votações em proposições, despesas da CEAP (Cota para o Exercício da Atividade Parlamentar) e os fornecedores que receberam verba da cota. São mais de 4.000 proposições indexadas. Cada dado tem link à fonte da Câmara ou do Senado.",
   },
   {
     question: "Posso cancelar quando quiser? Tem fidelidade?",
@@ -522,7 +626,7 @@ export function FaqPage() {
           {/* Herói */}
           <header style={{ marginBottom: "40px" }}>
             <span className="eyebrow" style={{ display: "block", marginBottom: "14px" }}>
-              15 perguntas · respostas diretas · 2026
+              20 perguntas · respostas diretas · 2026
             </span>
 
             <h1
@@ -599,7 +703,7 @@ export function FaqPage() {
                 marginBottom: "10px",
               }}
             >
-              ~170 mil registros de dados públicos, organizados para você decidir com clareza
+              ~217 mil registros de dados públicos oficiais, organizados para você decidir com clareza
             </p>
             <p
               style={{

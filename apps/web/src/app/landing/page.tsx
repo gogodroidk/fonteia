@@ -388,19 +388,27 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
   const FAQ_ITEMS = [
     {
       q: "O que é a Fonte.ia?",
-      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne cerca de 170 mil registros oficiais de 8 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções e jurídico — em uma busca única, com cada dado rastreável à fonte. O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
+      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne ~217 mil registros oficiais de 8 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções e jurídico — em uma busca única, com cada dado rastreável à fonte (link + data de coleta). O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
     },
     {
       q: "Quais fontes e áreas já estão ativas?",
-      a: "Todas as 8 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência (1.592), empresas por CNPJ (461 organizações, em crescimento) e jurídico do CNJ/DataJud (280 processos, em crescimento).",
+      a: "Todas as 8 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência/CGU (1.592), empresas por CNPJ (461, crescendo) e jurídico do CNJ/DataJud (280 processos). Mais o módulo INPI com 29.500 marcas.",
     },
     {
       q: "Os dados são confiáveis? De onde vêm?",
-      a: "Cada dado exibido vem direto da fonte oficial, com a URL e a data de coleta registradas para você conferir na origem. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
+      a: "Cada dado exibido vem direto da fonte oficial — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal da Transparência, IBGE ou INPI — com a URL e a data de coleta registradas. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
     },
     {
       q: "Como funciona o score dos leilões?",
       a: "O score (0–100) é específico do módulo de leilões e é calculado por regras fixas a partir dos dados publicados na fonte: quem pode participar (PF/PJ), prazo disponível para análise, acessibilidade do valor mínimo e se o lote tem imagem. É apoio de decisão calculado por regra — não é opinião de IA nem análise humana, e não substitui a leitura do edital.",
+    },
+    {
+      q: "Como verifico se uma empresa tem sanções ou está impedida de contratar?",
+      a: "No módulo Sanções, você busca pelo CNPJ e a Fonte.ia cruza com as três listas da CGU: CEIS (empresas inidôneas e suspensas), CNEP (punidas pela Lei Anticorrupção) e CEPIM (entidades sem fins lucrativos impedidas). São 1.592 registros indexados. Cada resultado tem link à publicação original no Portal da Transparência (portaldatransparencia.gov.br/sancoes).",
+    },
+    {
+      q: "O que é o PNCP e por que ele importa?",
+      a: "O PNCP (Portal Nacional de Contratações Públicas) é o repositório oficial de licitações e contratos públicos criado pela Nova Lei de Licitações (Lei 14.133/2021). Órgãos federais, estaduais e municipais publicam obrigatoriamente ali. A Fonte.ia indexa 153.945 contratos e 1.051 licitações do PNCP, com link direto a cada publicação original.",
     },
     {
       q: "Preciso saber de tecnologia para usar?",
@@ -610,7 +618,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Inteligência de dados públicos · 8 fontes oficiais ao vivo
+                  Inteligência de dados públicos · ~217 mil registros · 8 fontes oficiais ao vivo
                 </span>
               </div>
             </Reveal>
@@ -647,11 +655,11 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   maxWidth: 520,
                 }}
               >
-                A Fonte.ia reúne cerca de 170 mil registros oficiais de 8 áreas — leilões,
-                licitações, empresas, municípios, política, ambiental, sanções e jurídico — em
-                uma busca única, com{" "}
-                <strong style={{ color: "var(--t-hi)" }}>cada dado vinculado à fonte (link e data) e IA que nunca inventa</strong>.{" "}
-                Comece pelos leilões da Receita, nosso módulo mais maduro.
+                A Fonte.ia reúne ~217 mil registros oficiais de 9 áreas — leilões, licitações,
+                empresas, municípios, política, ambiental, sanções, jurídico e INPI — em uma
+                busca única, com{" "}
+                <strong style={{ color: "var(--t-hi)" }}>cada dado vinculado à fonte oficial (link + data) e IA que nunca inventa</strong>.{" "}
+                Comece pelos leilões da Receita Federal, nosso módulo mais maduro.
               </p>
             </Reveal>
 
@@ -1081,6 +1089,199 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 </div>
                 );
               })}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── PERGUNTAS QUE A FONTE.IA RESPONDE (AEO block) ─────────────── */}
+      <section
+        style={{
+          padding: "72px 24px",
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg)",
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <Reveal style={{ textAlign: "center", marginBottom: 44 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>Respostas com fonte oficial</div>
+            <h2
+              className="display"
+              style={{ fontSize: "clamp(26px,3.2vw,40px)", lineHeight: 1.1, margin: 0 }}
+            >
+              Perguntas que a Fonte.ia responde
+            </h2>
+            <p
+              className="muted"
+              style={{ fontSize: 15, marginTop: 14, maxWidth: 540, margin: "14px auto 0" }}
+            >
+              Cada resposta cita a fonte oficial com link e data de coleta. A IA nunca inventa —
+              quando a evidência falta, diz "evidência insuficiente".
+            </p>
+          </Reveal>
+
+          <Reveal delay={0.05}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: 14,
+              }}
+            >
+              {(
+                [
+                  {
+                    fonte: "Receita Federal",
+                    perguntas: [
+                      "Quais lotes da Receita Federal estão abertos agora?",
+                      "Quem pode participar deste lote — pessoa física ou jurídica?",
+                      "Qual o lance mínimo e o prazo de encerramento?",
+                      "Quais são os custos além do lance (DARF, comissão, transporte)?",
+                    ],
+                  },
+                  {
+                    fonte: "PNCP · Portal Nacional de Contratações",
+                    perguntas: [
+                      "Quais contratos o governo firmou com determinado CNPJ?",
+                      "Quais licitações estão abertas em determinada área?",
+                      "O que é o PNCP e quais órgãos publicam licitações nele?",
+                      "Uma empresa tem histórico de contratos públicos?",
+                    ],
+                  },
+                  {
+                    fonte: "Portal da Transparência · CGU",
+                    perguntas: [
+                      "Um CNPJ está impedido de contratar com o governo federal?",
+                      "A empresa consta no CEIS, CNEP ou CEPIM?",
+                      "Quais sanções uma empresa tem por atos de corrupção?",
+                    ],
+                  },
+                  {
+                    fonte: "INPI · Marcas",
+                    perguntas: [
+                      "Uma marca está registrada no INPI?",
+                      "Quais marcas estão em nome de determinado CNPJ?",
+                      "Qual o status e a classe NCL de um registro de marca?",
+                    ],
+                  },
+                  {
+                    fonte: "Câmara · Senado",
+                    perguntas: [
+                      "Como votou determinado deputado em uma proposição?",
+                      "Quais fornecedores receberam verba da cota parlamentar (CEAP)?",
+                      "Quais são as despesas de um parlamentar nos últimos meses?",
+                    ],
+                  },
+                  {
+                    fonte: "IBAMA · CNJ · IBGE",
+                    perguntas: [
+                      "Uma empresa tem autos de infração ambiental pelo IBAMA?",
+                      "Um CNPJ é parte em processos judiciais públicos (CNJ/DataJud)?",
+                      "Quais são os indicadores socioeconômicos de um município?",
+                    ],
+                  },
+                ] as const
+              ).map((grupo) => (
+                <div
+                  key={grupo.fonte}
+                  className="card card--pad"
+                  style={{ padding: "20px 22px" }}
+                >
+                  <div
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      color: "var(--accent-ink)",
+                      marginBottom: 14,
+                    }}
+                  >
+                    {grupo.fonte}
+                  </div>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      padding: 0,
+                      margin: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    {grupo.perguntas.map((p) => (
+                      <li
+                        key={p}
+                        style={{
+                          display: "flex",
+                          gap: 9,
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            marginTop: 3,
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            background: "color-mix(in srgb,var(--accent) 18%,var(--surface-2))",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          aria-hidden="true"
+                        >
+                          <span
+                            style={{
+                              display: "block",
+                              width: 5,
+                              height: 5,
+                              borderRadius: "50%",
+                              background: "var(--accent-ink)",
+                            }}
+                          />
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 13.5,
+                            lineHeight: 1.5,
+                            color: "var(--t-mid)",
+                            fontWeight: 500,
+                          }}
+                        >
+                          {p}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div
+              style={{
+                marginTop: 28,
+                padding: "14px 22px",
+                borderRadius: "var(--r-lg)",
+                background: "color-mix(in srgb,var(--brand) 7%,var(--surface))",
+                border: "1px solid color-mix(in srgb,var(--brand) 18%,var(--border))",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                flexWrap: "wrap",
+              }}
+            >
+              <ShieldCheck size={18} style={{ color: "var(--accent-ink)", flexShrink: 0 }} aria-hidden="true" />
+              <p style={{ margin: 0, fontSize: 13.5, color: "var(--t-mid)", lineHeight: 1.6 }}>
+                <strong style={{ color: "var(--t-hi)" }}>Garantia de rastreabilidade:</strong>{" "}
+                cada resposta inclui a URL da fonte oficial e a data de coleta. A Fonte.ia nunca
+                publica dado sem evidência — quando falta, diz explicitamente "evidência
+                insuficiente". Fontes: Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, CGU, IBGE, INPI.
+              </p>
             </div>
           </Reveal>
         </div>

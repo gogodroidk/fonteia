@@ -6,3 +6,4 @@ export * from "./intent";
 export * from "./answer-engine";
 export * from "./citations";
 export * from "./prompts";
+export * from "./retrieval";

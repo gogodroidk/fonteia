@@ -11,6 +11,16 @@
 
 import { hasValidApiKey, getVerifiedUserId } from "../_shared/auth.ts";
 import { fetchWithTimeout, fetchWithRetry } from "../_shared/http.ts";
+// Recuperação híbrida (RRF) + reranking heurístico + extração de fonte citável.
+// Funções PURAS espelhadas de packages/ai/src/retrieval.ts (a edge não importa o
+// pacote workspace por ser deployada isolada). keywordSearch chama a edge d1-bridge.
+import {
+  buildRetrievalContextBlock,
+  hybridRank,
+  keywordSearch,
+  type RankedList,
+  type RetrievalCandidate,
+} from "./_rag.ts";
 
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
@@ -158,6 +168,25 @@ const FONTEIA_SYSTEM_PROMPT = [
   "**Como usar no seu negócio** — orientação prática para o perfil de comprador.",
   "**Próximos passos** — ações concretas que o usuário pode executar agora.",
   "**Fontes** — cite cada fonte usada.",
+].join("\n");
+
+// Reforço de citação anexado ao CHAT_SYSTEM_PROMPT QUANDO há contexto recuperado
+// (entidades reais do acervo). Garante o valor cardinal do produto: toda afirmação
+// baseada no acervo CITA a fonte, e sem evidência a IA diz "evidência insuficiente".
+const CHAT_CITATION_REINFORCEMENT = [
+  "",
+  "CONTEXTO RECUPERADO DO ACERVO:",
+  "- Abaixo seguem entidades reais encontradas no acervo da Fonte.ia, cada uma numerada e com sua fonte oficial (quando disponível).",
+  "- Ao usar qualquer informação desse contexto, CITE a entidade pelo nome e, quando houver, a URL da fonte oficial.",
+  "- Se o contexto recuperado NÃO contiver a resposta, diga claramente 'evidência insuficiente no acervo' e oriente onde verificar na fonte oficial. NUNCA invente para preencher a lacuna.",
+].join("\n");
+
+// Quando a recuperação volta VAZIA (nenhuma entidade), instruímos honestidade
+// explícita: não fabricar. Mantém o guardrail mesmo sem material citável.
+const CHAT_NO_EVIDENCE_REINFORCEMENT = [
+  "",
+  "Não foram encontradas entidades no acervo para esta pergunta.",
+  "Se a pergunta exigir um dado específico do acervo, responda 'evidência insuficiente no acervo' e oriente o usuário a refinar a busca ou verificar na fonte oficial. NUNCA invente dados.",
 ].join("\n");
 
 interface GeminiPart {
@@ -518,6 +547,67 @@ async function matchEntities(
   return (await res.json()) as MatchRow[];
 }
 
+/* ─── Recuperação para o CHAT (melhora a citação, aditivo e best-effort) ──────
+ * Usa a última mensagem do usuário como query, roda a MESMA recuperação híbrida
+ * do /ai/search (vetor + keyword → RRF → rerank) e devolve um bloco de contexto
+ * CITÁVEL (entidades reais + fonte/data). É 100% tolerante a falha: qualquer erro
+ * ⇒ devolve null e o chat segue EXATAMENTE como antes (sem contexto). Nunca lança.
+ * Retorna:
+ *   - { block, found:true }  quando há entidades (injeta contexto + reforço de citação)
+ *   - { block:"", found:false } quando a busca rodou mas veio vazia (reforço de honestidade)
+ *   - null quando a recuperação não pôde rodar (sem query/sem chave) ⇒ chat inalterado. */
+const CHAT_RETRIEVAL_POOL = 24; // candidatos por lado antes da fusão
+const CHAT_CONTEXT_ITEMS = 6; // entidades citáveis injetadas no prompt
+const CHAT_CONTEXT_CHARS = 1800; // teto do bloco (proteção de janela/custo)
+
+async function retrieveChatContext(
+  apiKey: string,
+  query: string,
+): Promise<{ block: string; found: boolean } | null> {
+  const q = query.trim();
+  if (q.length < 3) return null; // saudação/ruído não dispara recuperação
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  try {
+    // Vetor (principal) e keyword (complemento) em paralelo; ambos best-effort aqui.
+    const [vectorRes, keywordRows] = await Promise.allSettled([
+      (async () => {
+        const embedding = await embedQuery(apiKey, q.slice(0, 2000));
+        return await matchEntities(embedding, null, CHAT_RETRIEVAL_POOL);
+      })(),
+      keywordSearch(supabaseUrl, PUBLISHABLE_KEY, q, null, CHAT_RETRIEVAL_POOL),
+    ]);
+
+    const vectorRows: RetrievalCandidate[] =
+      vectorRes.status === "fulfilled" ? (vectorRes.value as RetrievalCandidate[]) : [];
+    const keyword: RetrievalCandidate[] =
+      keywordRows.status === "fulfilled" ? keywordRows.value : [];
+
+    // Se ambos os lados falharam, não pudemos recuperar nada → chat inalterado.
+    if (vectorRes.status === "rejected" && keywordRows.status === "rejected") {
+      console.warn("[fonteia] chat retrieval: ambos os lados falharam (chat segue sem contexto)");
+      return null;
+    }
+
+    const lists: RankedList[] = [
+      { source: "vector", items: vectorRows, weight: 1.0 },
+      { source: "keyword", items: keyword, weight: 0.9 },
+    ];
+    const ranked = hybridRank(lists, q, CHAT_CONTEXT_ITEMS);
+    if (ranked.length === 0) return { block: "", found: false };
+
+    const block = buildRetrievalContextBlock(ranked, {
+      maxItems: CHAT_CONTEXT_ITEMS,
+      maxChars: CHAT_CONTEXT_CHARS,
+    });
+    return block.length > 0 ? { block, found: true } : { block: "", found: false };
+  } catch (e) {
+    // Defesa final: nunca derruba o chat por causa da recuperação.
+    console.warn("[fonteia] chat retrieval falhou (chat segue sem contexto):", String(e));
+    return null;
+  }
+}
+
 /* ─── Rate limit por usuário autenticado (ou IP como fallback) ───────────────
  * Janela fixa de RATE_WINDOW_SECONDS, RATE_LIMIT_PER_WINDOW hits por chave.
  * Chave = "user:{sub}" quando há JWT de sessão válido, "ip:{ip}" caso contrário.
@@ -666,14 +756,56 @@ Deno.serve(async (request: Request): Promise<Response> => {
       );
     }
 
+    // RECUPERAÇÃO HÍBRIDA (aditiva, mesma forma de resposta):
+    //   1) lado VETORIAL (pgvector / match_entities) — semântica/sinônimos.
+    //   2) lado KEYWORD (d1-bridge name LIKE) — CNPJ/nome próprio/número exato.
+    //   3) fusão RRF + reranking heurístico → corte no `limit`.
+    // Over-fetch (CANDIDATE_POOL) em cada lado para a fusão ter material; o corte
+    // final é DEPOIS do reranking. Degradação graciosa: se o keyword falhar (ou o
+    // d1-bridge não estiver configurado), ele devolve [] e cai para o vetor puro —
+    // exatamente o comportamento atual. Se o vetor falhar, mantemos o 502 de antes.
+    const CANDIDATE_POOL = Math.min(Math.max(limit * 3, 20), 50);
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+
+    let vectorRows: MatchRow[];
     try {
       const embedding = await embedQuery(apiKey, query.slice(0, 2000));
-      const results = await matchEntities(embedding, kind, limit);
-      return json({ query, kind, count: results.length, results, model: EMBED_MODEL });
+      vectorRows = await matchEntities(embedding, kind, CANDIDATE_POOL);
     } catch (error) {
-      console.error("[fonteia] ai/search:", String(error));
+      // A busca semântica é o caminho principal: se ela cai, mantemos o 502 honesto.
+      console.error("[fonteia] ai/search vetor:", String(error));
       return json({ error: "Falha na busca semantica." }, 502);
     }
+
+    // Lado keyword (best-effort, nunca derruba a rota).
+    const keywordRows: RetrievalCandidate[] = await keywordSearch(
+      supabaseUrl,
+      PUBLISHABLE_KEY,
+      query,
+      kind,
+      CANDIDATE_POOL,
+    );
+
+    const lists: RankedList[] = [
+      // Peso 1.0 no vetor (semântica) e 0.9 no keyword: o léxico é desempate forte,
+      // mas a semântica lidera quando ambos discordam.
+      { source: "vector", items: vectorRows as RetrievalCandidate[], weight: 1.0 },
+      { source: "keyword", items: keywordRows, weight: 0.9 },
+    ];
+
+    // Funde + reranqueia + corta no limite. Mapeia de volta para a MESMA forma
+    // pública { id, kind, name, attributes, score } — `score` é o cosine do vetor
+    // (0 quando o item só veio do keyword), preservando o contrato existente.
+    const ranked = hybridRank(lists, query, limit);
+    const results: MatchRow[] = ranked.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      name: r.name,
+      attributes: r.attributes,
+      score: typeof r.score === "number" ? r.score : 0,
+    }));
+
+    return json({ query, kind, count: results.length, results, model: EMBED_MODEL });
   }
 
   // Assistente geral: chat contextual (ContextChat / useAIChat → /ai/chat).
@@ -702,7 +834,39 @@ Deno.serve(async (request: Request): Promise<Response> => {
     if (contents.length === 0) {
       return json({ error: "Nenhuma mensagem valida em 'messages'." }, 400);
     }
-    // Contexto da tela vira a primeira mensagem (role user), antes do histórico.
+
+    // RECUPERAÇÃO PARA CITAR (aditivo, best-effort): usa a ÚLTIMA mensagem do
+    // usuário como query, busca entidades reais no acervo (vetor + keyword) e
+    // injeta um bloco CITÁVEL no prompt. Se a recuperação não puder rodar, o chat
+    // segue EXATAMENTE como antes. A forma de resposta { answer, model } não muda.
+    const lastUserText = [...contents].reverse().find((c) => c.role === "user")?.parts[0]?.text ?? "";
+    const retrieved = await retrieveChatContext(apiKey, lastUserText);
+
+    // Escolhe a instrução de sistema: base + reforço conforme o resultado da busca.
+    let systemPrompt = CHAT_SYSTEM_PROMPT;
+    if (retrieved?.found) {
+      systemPrompt = CHAT_SYSTEM_PROMPT + "\n" + CHAT_CITATION_REINFORCEMENT;
+    } else if (retrieved && !retrieved.found) {
+      systemPrompt = CHAT_SYSTEM_PROMPT + "\n" + CHAT_NO_EVIDENCE_REINFORCEMENT;
+    }
+
+    // Prepend (na ordem): contexto da tela → bloco recuperado citável → histórico.
+    // Ambos entram como turnos "user" ANTES do histórico, dentro do cap (capContents
+    // mantém o fim da conversa; por isso prependemos o material auxiliar primeiro).
+    if (retrieved?.found && retrieved.block) {
+      contents.unshift({
+        role: "user",
+        parts: [
+          {
+            text:
+              "Entidades reais encontradas no acervo da Fonte.ia (use e CITE pelo nome/fonte; " +
+              "se não responderem à pergunta, diga 'evidência insuficiente no acervo'):\n" +
+              retrieved.block,
+          },
+        ],
+      });
+    }
+    // Contexto da tela vira a primeira mensagem (role user), antes de tudo.
     const ctx = asStringOrNull(parsed.context);
     if (ctx) {
       contents.unshift({
@@ -713,7 +877,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
     contents = capContents(contents, CHAT_INPUT_CAP);
 
     try {
-      const result = await generateWithGemini(apiKey, CHAT_SYSTEM_PROMPT, contents, {
+      const result = await generateWithGemini(apiKey, systemPrompt, contents, {
         temperature: 0.4,
         maxOutputTokens: 1024,
       });

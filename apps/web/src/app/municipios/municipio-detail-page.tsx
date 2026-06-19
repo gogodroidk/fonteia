@@ -1,6 +1,9 @@
 import { ChevronLeft, ExternalLink, Gavel, MapPin } from "lucide-react";
 import { FonteDots } from "../../components/ui";
 import type { MunicipioWithStats } from "../../features/municipios/municipios-api";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,9 +59,33 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+function buildMunicipioReport(municipio: MunicipioWithStats, ibgeUrl: string): SavedReport {
+  const fields: SavedReport["fields"] = [
+    { label: "Código IBGE", value: municipio.codigoIbge },
+    ...(municipio.uf || municipio.ufNome
+      ? [{ label: "UF", value: [municipio.uf, municipio.ufNome].filter(Boolean).join(" — ") }]
+      : []),
+    ...(municipio.regiao ? [{ label: "Região", value: municipio.regiao }] : []),
+    ...(municipio.mesorregiao ? [{ label: "Mesorregião", value: municipio.mesorregiao }] : []),
+    ...(municipio.microrregiao ? [{ label: "Microrregião", value: municipio.microrregiao }] : []),
+    { label: "Licitações registradas", value: String(municipio.licitacoesCount) },
+  ];
+  return {
+    id: `municipio:${municipio.codigoIbge}`,
+    kind: "municipio",
+    kindLabel: "Município",
+    title: municipio.nome,
+    subtitle: municipio.uf ? `${municipio.uf}${municipio.ufNome ? ` — ${municipio.ufNome}` : ""}` : undefined,
+    fields,
+    sources: [{ label: "IBGE — Localidades", url: ibgeUrl }],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function MunicipioDetailPage({ municipio, onBack }: MunicipioDetailPageProps) {
   const ibgeUrl = buildIbgeUrl(municipio.uf, municipio.nome);
   const temLicitacoes = municipio.licitacoesCount > 0;
+  const report = buildMunicipioReport(municipio, ibgeUrl);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 800 }}>
@@ -101,6 +128,18 @@ export function MunicipioDetailPage({ municipio, onBack }: MunicipioDetailPagePr
             {municipio.regiao}
           </div>
         )}
+
+        {/* Ações */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+          <CreateAlertButton
+            kind="municipio"
+            entityRef={municipio.codigoIbge}
+            entityLabel={`${municipio.nome}/${municipio.uf}`}
+            size="sm"
+            variant="soft"
+          />
+          <ReportButton report={report} />
+        </div>
       </div>
 
       {/* Identificação */}
