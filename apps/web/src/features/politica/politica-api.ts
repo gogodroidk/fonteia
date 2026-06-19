@@ -277,6 +277,13 @@ export type VotacaoAttributes = {
 
 export type VotacaoItem = {
   id: string;
+  /**
+   * ID numérico da votação na API da Câmara dos Deputados.
+   * Extraído de `external_ids.votacaoId` (escrito pelo ingestor) ou inferido
+   * do `row.id` quando este for numérico. Usado para montar o link oficial:
+   * `https://www.camara.leg.br/votacoes/{votacaoId}`
+   */
+  votacaoId?: string | undefined;
   attributes: VotacaoAttributes;
 };
 
@@ -296,7 +303,22 @@ export async function listVotacoes(fetcher: typeof fetch = fetch): Promise<Votac
       { maxPages: 5, fetcher },
     );
 
-    const votacoes: VotacaoItem[] = rows.map((r) => ({ id: r.id, attributes: r.attributes }));
+    const votacoes: VotacaoItem[] = rows.map((r) => {
+      // Tenta extrair o ID numérico da votação para compor o link oficial.
+      // O ingestor escreve `external_ids.votacaoId`; se ausente, usamos o
+      // próprio `r.id` quando for numérico (alguns ingestors gravam o id da
+      // Câmara como primary key do D1 row).
+      const extId = r.external_ids["votacaoId"];
+      const votacaoId: string | undefined =
+        typeof extId === "string" && extId !== ""
+          ? extId
+          : typeof extId === "number"
+            ? String(extId)
+            : /^\d+$/.test(r.id)
+              ? r.id
+              : undefined;
+      return { id: r.id, votacaoId, attributes: r.attributes };
+    });
 
     if (votacoes.length > 0) {
       return {

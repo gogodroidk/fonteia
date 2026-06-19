@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Landmark,
   Loader2,
@@ -9,6 +12,7 @@ import {
   User,
   Vote,
   X,
+  XCircle,
 } from "lucide-react";
 import type { CasaLegislativa, Parlamentar } from "../../features/politica/politica-api";
 import {
@@ -509,98 +513,334 @@ function SenadoEmptyState() {
   );
 }
 
+// ─── Votacao helpers ──────────────────────────────────────────────────────────
+
+/** Expande siglas de órgão conhecidas para leitura humana. */
+function expandOrgao(sigla: string): string {
+  const MAP: Record<string, string> = {
+    PLEN: "Plenário",
+    CLN: "Plenário (CLN)",
+    MESA: "Mesa Diretora",
+  };
+  return MAP[sigla] ?? sigla;
+}
+
+/**
+ * Constrói o link oficial à página da votação na Câmara.
+ * Prefere `votacaoId` extraído de `external_ids`; cai para a proposição se
+ * disponível; último recurso: página geral de votações.
+ */
+function votacaoUrl(votacao: VotacaoItem): string {
+  if (votacao.votacaoId) {
+    return `https://www.camara.leg.br/votacoes/${votacao.votacaoId}`;
+  }
+  const prop = votacao.attributes.proposicao;
+  if (prop?.id) {
+    return `https://www.camara.leg.br/propostas-legislativas/${prop.id}`;
+  }
+  return "https://www.camara.leg.br/votacoes";
+}
+
+// ─── VotacaoCard skeleton (taller to match new card height) ──────────────────
+
+function SkeletonVotacaoCard() {
+  return (
+    <div className="card card--pad" aria-hidden="true" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="skeleton" style={{ height: 20, width: "38%", borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 20, width: "16%", borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 20, width: "22%", borderRadius: 99 }} />
+      </div>
+      <div className="skeleton" style={{ height: 13, width: "90%" }} />
+      <div className="skeleton" style={{ height: 13, width: "70%" }} />
+      <div className="skeleton" style={{ height: 8, width: "100%", borderRadius: 99 }} />
+      <div style={{ display: "flex", gap: 16 }}>
+        <div className="skeleton" style={{ height: 12, width: "18%" }} />
+        <div className="skeleton" style={{ height: 12, width: "18%" }} />
+        <div className="skeleton" style={{ height: 12, width: "18%" }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Votacao card ─────────────────────────────────────────────────────────────
 
+const EMENTA_CLAMP = 3; // lines visible when collapsed
+
 function VotacaoCard({ votacao }: { votacao: VotacaoItem }) {
+  const [expanded, setExpanded] = useState(false);
+
   const { data, siglaOrgao, aprovacao, placarSim, placarNao, placarAbstencoes, proposicao } =
     votacao.attributes;
 
-  const siglaLabel =
-    proposicao?.sigla && proposicao?.numero && proposicao?.ano
-      ? `${proposicao.sigla} ${proposicao.numero}/${proposicao.ano}`
-      : null;
+  // Build proposition title: "PL 1234/2025" or partial fallbacks
+  const hasSigla = proposicao?.sigla != null && proposicao.sigla !== "";
+  const hasNumero = proposicao?.numero != null;
+  const hasAno = proposicao?.ano != null;
+
+  let propTitle: string;
+  if (hasSigla && hasNumero && hasAno) {
+    propTitle = `${proposicao!.sigla} ${proposicao!.numero}/${proposicao!.ano}`;
+  } else if (hasSigla && hasNumero) {
+    propTitle = `${proposicao!.sigla} ${proposicao!.numero}`;
+  } else if (hasSigla) {
+    propTitle = proposicao!.sigla!;
+  } else {
+    propTitle = "Votação da Câmara";
+  }
+
+  const ementa = proposicao?.ementa ?? null;
+  const ementaLong = ementa !== null && ementa.length > 200;
+
+  // Vote bar proportions
+  const total = placarSim + placarNao + placarAbstencoes;
+  const pctSim = total > 0 ? (placarSim / total) * 100 : 0;
+  const pctNao = total > 0 ? (placarNao / total) * 100 : 0;
+  const pctAbs = total > 0 ? (placarAbstencoes / total) * 100 : 0;
+
+  const orgaoLabel = siglaOrgao ? expandOrgao(siglaOrgao) : null;
+  const link = votacaoUrl(votacao);
+
+  const approvedColor = "var(--ok, #16a34a)";
+  const rejectedColor = "var(--danger, #dc2626)";
+  const absColor = "var(--t-low)";
+
+  const resultColor = aprovacao ? approvedColor : rejectedColor;
+  const resultLabel = aprovacao ? "Aprovada" : "Rejeitada";
 
   return (
-    <article className="card card--hover" style={{ display: "flex", flexDirection: "column" }}>
+    <article
+      className="card"
+      style={{ display: "flex", flexDirection: "column" }}
+      aria-label={`${propTitle} — ${resultLabel}`}
+    >
       <div
         style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}
       >
-        {/* Top row: data + órgão + resultado */}
-        <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <span className="tiny muted" style={{ fontVariantNumeric: "tabular-nums" }}>
-            {formatDateShort(data)}
+        {/* ── Title: proposição code ── */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+          <span
+            style={{
+              fontWeight: 800,
+              fontSize: 15,
+              color: "var(--t-hi)",
+              lineHeight: 1.2,
+              flex: "1 1 0",
+              minWidth: 0,
+            }}
+          >
+            {propTitle}
           </span>
-          {siglaOrgao && (
-            <span className="badge badge--neutral" style={{ fontWeight: 700 }}>
-              {siglaOrgao}
-            </span>
-          )}
+          {/* Resultado badge — anchored right */}
           <span
             className="badge"
             style={{
               fontWeight: 700,
-              background: aprovacao
-                ? "color-mix(in srgb, #16a34a 14%, var(--surface))"
-                : "color-mix(in srgb, #dc2626 14%, var(--surface))",
-              color: aprovacao ? "#16a34a" : "#dc2626",
-              border: `1px solid ${aprovacao ? "color-mix(in srgb, #16a34a 30%, transparent)" : "color-mix(in srgb, #dc2626 30%, transparent)"}`,
+              fontSize: 11,
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: `color-mix(in srgb, ${resultColor} 13%, var(--surface))`,
+              color: resultColor,
+              border: `1px solid color-mix(in srgb, ${resultColor} 30%, transparent)`,
             }}
           >
-            {aprovacao ? "Aprovada" : "Rejeitada"}
+            {aprovacao ? (
+              <CheckCircle2 size={12} aria-hidden="true" />
+            ) : (
+              <XCircle size={12} aria-hidden="true" />
+            )}
+            {resultLabel}
           </span>
         </div>
 
-        {/* Proposição */}
-        {proposicao?.ementa && (
+        {/* ── Ementa ── */}
+        {ementa !== null ? (
           <div>
-            {siglaLabel && (
-              <span
-                style={{ fontWeight: 700, fontSize: 13, color: "var(--t-hi)", marginRight: 6 }}
+            <p
+              style={{
+                margin: 0,
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: "var(--t-mid)",
+                ...(expanded || !ementaLong
+                  ? {}
+                  : {
+                      display: "-webkit-box",
+                      WebkitLineClamp: EMENTA_CLAMP,
+                      WebkitBoxOrient: "vertical" as const,
+                      overflow: "hidden",
+                    }),
+              }}
+            >
+              {ementa}
+            </p>
+            {ementaLong && (
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: "4px 0 0",
+                  cursor: "pointer",
+                  color: "var(--brand-ink)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 3,
+                }}
+                aria-expanded={expanded}
               >
-                {siglaLabel}
+                {expanded ? (
+                  <>
+                    <ChevronUp size={13} aria-hidden="true" /> Recolher
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={13} aria-hidden="true" /> Ver mais
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        ) : (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              color: "var(--t-low)",
+              fontStyle: "italic",
+            }}
+          >
+            Ementa não disponível para esta votação.
+          </p>
+        )}
+
+        {/* ── Placar: proportion bar + numbers ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* Bar */}
+          {total > 0 && (
+            <div
+              role="img"
+              aria-label={`Placar: ${placarSim} sim, ${placarNao} não, ${placarAbstencoes} abstenções`}
+              style={{
+                display: "flex",
+                height: 7,
+                borderRadius: 99,
+                overflow: "hidden",
+                background: "var(--border)",
+              }}
+            >
+              {pctSim > 0 && (
+                <div
+                  style={{
+                    width: `${pctSim}%`,
+                    background: approvedColor,
+                    transition: "width 0.4s ease",
+                  }}
+                />
+              )}
+              {pctNao > 0 && (
+                <div
+                  style={{
+                    width: `${pctNao}%`,
+                    background: rejectedColor,
+                    transition: "width 0.4s ease",
+                  }}
+                />
+              )}
+              {pctAbs > 0 && (
+                <div
+                  style={{
+                    width: `${pctAbs}%`,
+                    background: absColor,
+                    opacity: 0.45,
+                    transition: "width 0.4s ease",
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {/* Numbers */}
+          <div
+            style={{
+              display: "flex",
+              gap: 14,
+              flexWrap: "wrap",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            <span
+              style={{ fontSize: 12.5, fontWeight: 700, color: approvedColor, display: "inline-flex", alignItems: "center", gap: 3 }}
+              aria-label={`${placarSim} votos sim`}
+            >
+              <CheckCircle2 size={13} aria-hidden="true" />
+              {placarSim} Sim
+            </span>
+            <span
+              style={{ fontSize: 12.5, fontWeight: 700, color: rejectedColor, display: "inline-flex", alignItems: "center", gap: 3 }}
+              aria-label={`${placarNao} votos não`}
+            >
+              <XCircle size={13} aria-hidden="true" />
+              {placarNao} Não
+            </span>
+            {placarAbstencoes > 0 && (
+              <span
+                style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t-low)", display: "inline-flex", alignItems: "center", gap: 3 }}
+                aria-label={`${placarAbstencoes} abstenções`}
+              >
+                — {placarAbstencoes} Abs.
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* ── Footer: data + órgão + fonte + link ── */}
+        <div
+          className="row between"
+          style={{ gap: 8, marginTop: "auto", paddingTop: 6, alignItems: "center", flexWrap: "wrap" }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            {orgaoLabel && (
+              <span
+                className="badge badge--neutral"
+                style={{ fontSize: 11, fontWeight: 700 }}
+                title={siglaOrgao !== orgaoLabel ? siglaOrgao : undefined}
+              >
+                {orgaoLabel}
               </span>
             )}
             <span
-              style={{
-                fontSize: 13,
-                color: "var(--t-mid)",
-                display: "-webkit-box",
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
+              className="tiny muted"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+              aria-label={`Data: ${formatDateShort(data)}`}
             >
-              {proposicao.ementa}
+              {formatDateShort(data)}
             </span>
+            <FonteDots fontes={FONTE_DOTS_CAMARA} size={18} />
           </div>
-        )}
-
-        {/* Placar */}
-        <div className="row" style={{ gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#16a34a" }}>
-            {placarSim} Sim
-          </span>
-          <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">
-            ·
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#dc2626" }}>
-            {placarNao} Não
-          </span>
-          {placarAbstencoes > 0 && (
-            <>
-              <span style={{ fontSize: 13, color: "var(--t-low)" }} aria-hidden="true">
-                ·
-              </span>
-              <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>
-                {placarAbstencoes} Abs.
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* Footer: fonte */}
-        <div style={{ marginTop: "auto", paddingTop: 4 }}>
-          <FonteDots fontes={FONTE_DOTS_CAMARA} size={20} />
+          <a
+            href={link}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+              fontWeight: 700,
+              color: "var(--brand-ink)",
+              textDecoration: "none",
+              flexShrink: 0,
+            }}
+            aria-label={`Ver ${propTitle} na Câmara dos Deputados (abre em nova aba)`}
+          >
+            Ver na Câmara
+            <ExternalLink size={12} aria-hidden="true" />
+          </a>
         </div>
       </div>
     </article>
@@ -634,6 +874,11 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
   const [isLoadingVotacoes, setIsLoadingVotacoes] = useState(false);
   const [errorVotacoes, setErrorVotacoes] = useState<string | null>(null);
   const hasLoadedVotacoes = useRef(false);
+
+  // ── Votações filter state ──
+  const [votacaoQuery, setVotacaoQuery] = useState("");
+  const [votacaoResultado, setVotacaoResultado] = useState<"todas" | "aprovadas" | "rejeitadas">("todas");
+  const [votacaoOrgao, setVotacaoOrgao] = useState("todos");
 
   // ── Load parlamentares on mount ──
   useEffect(() => {
@@ -788,6 +1033,50 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
 
   // Whether the user chose Senado but there are none yet (ingestion not run).
   const senadoFilteredButEmpty = casa === "senado" && senadoCount === 0 && !isLoading;
+
+  // ── Votacoes: distinct orgao options ──
+  const votacaoOrgaoOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const distinct = Array.from(
+      new Set(
+        votacoes
+          .map((v) => v.attributes.siglaOrgao)
+          .filter((s): s is string => typeof s === "string" && s.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    return [["todos", "Todos"], ...distinct.map((s) => [s, expandOrgao(s)] as const)];
+  }, [votacoes]);
+
+  // ── Votacoes: filtered list ──
+  const filteredVotacoes = useMemo(() => {
+    const q = normalizeForSearch(votacaoQuery);
+    return votacoes.filter((v) => {
+      const { aprovacao, siglaOrgao, proposicao } = v.attributes;
+      if (votacaoResultado === "aprovadas" && !aprovacao) return false;
+      if (votacaoResultado === "rejeitadas" && aprovacao) return false;
+      if (votacaoOrgao !== "todos" && siglaOrgao !== votacaoOrgao) return false;
+      if (q !== "") {
+        const haystack = normalizeForSearch(
+          [
+            proposicao?.sigla ?? "",
+            proposicao?.numero != null ? String(proposicao.numero) : "",
+            proposicao?.ano != null ? String(proposicao.ano) : "",
+            proposicao?.ementa ?? "",
+          ].join(" "),
+        );
+        if (!q.split(/\s+/).every((term) => haystack.includes(term))) return false;
+      }
+      return true;
+    });
+  }, [votacoes, votacaoQuery, votacaoResultado, votacaoOrgao]);
+
+  const hasActiveVotacaoFilters =
+    votacaoQuery !== "" || votacaoResultado !== "todas" || votacaoOrgao !== "todos";
+
+  function clearVotacaoFilters() {
+    setVotacaoQuery("");
+    setVotacaoResultado("todas");
+    setVotacaoOrgao("todos");
+  }
 
   function clearFilters() {
     setQuery("");
@@ -1093,9 +1382,10 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
           <h2 className="h2" style={{ marginTop: 4 }}>
             Votações do Plenário
           </h2>
-          <p className="muted small" style={{ marginTop: 4, maxWidth: 560 }}>
-            Votações recentes do Plenário da Câmara com placar completo e resultado — Dados Abertos
-            da Câmara dos Deputados.
+          <p className="muted small" style={{ marginTop: 4, maxWidth: 600 }}>
+            Cada card mostra qual proposição (PL, PEC, MP…) foi votada, o placar real de
+            votos e o resultado — e aponta direto à fonte oficial na Câmara dos Deputados.
+            Dados via Dados Abertos da Câmara.
           </p>
         </div>
 
@@ -1108,7 +1398,7 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
             aria-label="Carregando votações…"
           >
             {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonCard key={i} />
+              <SkeletonVotacaoCard key={i} />
             ))}
           </div>
         )}
@@ -1131,7 +1421,7 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
           </div>
         )}
 
-        {/* Empty */}
+        {/* Empty (no data at all) */}
         {!isLoadingVotacoes && errorVotacoes === null && votacoes.length === 0 && (
           <div
             className="panel"
@@ -1152,29 +1442,127 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
           </div>
         )}
 
-        {/* Data */}
+        {/* Data: filters + grid */}
         {!isLoadingVotacoes && errorVotacoes === null && votacoes.length > 0 && (
           <>
-            {/* Count row */}
-            <div style={{ fontSize: 13, color: "var(--t-mid)" }}>
-              <b
-                className="num"
-                style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}
-              >
-                {votacoes.length}
-              </b>{" "}
-              {votacoes.length === 1 ? "votação encontrada" : "votações encontradas"}
+            {/* Filter bar */}
+            <div
+              className="panel"
+              style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              {/* Free-text search */}
+              <div className="searchbar">
+                <Search
+                  size={16}
+                  style={{ color: "var(--t-low)", flexShrink: 0 }}
+                  aria-hidden="true"
+                />
+                <input
+                  value={votacaoQuery}
+                  onChange={(e) => setVotacaoQuery(e.target.value)}
+                  placeholder="Buscar por sigla, número ou ementa…"
+                  aria-label="Buscar votações"
+                />
+                {votacaoQuery !== "" && (
+                  <button
+                    className="btn btn--icon btn--ghost btn--sm"
+                    style={{ width: 28, height: 28, flexShrink: 0 }}
+                    onClick={() => setVotacaoQuery("")}
+                    type="button"
+                    aria-label="Limpar busca"
+                  >
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter selects */}
+              <div className="row wrap" style={{ gap: 10 }}>
+                <FilterSelect
+                  label="Resultado"
+                  value={votacaoResultado}
+                  options={[
+                    ["todas", "Todos"],
+                    ["aprovadas", "Aprovadas"],
+                    ["rejeitadas", "Rejeitadas"],
+                  ] as const}
+                  onChange={setVotacaoResultado}
+                />
+                {votacaoOrgaoOptions.length > 2 && (
+                  <FilterSelect
+                    label="Órgão"
+                    value={votacaoOrgao}
+                    options={votacaoOrgaoOptions}
+                    onChange={setVotacaoOrgao}
+                  />
+                )}
+              </div>
             </div>
 
-            {/* Grid */}
-            <div
-              className="grid"
-              style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}
-            >
-              {votacoes.map((votacao) => (
-                <VotacaoCard key={votacao.id} votacao={votacao} />
-              ))}
+            {/* Count row */}
+            <div className="row between wrap" style={{ gap: 8 }}>
+              <span style={{ fontSize: 13, color: "var(--t-mid)" }}>
+                <b
+                  className="num"
+                  style={{ color: "var(--t-hi)", fontVariantNumeric: "tabular-nums" }}
+                >
+                  {filteredVotacoes.length}
+                </b>{" "}
+                {filteredVotacoes.length === 1 ? "votação encontrada" : "votações encontradas"}
+                {filteredVotacoes.length !== votacoes.length && (
+                  <span className="muted"> de {votacoes.length}</span>
+                )}
+              </span>
+              {hasActiveVotacaoFilters && (
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={clearVotacaoFilters}
+                  type="button"
+                >
+                  Limpar filtros
+                </button>
+              )}
             </div>
+
+            {/* Empty (all filtered out) */}
+            {filteredVotacoes.length === 0 ? (
+              <div
+                className="panel"
+                style={{
+                  padding: 40,
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 12,
+                }}
+              >
+                <Vote size={24} style={{ color: "var(--t-low)" }} aria-hidden="true" />
+                <div style={{ fontWeight: 700, fontSize: 15 }}>
+                  Nenhuma votação com esses filtros
+                </div>
+                <p className="muted small" style={{ margin: 0 }}>
+                  Tente ampliar a busca ou remover algum filtro.
+                </p>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={clearVotacaoFilters}
+                  type="button"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            ) : (
+              /* Grid */
+              <div
+                className="grid"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}
+              >
+                {filteredVotacoes.map((votacao) => (
+                  <VotacaoCard key={votacao.id} votacao={votacao} />
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
