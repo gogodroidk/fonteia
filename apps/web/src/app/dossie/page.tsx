@@ -10,7 +10,7 @@
  * Mobile-first 375px. Dark/light safe. Reduced-motion safe. SSG-safe (window-guarded).
  */
 
-import { useState, useCallback, useId, type KeyboardEvent } from "react";
+import { useState, useCallback, useId } from "react";
 import {
   AlertTriangle,
   Brain,
@@ -19,8 +19,6 @@ import {
   ChevronRight,
   ExternalLink,
   FileSearch2,
-  Loader2,
-  Search,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -37,6 +35,8 @@ import {
   type DossieSection,
 } from "../../features/dossie/dossie-api";
 import { sanitizeCnpj, formatCnpj } from "../../features/cerebro/cerebro-api";
+import { requestCompanyEnrichment } from "../../features/empresas/company-search";
+import { CompanySearch, RoiNote } from "../../components/ui";
 import { ReportButton } from "../../components/report/ReportButton";
 import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
 import { CertidoesSection } from "./CertidoesSection";
@@ -822,7 +822,6 @@ function SourcesCard({ sources }: SourcesCardProps) {
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function DossiePage() {
-  const [inputValue, setInputValue] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [dossie, setDossie] = useState<Dossie | undefined>();
   const [errorMsg, setErrorMsg] = useState<string | undefined>();
@@ -835,6 +834,9 @@ export function DossiePage() {
       setStatus("error");
       return;
     }
+
+    // Enriquecimento LAZY do cadastro/QSA no D1 (best-effort; não bloqueia a tela).
+    void requestCompanyEnrichment(cnpj);
 
     setStatus("loading");
     setErrorMsg(undefined);
@@ -850,19 +852,7 @@ export function DossiePage() {
     }
   }, []);
 
-  function handleFormSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    void handleSubmit(inputValue);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      void handleSubmit(inputValue);
-    }
-  }
-
   function handleExampleClick(cnpj: string) {
-    setInputValue(cnpj);
     void handleSubmit(cnpj);
   }
 
@@ -936,78 +926,50 @@ export function DossiePage() {
         </p>
       </div>
 
-      {/* ── Formulário de busca ────────────────────────────────────────────── */}
-      <div className="panel" style={{ padding: "20px 20px 20px" }}>
-        <form onSubmit={handleFormSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <label
-            htmlFor={inputId}
-            style={{ fontSize: 13, fontWeight: 700, color: "var(--t-mid)" }}
-          >
-            CNPJ da empresa
-          </label>
-          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <input
-              id={inputId}
-              type="text"
-              className="input"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="00.000.000/0001-00"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              maxLength={18}
-              disabled={isLoading}
-              style={{ flex: 1, minWidth: 200 }}
-              aria-label="CNPJ para gerar dossiê"
-              aria-describedby={status === "error" ? "dossie-error" : undefined}
-            />
-            <button
-              type="submit"
-              className="btn btn--primary"
-              disabled={isLoading || inputValue.trim() === ""}
-              style={{ flexShrink: 0 }}
-            >
-              {isLoading ? (
-                <Loader2 size={15} aria-hidden="true" className="spin" />
-              ) : (
-                <Search size={15} aria-hidden="true" />
-              )}
-              {isLoading ? "Consultando…" : "Gerar dossiê"}
-            </button>
-          </div>
+      {/* ── Formulário de busca — por NOME (ou CNPJ) ───────────────────────── */}
+      <div className="panel" style={{ padding: "20px 20px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+        <CompanySearch
+          id={inputId}
+          label="Empresa"
+          placeholder="Digite o nome da empresa (ex.: Banco do Brasil) ou o CNPJ"
+          buttonLabel={isLoading ? "Consultando…" : "Gerar dossiê"}
+          disabled={isLoading}
+          onSelect={(cnpj) => void handleSubmit(cnpj)}
+        />
 
-          {/* Exemplos */}
-          <div
-            className="row"
-            style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}
+        {/* Exemplos */}
+        <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <span
+            style={{
+              fontSize: 11.5,
+              color: "var(--t-low)",
+              fontWeight: 600,
+              letterSpacing: ".04em",
+              textTransform: "uppercase",
+            }}
           >
-            <span
-              style={{
-                fontSize: 11.5,
-                color: "var(--t-low)",
-                fontWeight: 600,
-                letterSpacing: ".04em",
-                textTransform: "uppercase",
-              }}
+            Exemplos:
+          </span>
+          {EXEMPLOS.map((ex) => (
+            <button
+              key={ex.cnpj}
+              type="button"
+              className="chip"
+              onClick={() => handleExampleClick(ex.cnpj)}
+              disabled={isLoading}
+              aria-label={`Consultar ${ex.label} (${ex.cnpj})`}
             >
-              Exemplos:
-            </span>
-            {EXEMPLOS.map((ex) => (
-              <button
-                key={ex.cnpj}
-                type="button"
-                className="chip"
-                onClick={() => handleExampleClick(ex.cnpj)}
-                disabled={isLoading}
-                aria-label={`Consultar ${ex.label} (${ex.cnpj})`}
-              >
-                {ex.label}
-              </button>
-            ))}
-          </div>
-        </form>
+              {ex.label}
+            </button>
+          ))}
+        </div>
+
+        <RoiNote>
+          <strong style={{ color: "var(--t-hi)" }}>Em vez de pagar um relatório de crédito por empresa</strong>,
+          o dossiê reúne sanções, contratos, processos, marcas e sócios de fontes oficiais numa tela só —
+          com link para cada fonte. É a diligência que justifica a assinatura quando você avalia mais de
+          um fornecedor por mês.
+        </RoiNote>
       </div>
 
       {/* ── Erro ──────────────────────────────────────────────────────────── */}

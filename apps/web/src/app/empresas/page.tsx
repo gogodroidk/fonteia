@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
-  Building2,
   CalendarDays,
   ExternalLink,
   Gavel,
@@ -25,7 +24,8 @@ import {
   lookupCnpj,
   sanitizeCnpj,
 } from "../../features/empresas/empresas-api";
-import { FonteDots } from "../../components/ui";
+import { requestCompanyEnrichment } from "../../features/empresas/company-search";
+import { FonteDots, CompanySearch, RoiNote } from "../../components/ui";
 import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
 import { ReportButton } from "../../components/report/ReportButton";
 import type { SavedReport } from "../../features/reports/reports-store";
@@ -145,7 +145,6 @@ function buildEmpresaReport(empresa: EmpresaCnpj): SavedReport {
 // ─── Caixa de busca de CNPJ + perfil ───────────────────────────────────────────
 
 function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem[]> }) {
-  const [input, setInput] = useState("");
   const [empresa, setEmpresa] = useState<EmpresaCnpj | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,16 +152,17 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
   const [enrichment, setEnrichment] = useState<CompanyEnrichItem | null>(null);
   const [isLoadingEnrich, setIsLoadingEnrich] = useState(false);
 
-  const digits = sanitizeCnpj(input);
-  const canSearch = digits !== "" && !isLoading;
-
-  async function handleSearch() {
-    const cnpj = sanitizeCnpj(input);
+  async function handleSearch(rawCnpj: string) {
+    const cnpj = sanitizeCnpj(rawCnpj);
     if (cnpj === "") {
       setError("CNPJ inválido: digite os 14 números (com ou sem máscara).");
       setEmpresa(null);
       return;
     }
+
+    // Enriquecimento LAZY do cadastro/QSA no D1 (best-effort; não bloqueia a tela).
+    void requestCompanyEnrichment(cnpj);
+
     setIsLoading(true);
     setError(null);
     setEmpresa(null);
@@ -195,15 +195,6 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
     }
   }
 
-  function handleClear() {
-    setInput("");
-    setEmpresa(null);
-    setError(null);
-    setSearchedCnpj(null);
-    setEnrichment(null);
-    setIsLoadingEnrich(false);
-  }
-
   const ativa = empresa ? isSituacaoAtiva(empresa.situacao) : false;
 
   // Sanções associadas ao CNPJ consultado
@@ -218,62 +209,34 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
     >
       <div className="row between" style={{ gap: 8, alignItems: "flex-start" }}>
         <div>
-          <span className="eyebrow">Consulta de CNPJ</span>
+          <span className="eyebrow">Consulta de empresa</span>
           <h3 style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 800, color: "var(--t-hi)" }}>
-            Buscar empresa pelo CNPJ
+            Buscar empresa pelo nome ou CNPJ
           </h3>
           <p className="muted small" style={{ margin: "4px 0 0", maxWidth: 520 }}>
-            Consulta on-demand do cadastro oficial da Receita Federal: razão social, situação, CNAE,
-            sócios e localização. Gratuito.
+            Digite o nome da empresa e escolha na lista — ou cole o CNPJ. Consulta on-demand do cadastro
+            oficial da Receita Federal: razão social, situação, CNAE, sócios e localização. Gratuito.
           </p>
         </div>
         <FonteDots fontes={FONTE_DOTS_RECEITA} size={22} />
       </div>
 
-      {/* Caixa de busca */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void handleSearch();
-        }}
-        className="row wrap"
-        style={{ gap: 10, alignItems: "stretch" }}
-      >
-        <div className="searchbar" style={{ flex: "1 1 260px", minWidth: 0 }}>
-          <Building2 size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Digite o CNPJ (ex.: 00.000.000/0001-91)"
-            inputMode="text"
-            aria-label="CNPJ a consultar"
-          />
-          {input !== "" && (
-            <button
-              className="btn btn--icon btn--ghost btn--sm"
-              style={{ width: 28, height: 28, flexShrink: 0 }}
-              onClick={handleClear}
-              type="button"
-              aria-label="Limpar"
-            >
-              <X size={16} aria-hidden="true" />
-            </button>
-          )}
-        </div>
-        <button className="btn btn--primary" type="submit" disabled={!canSearch} style={{ flexShrink: 0 }}>
-          {isLoading ? (
-            <>
-              <Loader2 size={16} className="spin" aria-hidden="true" />
-              Consultando…
-            </>
-          ) : (
-            <>
-              <Search size={16} aria-hidden="true" />
-              Consultar
-            </>
-          )}
-        </button>
-      </form>
+      {/* Caixa de busca — por NOME (ou CNPJ) */}
+      <CompanySearch
+        label="Empresa"
+        placeholder="Digite o nome da empresa (ex.: Embraer) ou o CNPJ"
+        buttonLabel={isLoading ? "Consultando…" : "Consultar"}
+        disabled={isLoading}
+        onSelect={(cnpj) => void handleSearch(cnpj)}
+      />
+
+      {/* Retorno (ROI) — só quando ainda não há resultado, para não poluir o perfil */}
+      {empresa === null && error === null && (
+        <RoiNote compact>
+          Confirmar uma empresa pelo nome leva segundos e evita digitar CNPJ errado. Veja situação
+          cadastral, sócios e CNAE antes de assinar contrato, emitir nota ou liberar crédito.
+        </RoiNote>
+      )}
 
       {/* Erro */}
       {error !== null && (

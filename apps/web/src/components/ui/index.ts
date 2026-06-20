@@ -33,3 +33,9 @@ export type { SourceBadgeProps } from "./SourceBadge";
 
 export { EmptyState } from "./EmptyState";
 export type { EmptyStateProps, EmptyStateActionProps } from "./EmptyState";
+
+export { CompanySearch } from "./CompanySearch";
+export type { CompanySearchProps } from "./CompanySearch";
+
+export { RoiNote } from "./RoiNote";
+export type { RoiNoteProps } from "./RoiNote";
