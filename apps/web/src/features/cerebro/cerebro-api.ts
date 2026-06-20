@@ -228,7 +228,7 @@ function str(value: unknown): string {
 function validCnpj(value: unknown): string {
   const cnpj = sanitizeCnpj(str(value));
   if (cnpj === "") return "";
-  if (/^(\d)\1{13}$/.test(cnpj)) return ""; // todos os 14 dígitos iguais
+  if (/^(.)\1{13}$/.test(cnpj)) return ""; // todos os 14 caracteres iguais (dígitos ou letras)
   return cnpj;
 }
 
@@ -286,9 +286,11 @@ function pushField(out: DetailField[], label: string, value: string): void {
 /** Máscara de CPF/CNPJ best-effort (alguns kinds guardam o doc com máscara). */
 function maskDoc(value: unknown): string {
   const s = str(value);
-  const digits = s.replace(/\D/g, "");
-  if (digits.length === 14) return formatCnpj(digits);
-  return s; // mantém a forma original (ex.: CPF mascarado do IBAMA)
+  // formatCnpj já chama sanitizeCnpj internamente, que preserva letras e
+  // remove apenas caracteres de máscara. Se não tiver 14 chars limpos,
+  // devolve s inalterado (ex.: CPF mascarado do IBAMA).
+  const formatted = formatCnpj(s);
+  return formatted !== s ? formatted : s;
 }
 
 // ─── Links para a fonte oficial por kind ─────────────────────────────────────────

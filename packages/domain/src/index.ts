@@ -1,3 +1,4 @@
+export * from "./cnpj";
 export * from "./dossiers";
 export * from "./entities";
 export * from "./evidence";

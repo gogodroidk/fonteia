@@ -52,6 +52,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry } from "../_shared/http.ts";
 import { hasValidCronSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { normalizeCnpj } from "../_shared/br.ts";
 
 // ── Constantes ───────────────────────────────────────────────────────────────
 
@@ -218,7 +219,7 @@ function normalizeEnte(
     sourceId,
     kind: "fiscal_report",
     name: (ente.ente ?? "").trim(),
-    cnpj: (ente.cnpj ?? "").replace(/\D/g, ""),
+    cnpj: normalizeCnpj(ente.cnpj),
     codigoIbge,
     uf: (ente.uf ?? "").trim().toUpperCase(),
     esfera: (ente.esfera ?? "").trim().toUpperCase(),

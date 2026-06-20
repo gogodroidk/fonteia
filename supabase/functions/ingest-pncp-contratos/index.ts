@@ -106,7 +106,8 @@ function parseDate(value: string | null | undefined): string {
 
 function portalUrl(num: string): string {
   // Formato: {cnpjOrgao}-{sequencial}/{ano}  ex: 00394502000144-0001/2024
-  const m = /^(\d{14})-(\d+)\/(\d{4})$/.exec(num.trim());
+  // [0-9A-Z]{14} — suporte a CNPJ alfanumérico (IN RFB 2.229/2026, vigência 01/07/2026)
+  const m = /^([0-9A-Z]{14})-(\d+)\/(\d{4})$/.exec(num.trim().toUpperCase());
   if (m) {
     const [, cnpj, seq, ano] = m;
     return `${PORTAL}/app/contratos/${cnpj}/${ano}/${Number(seq)}`;

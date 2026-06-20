@@ -974,7 +974,7 @@ export default function RaioXPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Digite o CNPJ (ex.: 00.000.000/0001-91)"
-                inputMode="numeric"
+                inputMode="text"
                 aria-label="CNPJ para consulta Raio-X"
                 autoComplete="off"
                 disabled={status === "loading"}
