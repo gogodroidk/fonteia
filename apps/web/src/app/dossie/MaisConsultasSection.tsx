@@ -13,7 +13,7 @@
  * Design: CSS custom properties; mobile-first 375px; sem Tailwind, sem shadcn.
  */
 
-import { useState, useEffect, useId } from "react";
+import { useState, useEffect, useId, useRef } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -825,13 +825,17 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
   // forçar re-render ao mudar (spread + novo Map a cada escrita).
   const [kindStates, setKindStates] = useState<Map<string, KindState>>(new Map());
 
+  // Ref para o cnpj atual — usado para cancelar resultados de consultas stale
+  // quando o usuário troca de CNPJ enquanto uma requisição está em andamento.
+  const currentCnpjRef = useRef(cnpj);
+  useEffect(() => {
+    currentCnpjRef.current = cnpj;
+  }, [cnpj]);
+
   // ── Carga do catálogo ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (cnpj === "") return;
-
     let cancelled = false;
     setCatalogState({ phase: "loading" });
-    setKindStates(new Map());
 
     void fetchCatalog().then((result) => {
       if (cancelled) return;
@@ -852,7 +856,8 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     return () => {
       cancelled = true;
     };
-  }, [cnpj]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Dispatch de um kind individual ────────────────────────────────────────
   function dispatchKind(kind: string) {
@@ -860,9 +865,11 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     const current = kindStates.get(kind);
     if (current?.phase === "loading") return;
 
+    const dispatchedCnpj = cnpj;
     setKindStates((prev) => new Map([...prev, [kind, { phase: "loading" }]]));
 
-    void consultarCertidao(kind, cnpj).then((result) => {
+    void consultarCertidao(kind, dispatchedCnpj).then((result) => {
+      if (currentCnpjRef.current !== dispatchedCnpj) return;
       setKindStates((prev) =>
         new Map([...prev, [kind, { phase: "done", result }]])
       );
@@ -891,8 +898,10 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     });
 
     // Dispara em paralelo
+    const dispatchedCnpj = cnpj;
     for (const k of toDispatch) {
-      void consultarCertidao(k.kind, cnpj).then((result) => {
+      void consultarCertidao(k.kind, dispatchedCnpj).then((result) => {
+        if (currentCnpjRef.current !== dispatchedCnpj) return;
         setKindStates((prev) =>
           new Map([...prev, [k.kind, { phase: "done", result }]])
         );

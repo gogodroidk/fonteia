@@ -124,7 +124,7 @@ interface ProxyEnvelope {
 function buildProxyUrl(kind: string, cnpj: string): string | null {
   const fonteiaUrl = getConfiguredApiUrl();
   if (!fonteiaUrl) return null;
-  const base = trimTrailingSlash(fonteiaUrl).replace(/\/[^/]+$/, "/infosimples-proxy");
+  const base = trimTrailingSlash(fonteiaUrl).replace(/\/functions\/v1\/[^/]+$/, "/functions/v1/infosimples-proxy");
   return `${base}?kind=${encodeURIComponent(kind)}&cnpj=${encodeURIComponent(cnpj)}`;
 }
 

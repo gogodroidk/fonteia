@@ -90,6 +90,8 @@ function statusLabel(status: CertidaoStatus | SemaforoGeral): string {
       return "Atenção";
     case "indisponivel":
       return "Indisponível";
+    default:
+      return status;
   }
 }
 
@@ -440,6 +442,7 @@ function CertidaoCard({ card }: CertidaoCardProps) {
                       background: "color-mix(in srgb,var(--danger) 5%,transparent)",
                       borderRadius: "var(--r-sm)",
                       padding: "6px 8px",
+                      borderTop: undefined,
                     }
                   : {}),
               }}
@@ -818,7 +821,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             color: "inherit",
           }}
         >
-          Certidoes &amp; Idoneidade
+          Certidões &amp; Idoneidade
         </h3>
       </div>
 
@@ -915,7 +918,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             </span>
           </div>
           <p style={{ margin: 0, fontSize: 13, color: "var(--t-mid)", lineHeight: 1.55 }}>
-            Certidões automatizadas estao disponíveis nos planos Escritório e Corporativo.
+            Certidões automatizadas estão disponíveis nos planos Escritório e Corporativo.
           </p>
           <a href="/billing" className="btn btn--primary btn--sm">
             Ver planos
@@ -940,7 +943,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
           <div
             style={{ display: "flex", flexDirection: "column", gap: 8 }}
             role="list"
-            aria-label="Certidoes por orgao"
+            aria-label="Certidões por órgão"
           >
             {cards.map((card) => (
               <div key={card.kind} role="listitem">
@@ -961,9 +964,9 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
               border: "1px solid var(--border)",
             }}
           >
-            Certidoes obtidas automaticamente via InfoSimples. Sempre verifique nas
+            Certidões obtidas automaticamente via InfoSimples. Sempre verifique nas
             fontes oficiais antes de tomar decisões. Os links "Fonte oficial" em cada
-            card apontam para o orgao emissor.
+            card apontam para o órgão emissor.
           </div>
 
           {/* Mais consultas — acordeões sob demanda (nunca auto-disparados) */}

@@ -51,29 +51,13 @@ export type IdoneidadeSelo = "irregular" | "atencao" | "regular" | "indisponivel
  * Prioridade: irregular > atencao > regular > indisponivel.
  */
 export function computarSelo(cards: IdoneidadeCardState[]): IdoneidadeSelo {
-  let hasRegular = false;
-  for (const card of cards) {
-    if (card.result.state !== "ok") continue;
-    const { status } = card.result.data;
-    if (status === "irregular") return "irregular";
-    if (status === "atencao") {
-      // Não retorna imediatamente: pode haver irregular mais à frente.
-      // Mas como o loop já verificou irregular antes, podemos acumular.
-      // Na prática, se chegarmos aqui é pq não há irregular ainda —
-      // mas precisamos continuar o loop para checar os restantes.
-      // Usamos uma flag intermediária.
-    }
-    if (status === "regular") hasRegular = true;
-  }
+  const statuses = cards
+    .filter((c) => c.result.state === "ok")
+    .map((c) => (c.result as Extract<typeof c.result, { state: "ok" }>).data.status);
 
-  // Segunda passagem para atencao (não misturar com irregular acima).
-  for (const card of cards) {
-    if (card.result.state !== "ok") continue;
-    const { status } = card.result.data;
-    if (status === "atencao") return "atencao";
-  }
-
-  if (hasRegular) return "regular";
+  if (statuses.includes("irregular")) return "irregular";
+  if (statuses.includes("atencao"))   return "atencao";
+  if (statuses.includes("regular"))   return "regular";
   return "indisponivel";
 }
 

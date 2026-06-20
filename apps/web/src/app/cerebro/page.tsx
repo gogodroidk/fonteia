@@ -290,7 +290,7 @@ export function CerebroPage() {
 
   // Estado do painel de Idoneidade / Compliance.
   const [idoneidade, setIdoneidade] = useState<IdoneidadeCardState[] | null>(null);
-  const [idoneiadadeLoading, setIdoneidadeLoading] = useState(false);
+  const [idoneidadeLoading, setIdoneidadeLoading] = useState(false);
   const [showIdoneidade, setShowIdoneidade] = useState(false);
   // Mapa de selos já consultados: nodeId → IdoneidadeSelo.
   const [nodeSeloMap, setNodeSeloMap] = useState<Map<string, IdoneidadeSelo>>(new Map());
@@ -349,6 +349,12 @@ export function CerebroPage() {
 
   useEffect(() => {
     selectedIdRef.current = selectedId;
+  }, [selectedId]);
+  // Quando o nó selecionado muda, fecha e limpa o painel de idoneidade para evitar
+  // que cards de um nó anterior apareçam enquanto o cabeçalho já mostra o novo CNPJ.
+  useEffect(() => {
+    setShowIdoneidade(false);
+    setIdoneidade(null);
   }, [selectedId]);
   useEffect(() => {
     hiddenRef.current = hiddenKinds;
@@ -1623,12 +1629,12 @@ export function CerebroPage() {
                       className="btn btn--ghost btn--sm"
                       type="button"
                       onClick={() => void runIdoneidade(selectedNode.cnpj!, selectedNode.id)}
-                      disabled={isLoading || idoneiadadeLoading}
+                      disabled={isLoading || idoneidadeLoading}
                       title="Verifica sanções, dívida ativa e idoneidade via InfoSimples (consulta premium, cache 60d)"
                       style={{ gap: 6 }}
                     >
                       <ShieldAlert size={13} aria-hidden="true" />
-                      {idoneiadadeLoading && showIdoneidade ? "Verificando…" : "Verificar idoneidade"}
+                      {idoneidadeLoading && showIdoneidade ? "Verificando…" : "Verificar idoneidade"}
                       {(() => {
                         const s = nodeSeloMap.get(selectedNode.id);
                         if (!s) return null;
@@ -1758,7 +1764,7 @@ export function CerebroPage() {
           cnpj={selectedNode.cnpj}
           empresaNome={selectedNode.label}
           cards={idoneidade ?? []}
-          loading={idoneiadadeLoading}
+          loading={idoneidadeLoading}
           onClose={() => {
             setShowIdoneidade(false);
             setIdoneidade(null);

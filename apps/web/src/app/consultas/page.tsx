@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -81,6 +81,9 @@ function statusBadgeStyle(status: string): { background: string; color: string }
 function CertidaoResultView({ result }: { result: CertidaoResult }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
+  const uid = useId();
+  const detailsId = `${uid}-details`;
+  const rawId = `${uid}-raw`;
 
   if (result.state === "dormant") {
     return (
@@ -150,8 +153,6 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
   // state === "ok"
   const payload: CertidaoPayload = result.data;
   const badgeStyle = statusBadgeStyle(payload.status);
-  const detailsId = `details-${payload.titulo.replace(/\s+/g, "-").toLowerCase()}`;
-  const rawId = `raw-${payload.titulo.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -413,7 +414,7 @@ interface CategorySectionProps {
 }
 
 function CategorySection({ categoria, kinds, cnpjDigits, cnpjValid }: CategorySectionProps) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const sectionId = `section-${categoria.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
@@ -490,6 +491,33 @@ function CatalogSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
+// Validação de CNPJ (dígito verificador)
+// ---------------------------------------------------------------------------
+
+function isValidCnpj(digits: string): boolean {
+  if (digits.length !== 14) return false;
+  // Rejeita sequências de dígitos iguais (00000000000000, 11111111111111, etc.)
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+
+  function calcDigit(d: string, weights: number[]): number {
+    let sum = 0;
+    for (let i = 0; i < weights.length; i++) {
+      sum += Number(d[i]) * (weights[i] ?? 0);
+    }
+    const remainder = sum % 11;
+    return remainder < 2 ? 0 : 11 - remainder;
+  }
+
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const d1 = calcDigit(digits, w1);
+  const d2 = calcDigit(digits, w2);
+
+  return Number(digits[12]) === d1 && Number(digits[13]) === d2;
+}
+
+// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 
@@ -500,7 +528,7 @@ export function ConsultasPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const cnpjDigits = onlyDigits(cnpjDisplay);
-  const cnpjValid = cnpjDigits.length === 14;
+  const cnpjValid = isValidCnpj(cnpjDigits);
 
   function runCatalogFetch() {
     setPageState("loading-catalog");
