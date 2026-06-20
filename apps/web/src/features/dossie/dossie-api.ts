@@ -24,6 +24,7 @@ import {
   type ExpandResult,
 } from "../cerebro/cerebro-api";
 import { lookupCnpj, type EmpresaCnpj } from "../empresas/empresas-api";
+import { requestCompanyEnrichment } from "../empresas/company-search";
 import type { DetailField } from "../cerebro/types";
 import type { SavedReport, ReportField, ReportSource } from "../reports/reports-store";
 
@@ -396,6 +397,12 @@ export async function buildDossie(rawCnpj: string): Promise<Dossie> {
     expand.centerDetails?.some((d) => d.label === "Situação");
 
   if (!hasCadastroFromD1) {
+    // Enriquecimento LAZY do BULK (TODO #96): quando o D1 ainda não tem o cadastro
+    // `company`/QSA deste CNPJ, dispara o coletor `ingest-brasilapi` em background
+    // para que a PRÓXIMA visita já encontre QSA/CNAE/capital no grafo. Best-effort:
+    // não esperamos a resposta e nunca quebramos a tela (a chamada degrada sozinha).
+    void requestCompanyEnrichment(cnpj);
+
     try {
       empresa = await lookupCnpj(cnpj);
     } catch (err) {

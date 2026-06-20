@@ -37,6 +37,7 @@ import {
   type GatilhoLead,
 } from "../../features/leads/leads-heuristics";
 import { gerarMensagens } from "../../features/leads/leads-templates";
+import { RoiNote } from "../../components/ui";
 import { navigateSpa } from "../_nav";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -916,9 +917,17 @@ export function LeadsPage() {
         </h2>
         <p className="muted small" style={{ marginTop: 4, maxWidth: 580 }}>
           Cada empresa aqui <strong>acabou de assinar um contrato público</strong> — ela tem dinheiro
-          novo, demandas novas e está aberta a fornecedores. Chegue na hora certa com a oferta certa.
+          novo, demandas novas e está aberta a fornecedores. Cada cartão mostra <strong>o porquê</strong>{" "}
+          (o gatilho e a evidência no PNCP) e já traz a mensagem pronta para o primeiro contato.
         </p>
       </div>
+
+      {/* Retorno (ROI) */}
+      <RoiNote>
+        Uma lista de prospecção qualificada com gatilho de compra custa caro em ferramenta de vendas.
+        Aqui ela sai de contratos públicos reais, com o motivo e o link da fonte — fechar UM cliente
+        novo já paga vários meses da assinatura.
+      </RoiNote>
 
       {/* Error banner */}
       {errorMessage !== null && (

@@ -7,19 +7,16 @@
  *
  * Suporta ?cnpj= na URL para pré-preenchimento e busca automática.
  */
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useCallback, type ReactNode } from "react";
 import {
   AlertTriangle,
   Building2,
   CalendarDays,
   Download,
   FileText,
-  Loader2,
   MapPin,
-  Search,
   ShieldAlert,
   Users,
-  X,
   ExternalLink,
   CheckCircle2,
   Info,
@@ -42,6 +39,8 @@ import {
   buildCsvBlob,
 } from "../../features/raio-x/raio-x-api";
 import { FonteSeloBlock } from "../../features/raio-x/FonteSeloBlock";
+import { CompanySearch, RoiNote } from "../../components/ui";
+import { requestCompanyEnrichment } from "../../features/empresas/company-search";
 
 // ─── Constantes de fonte ───────────────────────────────────────────────────────
 
@@ -789,49 +788,48 @@ function RaioXSkeleton() {
 // ─── Página principal ──────────────────────────────────────────────────────────
 
 export default function RaioXPage() {
-  const [input, setInput] = useState(() => {
-    // Pré-preenche com ?cnpj= se presente na URL
+  const initialCnpj = (() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       return params.get("cnpj") ?? "";
     }
     return "";
-  });
+  })();
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [report, setReport] = useState<RaioXReportData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const digits = sanitizeCnpj(input);
-  const canSearch = digits !== "" && status !== "loading";
+  // Executa a busca completa (cadastro + sanções + contratos) para um CNPJ já
+  // resolvido. Compartilhada pelo CompanySearch (escolha por nome/CNPJ) e pelo
+  // efeito de deep-link ?cnpj=. Antes de buscar, dispara o enriquecimento LAZY do
+  // cadastro no D1 (best-effort, não bloqueia) — TODO do #96.
+  const runSearch = useCallback(async (rawCnpj: string) => {
+    const cnpj = sanitizeCnpj(rawCnpj);
+    if (cnpj === "") {
+      setErrorMsg("CNPJ inválido: digite os 14 números (com ou sem máscara).");
+      setStatus("error");
+      return;
+    }
 
-  // Auto-search quando a URL traz ?cnpj= com valor válido.
-  // Lê window.location.search diretamente para evitar stale-closure sobre `input`.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const urlCnpj = params.get("cnpj") ?? "";
-    if (sanitizeCnpj(urlCnpj) === "") return;
+    // Esquenta o cache de cadastro/QSA sem esperar (silencioso se indisponível).
+    void requestCompanyEnrichment(cnpj);
 
-    // Dispara a busca com o CNPJ da URL em vez de depender do state `input`.
-    const cnpj = sanitizeCnpj(urlCnpj);
     setStatus("loading");
     setErrorMsg(null);
     setReport(null);
 
     const now = new Date().toISOString();
-    void Promise.allSettled([
-      lookupCnpj(cnpj),
-      fetchSancoesByCnpj(cnpj),
-      fetchContratosByCnpj(cnpj),
-    ]).then(([empresaResult, sancoesResult, contratosResult]) => {
+    try {
+      const [empresaResult, sancoesResult, contratosResult] = await Promise.allSettled([
+        lookupCnpj(cnpj),
+        fetchSancoesByCnpj(cnpj),
+        fetchContratosByCnpj(cnpj),
+      ]);
+
       if (empresaResult.status === "rejected") {
-        setErrorMsg(
-          empresaResult.reason instanceof Error
-            ? empresaResult.reason.message
-            : "Falha ao consultar dados cadastrais.",
-        );
-        setStatus("error");
-        return;
+        throw empresaResult.reason instanceof Error
+          ? empresaResult.reason
+          : new Error("Falha ao consultar dados cadastrais.");
       }
 
       const empresa = empresaResult.value;
@@ -860,82 +858,20 @@ export default function RaioXPage() {
       }
       setReport(reportData);
       setStatus("done");
-    }).catch((err: unknown) => {
-      setErrorMsg(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
-      setStatus("error");
-    });
-    // Runs only on mount — no reactive deps needed.
-  }, []);
-
-  async function handleSearch() {
-    const cnpj = sanitizeCnpj(input);
-    if (cnpj === "") {
-      setErrorMsg("CNPJ inválido: digite os 14 números (com ou sem máscara).");
-      setStatus("error");
-      return;
-    }
-
-    setStatus("loading");
-    setErrorMsg(null);
-    setReport(null);
-
-    const now = new Date().toISOString();
-    const cadastralFetchedAt = now;
-    const sancoesFetchedAt = now;
-    const contratosFetchedAt = now;
-
-    try {
-      // Busca cadastral, sanções e contratos em paralelo
-      const [empresaResult, sancoesResult, contratosResult] = await Promise.allSettled([
-        lookupCnpj(cnpj),
-        fetchSancoesByCnpj(cnpj),
-        fetchContratosByCnpj(cnpj),
-      ]);
-
-      if (empresaResult.status === "rejected") {
-        throw empresaResult.reason instanceof Error
-          ? empresaResult.reason
-          : new Error("Falha ao consultar dados cadastrais.");
-      }
-
-      const empresa = empresaResult.value;
-      const sancoesData =
-        sancoesResult.status === "fulfilled"
-          ? sancoesResult.value
-          : { sancoes: [] as SancaoItem[], lastSyncedAt: undefined };
-      const contratosData =
-        contratosResult.status === "fulfilled"
-          ? contratosResult.value
-          : { contratos: [], lastSyncedAt: undefined };
-
-      const reportData: RaioXReportData = {
-        empresa,
-        sancoes: sancoesData.sancoes,
-        cadastralFetchedAt,
-        sancoesFetchedAt,
-        contratos: contratosData.contratos,
-        contratosFetchedAt,
-      };
-      if (sancoesData.lastSyncedAt !== undefined) {
-        reportData.sancoesSyncedAt = sancoesData.lastSyncedAt;
-      }
-      if (contratosData.lastSyncedAt !== undefined) {
-        reportData.contratosSyncedAt = contratosData.lastSyncedAt;
-      }
-      setReport(reportData);
-      setStatus("done");
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
       setStatus("error");
     }
-  }
+  }, []);
 
-  function handleClear() {
-    setInput("");
-    setReport(null);
-    setErrorMsg(null);
-    setStatus("idle");
-  }
+  // Auto-search quando a URL traz ?cnpj= com valor válido (deep-link do Cérebro etc.).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const urlCnpj = sanitizeCnpj(params.get("cnpj") ?? "");
+    if (urlCnpj === "") return;
+    void runSearch(urlCnpj);
+  }, [runSearch]);
 
   return (
     <main
@@ -958,64 +894,29 @@ export default function RaioXPage() {
         </p>
       </div>
 
-      {/* Caixa de busca */}
-      <div className="panel" style={{ padding: "16px 18px 18px" }}>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void handleSearch();
-          }}
-          style={{ display: "flex", flexDirection: "column", gap: 12 }}
-        >
-          <div className="row wrap" style={{ gap: 10, alignItems: "stretch" }}>
-            <div className="searchbar" style={{ flex: "1 1 240px", minWidth: 0 }}>
-              <Building2 size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Digite o CNPJ (ex.: 00.000.000/0001-91)"
-                inputMode="text"
-                aria-label="CNPJ para consulta Raio-X"
-                autoComplete="off"
-                disabled={status === "loading"}
-              />
-              {input !== "" && (
-                <button
-                  className="btn btn--icon btn--ghost btn--sm"
-                  style={{ width: 28, height: 28, flexShrink: 0 }}
-                  onClick={handleClear}
-                  type="button"
-                  aria-label="Limpar"
-                >
-                  <X size={15} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            <button
-              className="btn btn--primary"
-              type="submit"
-              disabled={!canSearch}
-              style={{ flexShrink: 0 }}
-            >
-              {status === "loading" ? (
-                <>
-                  <Loader2 size={15} className="spin" aria-hidden="true" />
-                  Consultando…
-                </>
-              ) : (
-                <>
-                  <Search size={15} aria-hidden="true" />
-                  Gerar Raio-X
-                </>
-              )}
-            </button>
-          </div>
-
-          <p className="tiny muted" style={{ margin: 0 }}>
-            Consulta dados da Receita Federal e Portal da Transparência. Gratuito, sem cadastro.
-          </p>
-        </form>
+      {/* Caixa de busca — por NOME (ou CNPJ) */}
+      <div className="panel" style={{ padding: "16px 18px 18px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <CompanySearch
+          label="Empresa"
+          placeholder="Digite o nome da empresa (ex.: Petrobras) ou o CNPJ"
+          buttonLabel={status === "loading" ? "Consultando…" : "Gerar Raio-X"}
+          initialValue={initialCnpj}
+          disabled={status === "loading"}
+          onSelect={(cnpj) => void runSearch(cnpj)}
+        />
+        <p className="tiny muted" style={{ margin: 0 }}>
+          Busca por nome no cadastro de empresas e contratos públicos; escolha a empresa e o relatório
+          abre pelo CNPJ. Dados da Receita Federal e Portal da Transparência.
+        </p>
       </div>
+
+      {/* Retorno (ROI) */}
+      <RoiNote>
+        <strong style={{ color: "var(--t-hi)" }}>Antes de fechar negócio</strong>, um Raio-X mostra de
+        graça se a empresa tem sanção ativa no governo (CEIS/CNEP) e histórico de contratos. Uma
+        diligência dessas com despachante custa tempo e fila — aqui sai em segundos e evita fechar com
+        quem está impedido de contratar.
+      </RoiNote>
 
       {/* Erro */}
       {status === "error" && errorMsg !== null && (
