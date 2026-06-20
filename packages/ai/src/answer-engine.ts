@@ -74,8 +74,15 @@ export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
     : context;
   const claims = selectRelevantClaims(safeContext);
   const citations = citationsForClaims(claims, safeContext.evidence);
+  // Só consideramos "fundamentado" o claim cuja evidência REALMENTE resolveu em
+  // citação — senão mostraríamos um keyFact sem fonte rastreável (viola o contrato
+  // de evidência: "a IA nunca afirma sem fonte").
+  const citedEvidenceIds = new Set(citations.map((c) => c.evidenceId));
+  const backedClaims = claims.filter((claim) =>
+    claim.evidenceIds.some((id) => citedEvidenceIds.has(id)),
+  );
 
-  if (claims.length === 0 || citations.length === 0) {
+  if (backedClaims.length === 0 || citations.length === 0) {
     return {
       status: "insufficient_evidence",
       summary: "Nao encontrei evidencia suficiente para responder com seguranca.",
@@ -90,7 +97,7 @@ export function answerWithEvidence(context: AnswerContext): FonteiaAnswer {
 
   requireCitations(citations);
 
-  const keyFacts = claims.map((claim) => ({
+  const keyFacts = backedClaims.map((claim) => ({
     label: claim.label,
     value: stringifyClaimValue(claim.value),
     evidenceIds: claim.evidenceIds,

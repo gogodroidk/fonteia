@@ -199,8 +199,13 @@ export async function fetchTodasProposicoes(
 
 export function normalizeProposicao(raw: CamaraProposicaoRaw): CamaraProposicao {
   const tipo = (raw.siglaTipo ?? "").trim();
-  const numero = Number(raw.numero);
-  const ano = Number(raw.ano);
+  const numeroNum = Number(raw.numero);
+  const anoNum = Number(raw.ano);
+  // Payload cru (JSON externo): numero/ano podem faltar/ser não-numéricos →
+  // evita compor um título "PL NaN/NaN".
+  const numero = Number.isFinite(numeroNum) ? numeroNum : 0;
+  const ano = Number.isFinite(anoNum) ? anoNum : 0;
+  const titulo = numero && ano ? `${tipo} ${numero}/${ano}`.trim() : tipo;
 
   return {
     id: String(raw.id),
@@ -208,7 +213,7 @@ export function normalizeProposicao(raw: CamaraProposicaoRaw): CamaraProposicao 
     tipo,
     numero,
     ano,
-    titulo: `${tipo} ${numero}/${ano}`.trim(),
+    titulo,
     ementa: (raw.ementa ?? "").trim(),
   };
 }

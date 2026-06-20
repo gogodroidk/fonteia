@@ -37,6 +37,11 @@ export function useIsAdmin(): IsAdminState {
       .then(({ data }) => {
         if (cancelled) return;
         setState({ isAdmin: data?.role === "admin", loading: false });
+      })
+      .catch(() => {
+        // Falha de rede/PostgREST: degrada para não-admin em vez de deixar o nav
+        // travado em loading=true para sempre (promessa rejeitada sem handler).
+        if (!cancelled) setState({ isAdmin: false, loading: false });
       });
 
     return () => {

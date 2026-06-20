@@ -11,7 +11,15 @@
 --
 -- Aplicar no banco de produção (Supabase -> SQL Editor, ou via migração rastreada):
 
-REVOKE EXECUTE ON FUNCTION public.ingest_receita_lots(jsonb) FROM PUBLIC, anon, authenticated;
+-- Guarda para recriação do zero: a função só é criada na 0099 (CREATE OR REPLACE).
+-- Sem este DO-block, um `apply` em ordem lexicográfica abortaria aqui
+-- ("function does not exist"). Quando a função existir, o REVOKE é aplicado.
+do $$
+begin
+  revoke execute on function public.ingest_receita_lots(jsonb) from public, anon, authenticated;
+exception when undefined_function then
+  raise notice '0003: ingest_receita_lots ainda nao existe; REVOKE sera aplicado na 0099.';
+end $$;
 
 -- Verificação (a ACL deve sobrar apenas com postgres e service_role marcados 'X'):
 --   select proacl::text from pg_proc

@@ -17,7 +17,20 @@ export function getConsent(): Consent | null {
   if (!hasStorage()) return null;
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Consent) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    // Valida o shape antes de confiar: localStorage corrompido ou de versão antiga
+    // não pode passar como consentimento válido (gating de cookies sob LGPD).
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      typeof (parsed as Record<string, unknown>).funcionais === "boolean" &&
+      typeof (parsed as Record<string, unknown>).analiticos === "boolean" &&
+      typeof (parsed as Record<string, unknown>).publicidade === "boolean"
+    ) {
+      return parsed as Consent;
+    }
+    return null;
   } catch {
     return null;
   }

@@ -28,30 +28,53 @@ export function usePlan(): PlanInfo {
       setInfo(FREE);
       return;
     }
-    // Promise.resolve adota o thenable do Supabase (PostgrestBuilder e PromiseLike,
-    // nao tem .catch) -> vira Promise real com .then/.catch.
-    void Promise.resolve(supabase.rpc("my_plan")).then(({ data, error }) => {
+    const client = supabase;
+
+    function fetchPlan() {
+      // Promise.resolve adota o thenable do Supabase (PostgrestBuilder e PromiseLike,
+      // nao tem .catch) -> vira Promise real com .then/.catch.
+      void Promise.resolve(client.rpc("my_plan"))
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          if (error || data === null || typeof data !== "object") {
+            // Log explícito: um erro transitório do my_plan rebaixa para free só
+            // nesta sessão — sem isto, um Pro "perde" acesso sem rastro de diagnóstico.
+            if (error) console.warn("[usePlan] my_plan falhou, assumindo free:", error.message);
+            setInfo(FREE);
+            return;
+          }
+          const d = data as { plan?: string; trial?: boolean; until?: string };
+          const plan: PlanId = d.plan === "pro" || d.plan === "corporativo" ? d.plan : "free";
+          setInfo({
+            plan,
+            isPro: plan !== "free",
+            trial: Boolean(d.trial),
+            until: typeof d.until === "string" ? d.until : undefined,
+            loading: false,
+          });
+        })
+        .catch(() => {
+          // Promise rejeitada (rede/supabase offline) → degrada para free,
+          // evita loading:true para sempre.
+          if (!cancelled) setInfo(FREE);
+        });
+    }
+
+    fetchPlan();
+    // Re-busca o plano quando a sessão muda (login, logout, refresh de token,
+    // resgate de cupom). Sem isto, o plano fica congelado até um reload completo:
+    // quem acabou de pagar/logar continua vendo "free" e quem saiu continua "pro".
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(() => {
       if (cancelled) return;
-      if (error || data === null || typeof data !== "object") {
-        setInfo(FREE);
-        return;
-      }
-      const d = data as { plan?: string; trial?: boolean; until?: string };
-      const plan: PlanId = d.plan === "pro" || d.plan === "corporativo" ? d.plan : "free";
-      setInfo({
-        plan,
-        isPro: plan !== "free",
-        trial: Boolean(d.trial),
-        until: typeof d.until === "string" ? d.until : undefined,
-        loading: false,
-      });
-    }).catch(() => {
-      // Promise rejeitada (rede/supabase offline) → degrada para free,
-      // evita loading:true para sempre.
-      if (!cancelled) setInfo(FREE);
+      setInfo((prev) => ({ ...prev, loading: true }));
+      fetchPlan();
     });
+
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
   }, []);
 
