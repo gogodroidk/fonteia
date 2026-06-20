@@ -763,7 +763,7 @@ export function ConsultasPage() {
             title="Consultas premium não configuradas"
             description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
             tone="warning"
-            action={{ label: "Ver planos", href: "/billing" }}
+            action={{ label: "Ver planos", href: "/app/planos" }}
           />
         </div>
       ) : catalogData !== null ? (

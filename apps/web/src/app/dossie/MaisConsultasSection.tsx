@@ -246,7 +246,7 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
             Faça login para consultar.
           </span>
           <a
-            href="/auth/login"
+            href="/entrar"
             className="btn btn--ghost btn--sm"
             style={{ alignSelf: "flex-start", fontSize: 11.5 }}
           >
@@ -281,7 +281,7 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
             Recurso do plano pago.
           </span>
           <a
-            href="/billing"
+            href="/app/planos"
             className="btn btn--ghost btn--sm"
             style={{ alignSelf: "flex-start", fontSize: 11.5 }}
           >
@@ -1049,7 +1049,7 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
             title="Consultas premium não configuradas"
             description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
             tone="warning"
-            action={{ label: "Ver planos", href: "/billing" }}
+            action={{ label: "Ver planos", href: "/app/planos" }}
           />
         </div>
       )}
