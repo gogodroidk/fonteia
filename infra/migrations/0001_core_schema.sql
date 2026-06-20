@@ -77,7 +77,11 @@ CREATE TABLE IF NOT EXISTS entities (
   external_ids JSONB NOT NULL DEFAULT '{}'::jsonb,
   attributes JSONB NOT NULL DEFAULT '{}'::jsonb,
   geometry GEOMETRY,
-  embedding VECTOR(1536),
+  -- 768 dims (Gemini text-embedding-004). Corrigido de VECTOR(1536) (OpenAI
+  -- ada-002, removido) para casar com o banco de produção e com as funções
+  -- match_entities/similar_entities (que declaram vector(768)). Recriar o banco
+  -- com 1536 quebraria a busca semântica. Ver docs/HARDENING.md §3.
+  embedding VECTOR(768),
   source_ids TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
