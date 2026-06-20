@@ -36,14 +36,15 @@ import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { ThemeToggle } from "./components/ui";
 import { HelpModeProvider, HelpHint, useHelpMode } from "./components/help-mode";
-import { LoginPage } from "./app/auth/login-page";
+// LandingPage permanece import ESTÁTICO: é o LCP do visitante anônimo (a rota "/"
+// é pré-renderizada/SSG). Carregá-la sob demanda só piscaria um fallback por cima
+// do HTML já visível. LoginPage/OnboardingPage e os widgets de IA (Omnibox/Chat)
+// NÃO aparecem no first paint da landing, então saem do chunk de entrada (lazy,
+// declarados mais abaixo junto das demais rotas code-split).
 import { LandingPage } from "./app/landing/page";
-import { OnboardingPage } from "./app/onboarding/page";
 import type { LegalKind } from "./app/legal/page";
 import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
-import { IntelligenceOmnibox } from "./components/ai/IntelligenceOmnibox";
-import { ContextChat } from "./components/ai/ContextChat";
 import { PwaInstallPrompt } from "./components/pwa-install-prompt";
 
 // --- ErrorBoundary: captura erros de chunks lazy e renderiza fallback amigável ---
@@ -90,6 +91,24 @@ class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryStat
 }
 
 // --- Lazy-loaded internal pages (code-split per route) ---
+// LoginPage / OnboardingPage: só renderizam atrás de auth (/entrar, /app sem
+// sessão, ou pós-login), nunca no first paint da landing — code-split tira o
+// peso delas do chunk de entrada.
+const LoginPage = lazy(() =>
+  import("./app/auth/login-page").then((m) => ({ default: m.LoginPage })),
+);
+const OnboardingPage = lazy(() =>
+  import("./app/onboarding/page").then((m) => ({ default: m.OnboardingPage })),
+);
+// Widgets de IA do shell autenticado (paleta ⌘K + chat flutuante). Não montam
+// para visitante anônimo; lazy mantém o código fora do bundle inicial e os
+// carrega quando o shell aparece.
+const IntelligenceOmnibox = lazy(() =>
+  import("./components/ai/IntelligenceOmnibox").then((m) => ({ default: m.IntelligenceOmnibox })),
+);
+const ContextChat = lazy(() =>
+  import("./components/ai/ContextChat").then((m) => ({ default: m.ContextChat })),
+);
 const DashboardPage = lazy(() =>
   import("./app/page").then((m) => ({ default: m.DashboardPage })),
 );
@@ -730,12 +749,16 @@ function AppShell({ path, navigate }: AppShellProps) {
               {/* Botão de inteligência (omnibox + paleta ⌘K) — IA da Fonte.ia */}
               <HelpHint id="topbar.ai">
                 <div className="shell-omnibox">
-                  <IntelligenceOmnibox
-                    context={aiContext}
-                    {...(aiAccessToken ? { accessToken: aiAccessToken } : {})}
-                    placeholder="Inteligência…"
-                    onNavigate={go}
-                  />
+                  {/* fallback null: o omnibox aparece ao terminar de carregar;
+                      sem reservar espaço extra (não causa layout shift). */}
+                  <Suspense fallback={null}>
+                    <IntelligenceOmnibox
+                      context={aiContext}
+                      {...(aiAccessToken ? { accessToken: aiAccessToken } : {})}
+                      placeholder="Inteligência…"
+                      onNavigate={go}
+                    />
+                  </Suspense>
                 </div>
               </HelpHint>
               <HelpHint id="topbar.theme">
@@ -898,7 +921,10 @@ function AppShell({ path, navigate }: AppShellProps) {
       {/* Assistente flutuante (chat contextual). No mobile a IA fica no FAB "Perguntar"
           abaixo (evita dois botões flutuantes empilhados), então escondemos este wrapper. */}
       <div className="shell-chat">
-        <ContextChat context={aiContext} {...(aiAccessToken ? { accessToken: aiAccessToken } : {})} />
+        {/* fallback null: o botão flutuante do chat aparece ao carregar. */}
+        <Suspense fallback={null}>
+          <ContextChat context={aiContext} {...(aiAccessToken ? { accessToken: aiAccessToken } : {})} />
+        </Suspense>
       </div>
 
       {/* Convite para instalar o app no celular (Android/Chrome e iOS/Safari). */}
@@ -1263,23 +1289,39 @@ export function App() {
     content = <ErrorBoundary><Suspense fallback={pageFallback}>{publicMarketing}</Suspense></ErrorBoundary>;
   } else if (inApp) {
     if (!user) {
-      content = <LoginPage onGoToLanding={() => navigate("/")} />;
+      content = (
+        <ErrorBoundary>
+          <Suspense fallback={pageFallback}>
+            <LoginPage onGoToLanding={() => navigate("/")} />
+          </Suspense>
+        </ErrorBoundary>
+      );
     } else if (!onboarded) {
       content = (
-        <OnboardingPage
-          name={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email?.split("@")[0]}
-          onFinish={() => {
-            markOnboarded();
-            setOnboarded(true);
-            navigate("/app");
-          }}
-        />
+        <ErrorBoundary>
+          <Suspense fallback={pageFallback}>
+            <OnboardingPage
+              name={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email?.split("@")[0]}
+              onFinish={() => {
+                markOnboarded();
+                setOnboarded(true);
+                navigate("/app");
+              }}
+            />
+          </Suspense>
+        </ErrorBoundary>
       );
     } else {
       content = <AppShell path={path} navigate={navigate} />;
     }
   } else if (path === "/entrar") {
-    content = <LoginPage onGoToLanding={() => navigate("/")} />;
+    content = (
+      <ErrorBoundary>
+        <Suspense fallback={pageFallback}>
+          <LoginPage onGoToLanding={() => navigate("/")} />
+        </Suspense>
+      </ErrorBoundary>
+    );
   } else {
     content = <LandingPage onLogin={() => navigate("/entrar")} />;
   }
