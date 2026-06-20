@@ -321,6 +321,9 @@ export function CerebroPage() {
   const queryRef = useRef<string>("");
   // Ref para o mapa de selos de idoneidade — acessado no loop de render (draw).
   const nodeSeloMapRef = useRef<Map<string, IdoneidadeSelo>>(new Map());
+  // Trava de "auto-gerar a partir da URL" — garante que o deep-link (?cnpj/?nome)
+  // dispare o grafo UMA única vez no mount (e não a cada re-render).
+  const didInitFromUrlRef = useRef(false);
 
   // Estado de interação por ponteiro (drag de nó / pan).
   const dragRef = useRef<{
@@ -816,6 +819,35 @@ export function CerebroPage() {
     },
     [runCnpj, runHit],
   );
+
+  /**
+   * Deep-link: ao montar, lê `?cnpj=` (ou `?nome=`/`?q=`) da URL e GERA o grafo
+   * automaticamente. É como o Dossiê chega aqui (`navigateToCerebro(cnpj)` →
+   * `/app/cerebro?cnpj=...`). Sem isto, o canvas ficava vazio mesmo com o CNPJ na
+   * URL. Roda só uma vez (trava `didInitFromUrlRef`); CNPJ tem prioridade sobre nome.
+   */
+  useEffect(() => {
+    if (didInitFromUrlRef.current) return;
+    if (typeof window === "undefined") return;
+    didInitFromUrlRef.current = true;
+
+    const params = new URLSearchParams(window.location.search);
+    const cnpjParam = params.get("cnpj") ?? "";
+    const cnpj = sanitizeCnpj(cnpjParam);
+    if (cnpj !== "") {
+      setInput(formatCnpj(cnpj));
+      void runCnpj(cnpj, true);
+      return;
+    }
+    // Fallback amigável: aceita também ?nome= / ?q= (busca por nome e auto-escolhe).
+    const nomeParam = (params.get("nome") ?? params.get("q") ?? "").trim();
+    if (nomeParam.length >= 2) {
+      setInput(nomeParam);
+      handleGuideExample(nomeParam);
+    }
+    // Mount-only: refs e callbacks são estáveis; não re-disparar ao mudar deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Expande um nó-folha (por CNPJ, por deputadoId, por nome ou município). */
   const expandNode = useCallback(
