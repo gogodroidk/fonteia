@@ -174,7 +174,7 @@ function IdoneidadeCard({ card }: { card: IdoneidadeCardState }) {
           <Lock size={13} aria-hidden="true" style={{ color: "var(--t-low)", flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: "var(--t-mid)" }}>{label}</span>
         </div>
-        <a href="/auth/login" className="btn btn--ghost btn--sm" style={{ fontSize: 11.5 }}>
+        <a href="/entrar" className="btn btn--ghost btn--sm" style={{ fontSize: 11.5 }}>
           Entrar para consultar
         </a>
       </div>

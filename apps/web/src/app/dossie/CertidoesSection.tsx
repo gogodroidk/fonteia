@@ -186,7 +186,7 @@ function CertidaoCard({ card }: CertidaoCardProps) {
           <Lock size={14} aria-hidden="true" style={{ color: "var(--t-low)", flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: "var(--t-mid)" }}>{label}</span>
         </div>
-        <a href="/auth/login" className="btn btn--ghost btn--sm" style={{ fontSize: 11.5 }}>
+        <a href="/entrar" className="btn btn--ghost btn--sm" style={{ fontSize: 11.5 }}>
           Entrar para consultar
         </a>
       </div>
@@ -842,7 +842,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             title="Certidões automatizadas"
             description="A integração com InfoSimples não está configurada neste ambiente. Disponível nos planos Escritório e Corporativo."
             tone="warning"
-            action={{ label: "Ver planos", href: "/billing" }}
+            action={{ label: "Ver planos", href: "/app/planos" }}
           />
         </div>
       )}
@@ -855,7 +855,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             title="Entre para consultar"
             description="Certidões e consultas de idoneidade exigem login."
             tone="info"
-            action={{ label: "Entrar", href: "/auth/login" }}
+            action={{ label: "Entrar", href: "/entrar" }}
           />
         </div>
       )}
@@ -868,7 +868,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             title="Certidões automatizadas"
             description="Disponível nos planos Escritório e Corporativo. Automatize a verificação de compliance da sua carteira de clientes."
             tone="warning"
-            action={{ label: "Ver planos", href: "/billing" }}
+            action={{ label: "Ver planos", href: "/app/planos" }}
           />
         </div>
       )}
