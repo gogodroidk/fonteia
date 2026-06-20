@@ -270,8 +270,9 @@ const S = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "32px",
-    height: "32px",
+    // Alvo de toque mínimo para mobile (era 32px, abaixo do recomendado).
+    width: "40px",
+    height: "40px",
     borderRadius: "var(--r-md, 12px)",
     marginLeft: "auto",
     flexShrink: 0,
