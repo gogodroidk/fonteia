@@ -224,6 +224,9 @@ const PrivacidadeCentralPage = lazy(() =>
   import("./app/privacidade/page").then((m) => ({ default: m.PrivacidadeCentralPage })),
 );
 const EmpresaPage = lazy(() => import("./app/publico/empresa-page").then((m) => ({ default: m.EmpresaPage })));
+const EnterprisePage = lazy(() =>
+  import("./app/enterprise/page").then((m) => ({ default: m.EnterprisePage })),
+);
 const CerebroPage = lazy(() =>
   import("./app/cerebro/page").then((m) => ({ default: m.CerebroPage })),
 );
@@ -1236,6 +1239,7 @@ export function App() {
     path === "/contato" ? <ContatoPage /> :
     path === "/central-privacidade" || path === "/privacidade-central" ? <PrivacidadeCentralPage /> :
     path === "/empresa" ? <EmpresaPage /> :
+    path === "/enterprise" ? <EnterprisePage /> :
     null;
 
   const inApp = path.startsWith("/app");

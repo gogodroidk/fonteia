@@ -38,6 +38,7 @@ import { ParaQuemPage } from "../src/app/publico/para-quem";
 import { ContatoPage } from "../src/app/publico/contato";
 import { LegalPage } from "../src/app/legal/page";
 import { PrivacidadeCentralPage } from "../src/app/privacidade/page";
+import { EnterprisePage } from "../src/app/enterprise/page";
 
 // Wrappers sem props para as páginas legais (LegalPage requer kind + onHome).
 function PrivacidadeLegalPage() { return <LegalPage kind="privacidade" onHome={() => {}} />; }
@@ -207,6 +208,13 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     description:
       "Como a Fonte.ia trata dados (LGPD), por que os dados de leilão são públicos (Lei de Acesso à Informação) e a infraestrutura de segurança (Supabase, Cloudflare, Stripe).",
     Component: SegurancaPage,
+  },
+  {
+    path: "/enterprise",
+    title: "Fonte.ia Enterprise — inteligência de dados públicos com rastreabilidade auditável",
+    description:
+      "Plano corporativo da Fonte.ia para compliance, due diligence e risco de fornecedor: o grafo que liga o dinheiro público ao privado com fonte citável (link+data+hash), API, SSO/RBAC, cota de créditos, trilha de auditoria, relatório com marca, DPA/LGPD e SLA. Sob consulta.",
+    Component: EnterprisePage,
   },
   {
     path: "/contato",
