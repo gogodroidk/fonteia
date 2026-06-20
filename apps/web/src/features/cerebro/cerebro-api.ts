@@ -986,6 +986,32 @@ function toErrorMessage(error: unknown): string {
  * ex.: QSA de `company`, deputado de `parliamentary_expense`). `rel` define como
  * a folha se liga ao centro (despesas de fornecedor usam `fornecedor`, não `cnpj`).
  */
+/**
+ * Normaliza um rótulo cru de empresa (vindo de contratos/despesas) em um nome
+ * apresentável para o nó-centro. Sem isto, o centro herdava textos como
+ * "CONTRATADA: BANCO DO BRASIL S/A." (contrato) ou
+ * "COMBUSTÍVEIS E LUBRIFICANTES. — POSTO X" (categoria CEAP + fornecedor).
+ * Conservador: se não conseguir limpar, devolve o texto original aparado.
+ */
+function cleanCompanyName(raw: string): string {
+  let s = raw.trim();
+  if (s === "") return s;
+  // Despesas CEAP vêm como "CATEGORIA DA DESPESA — FORNECEDOR": fica com o fornecedor.
+  const emDash = s.lastIndexOf(" — ");
+  if (emDash !== -1) {
+    const after = s.slice(emDash + 3).trim();
+    if (after !== "") s = after;
+  }
+  // Remove prefixos de contrato comuns ("CONTRATADA:", "FORNECEDOR -", …).
+  s = s.replace(
+    /^(contratad[ao]|contratante|contrato|fornecedor|empresa|benefici[áa]ri[ao]|raz[ãa]o social)\s*[:\-–]\s*/i,
+    "",
+  );
+  // Colapsa espaços e remove pontuação solta nas pontas.
+  s = s.replace(/\s+/g, " ").replace(/^[\s.,;:–-]+|[\s.,;:–-]+$/g, "").trim();
+  return s === "" ? raw.trim() : s;
+}
+
 async function fetchKindByCnpj(
   kind: GraphKind,
   cnpj: string,
@@ -1002,7 +1028,7 @@ async function fetchKindByCnpj(
   let centerLabel = "";
   for (const row of rows) {
     if (centerLabel === "") {
-      const candidate = str(attr(row, "fornecedorNome")) || str(row.name);
+      const candidate = cleanCompanyName(str(attr(row, "fornecedorNome")) || str(row.name));
       if (candidate) centerLabel = candidate;
     }
     const leaf = leafFromRow(kind, row, rel, center);
@@ -1739,8 +1765,20 @@ export async function expandLeaf(
   return { cnpj: "", centerLabel: node.label, leaves, counts, errors };
 }
 
-/** CNPJ de exemplo para o estado inicial — escolhido por ter rede rica de dados. */
-export const EXEMPLO_CNPJ = "00000000000191"; // Banco do Brasil S.A.
+/**
+ * CNPJs de exemplo para o estado inicial do Cérebro — escolhidos por terem rede
+ * RICA no D1 (contratos públicos + despesas CEAP de vários deputados → demonstram
+ * o "siga o dinheiro"). Verificado em produção (jun/2026): Banco do Brasil sozinho
+ * tem poucos contratos; Vivo/Uber rendem grafos muito mais densos.
+ */
+export const EXEMPLOS_CNPJ: ReadonlyArray<{ cnpj: string; label: string }> = [
+  { cnpj: "02558157000162", label: "Telefônica / Vivo" },
+  { cnpj: "17895646000187", label: "Uber do Brasil" },
+  { cnpj: "00000000000191", label: "Banco do Brasil" },
+];
+
+/** Exemplo padrão (primeiro da lista). */
+export const EXEMPLO_CNPJ = EXEMPLOS_CNPJ[0]!.cnpj;
 
 // ─── API pública: Beneficiário Final (UBO) ───────────────────────────────────────
 

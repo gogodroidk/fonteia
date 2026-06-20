@@ -57,7 +57,7 @@ import {
   sanitizeCnpj,
   formatCnpj,
   resolveUBO,
-  EXEMPLO_CNPJ,
+  EXEMPLOS_CNPJ,
   CENTER_SENTINEL,
   type ExpandResult,
   type RawLeaf,
@@ -1373,18 +1373,37 @@ export function CerebroPage() {
                   Digite um CNPJ ou o nome de uma empresa, pessoa ou marca. Cada fio liga a entidade às
                   sanções, contratos, licitações, processos, municípios e mais — colorido por módulo.
                 </p>
-                <button
-                  className="btn btn--soft btn--sm"
-                  type="button"
-                  style={{ pointerEvents: "auto" }}
-                  onClick={() => {
-                    setInput(formatCnpj(EXEMPLO_CNPJ));
-                    void runCnpj(EXEMPLO_CNPJ, true);
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    pointerEvents: "auto",
                   }}
                 >
-                  <Sparkles size={14} aria-hidden="true" />
-                  Ver exemplo (Banco do Brasil)
-                </button>
+                  <span
+                    className="muted small"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                  >
+                    <Sparkles size={14} aria-hidden="true" />
+                    Ver exemplo:
+                  </span>
+                  {EXEMPLOS_CNPJ.map((ex) => (
+                    <button
+                      key={ex.cnpj}
+                      className="btn btn--soft btn--sm"
+                      type="button"
+                      onClick={() => {
+                        setInput(formatCnpj(ex.cnpj));
+                        void runCnpj(ex.cnpj, true);
+                      }}
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
