@@ -227,6 +227,9 @@ const EmpresaPage = lazy(() => import("./app/publico/empresa-page").then((m) => 
 const CerebroPage = lazy(() =>
   import("./app/cerebro/page").then((m) => ({ default: m.CerebroPage })),
 );
+const ConsultasPage = lazy(() =>
+  import("./app/consultas/page").then((m) => ({ default: m.ConsultasPage })),
+);
 const MunicipioDetailPage = lazy(() =>
   import("./app/municipios/municipio-detail-page").then((m) => ({ default: m.MunicipioDetailPage })),
 );
@@ -263,6 +266,7 @@ type RouteKey =
   | "leads"
   | "cerebro"
   | "dossie"
+  | "consultas"
   | "onboarding";
 
 const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
@@ -274,6 +278,7 @@ const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof La
   { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
   { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
   { path: "/app/dossie", route: "dossie", label: "Dossiê", icon: FileSearch2 },
+  { path: "/app/consultas", route: "consultas", label: "Consultas", icon: BadgeCheck },
   { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
   { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
   { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
@@ -318,6 +323,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   leads: "Leads com Motivo",
   cerebro: "Cérebro",
   dossie: "Dossiê da Empresa",
+  consultas: "Consultas Premium",
   onboarding: "Perfil",
 };
 
@@ -336,6 +342,7 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/inpi")) return "inpi";
   if (path.startsWith("/app/cerebro")) return "cerebro";
   if (path.startsWith("/app/dossie")) return "dossie";
+  if (path.startsWith("/app/consultas")) return "consultas";
   if (path.startsWith("/app/raio-x")) return "raio-x";
   if (path.startsWith("/app/leads")) return "leads";
   if (path.startsWith("/app/onboarding")) return "onboarding";
@@ -768,6 +775,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "raio-x" && <RaioXPage />}
                 {route === "cerebro" && <CerebroPage />}
                 {route === "dossie" && <DossiePage />}
+                {route === "consultas" && <ConsultasPage />}
                 {route === "leads" && <LeadsPage />}
                 {route === "onboarding" && <OnboardingProfissaoPage onFinish={() => go("/app")} />}
                 {route === "alertas" && <AlertasPage onSelectLot={handleSelectLot} />}
@@ -845,6 +853,7 @@ function AppShell({ path, navigate }: AppShellProps) {
           navByRoute("ambiental"),
           navByRoute("juridico"),
           navByRoute("inpi"),
+          navByRoute("consultas"),
           navByRoute("fontes"),
           { path: "/app/modules", route: "modules" as RouteKey, label: "Módulos", icon: LayoutGrid },
         ];

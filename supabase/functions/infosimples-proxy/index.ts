@@ -16,8 +16,8 @@
 // SEGREDOS (Supabase -> Edge Functions -> Secrets):
 //   INFOSIMPLES_TOKEN          obrigatorio p/ LIGAR. Ausente => 200 configured:false
 //                              (DORMENTE: o front cai no comportamento atual).
-//   INFOSIMPLES_MONTHLY_CAP    opcional; teto de chamadas 'live'/mes (default 400).
-//   INFOSIMPLES_DAILY_PER_USER opcional; limite de chamadas 'live'/dia por usuario (default 20).
+//   INFOSIMPLES_MONTHLY_CAP    opcional; teto de chamadas 'live'/mes (default 10000).
+//   INFOSIMPLES_DAILY_PER_USER opcional; limite de chamadas 'live'/dia por usuario (default 100).
 //   INFOSIMPLES_CACHE_TTL_DAYS opcional; frescor do cache em dias (default 60).
 //   INFOSIMPLES_TIMEOUT_S      opcional; timeout enviado a InfoSimples em s (default 300).
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY  injetados pela plataforma.
@@ -41,8 +41,8 @@ const PUBLISHABLE_KEY = "sb_publishable_uojihld8t92MQXo7gXrR3w_WPVn4RkZ";
 const PROVIDER = "infosimples";
 
 // Defaults da trava — sobrescreviveis por secret (sem redeploy de logica).
-const DEFAULT_MONTHLY_CAP = 400;
-const DEFAULT_DAILY_PER_USER = 20;
+const DEFAULT_MONTHLY_CAP = 10000; // was 400; adjustable via INFOSIMPLES_MONTHLY_CAP secret
+const DEFAULT_DAILY_PER_USER = 100; // was 20; adjustable via INFOSIMPLES_DAILY_PER_USER secret
 const DEFAULT_CACHE_TTL_DAYS = 60;
 const DEFAULT_TIMEOUT_S = 300;
 
@@ -139,6 +139,104 @@ function item(rotulo: string, valor: unknown): ItemRotulo | null {
 // Helper: filtra nulls de uma lista de candidatos a ItemRotulo.
 function compactItems(...candidates: (ItemRotulo | null)[]): ItemRotulo[] {
   return candidates.filter((c): c is ItemRotulo => c !== null);
+}
+
+// Internal registry for CATALOG metadata (populated by genericCnpjLookup).
+const _genericMeta = new Map<string, { titulo: string; categoria: string }>();
+
+/**
+ * Factory para consultas genéricas que recebem CNPJ como entrada primária.
+ * Gera um LookupDef com normalize defensivo que nunca lança exceção.
+ * @param opts.org  Segmento org do endpoint InfoSimples (ex: "sefaz/sp")
+ * @param opts.slug Slug do endpoint (ex: "certidao-debitos")
+ * @param opts.titulo Título legível para exibição no front
+ * @param opts.categoria Categoria para o CATALOG
+ * @param opts.tipo "sancao" | "certidao" | "cadastro" | "info" — controla inferência de status
+ */
+function genericCnpjLookup(opts: {
+  org: string;
+  slug: string;
+  titulo: string;
+  categoria: string;
+  tipo?: "sancao" | "certidao" | "cadastro" | "info";
+}): LookupDef {
+  const endpoint = `https://api.infosimples.com/api/v2/consultas/${opts.org}/${opts.slug}`;
+  const build: LookupDef["build"] = (url) => {
+    const cnpj = sanitizeCnpj(url.searchParams.get("cnpj") ?? "");
+    if (!cnpj) return { error: "CNPJ inválido: informe os 14 números." };
+    return { key: cnpj, params: { cnpj } };
+  };
+  const normalize: LookupDef["normalize"] = (data): NormalizedCompliance => {
+    try {
+      const d = (data[0] ?? {}) as Record<string, unknown>;
+
+      // Status: inferido por tipo
+      let status: StatusCompliance = "regular";
+      if (opts.tipo === "sancao") {
+        status = data.length > 0 ? "irregular" : "regular";
+      } else if (opts.tipo === "certidao") {
+        // Procura por palavras-chave de regularidade / irregularidade em todos os campos escalares
+        const allText = Object.values(d)
+          .filter((v) => typeof v === "string" || typeof v === "number")
+          .map((v) => asStr(v).toLowerCase())
+          .join(" ");
+        const regularKws = ["negativa", "nada consta", "regular", "isento", "sem débito", "sem debito", "positiva com efeito", "positiva com efeitos"];
+        const irregularKws = ["positiva", "consta", "débito", "debito", "irregular", "pendente", "inadimplente"];
+        const isRegular = regularKws.some((kw) => allText.includes(kw));
+        const isIrregular = irregularKws.some((kw) => allText.includes(kw));
+        if (isRegular && !isIrregular) status = "regular";
+        else if (isIrregular) status = "irregular";
+        else if (data.length === 0) status = "indisponivel";
+        else status = "atencao";
+      } else {
+        // cadastro/info: sempre regular (informacional)
+        status = data.length === 0 ? "indisponivel" : "regular";
+      }
+
+      // Itens: até 30 campos escalares de data[0]; arrays/objects viram contadores
+      const itens: ItemRotulo[] = [];
+      for (const [k, v] of Object.entries(d)) {
+        if (itens.length >= 30) break;
+        if (k === "site_receipt" || k === "site_receipts") continue;
+        if (Array.isArray(v)) {
+          if (v.length > 0) itens.push({ rotulo: k, valor: `${v.length} registro(s)` });
+        } else if (v !== null && typeof v === "object") {
+          const entries = Object.entries(v as Record<string, unknown>);
+          if (entries.length > 0) itens.push({ rotulo: k, valor: `${entries.length} campo(s)` });
+        } else {
+          const str = asStr(v);
+          if (str) itens.push({ rotulo: k, valor: str });
+        }
+      }
+
+      // Resumo de 1 linha
+      const countMsg = opts.tipo === "sancao"
+        ? data.length === 0 ? "Nada consta" : `${data.length} registro(s) encontrado(s)`
+        : data.length === 0 ? "Sem dados retornados" : `${data.length} resultado(s)`;
+      const resumo = `${opts.titulo}: ${countMsg}`;
+
+      return {
+        status,
+        titulo: opts.titulo,
+        resumo,
+        itens,
+        fonteUrl: extractFonteUrl(d),
+      };
+    } catch {
+      // normalize nunca lança — fallback seguro
+      return {
+        status: "indisponivel",
+        titulo: opts.titulo,
+        resumo: "Erro ao processar resposta.",
+        itens: [],
+      };
+    }
+  };
+  const def: LookupDef = { endpoint, build, normalize };
+  (def as Record<string, unknown>)["_titulo"] = opts.titulo;
+  (def as Record<string, unknown>)["_categoria"] = opts.categoria;
+  _genericMeta.set(endpoint, { titulo: opts.titulo, categoria: opts.categoria });
+  return def;
 }
 
 const LOOKUPS: Record<string, LookupDef> = {
@@ -745,7 +843,229 @@ const LOOKUPS: Record<string, LookupDef> = {
       };
     },
   },
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // CONSULTAS GENÉRICAS (genericCnpjLookup) — entrada CNPJ, normalize defensivo.
+  // Chave = "<org-com-/-trocada-por-->-<slug>". Não duplicar chaves dos ricos.
+  // ════════════════════════════════════════════════════════════════════════════
+
+  // ─── Receita Federal extras ──────────────────────────────────────────────────
+  "receita-federal-situacao": genericCnpjLookup({ org: "receita-federal", slug: "situacao", titulo: "Situação Fiscal (Receita Federal)", categoria: "cadastro_federal", tipo: "info" }),
+  "receita-federal-radar": genericCnpjLookup({ org: "receita-federal", slug: "radar", titulo: "Radar de Habilitação (Receita Federal)", categoria: "comercio_exterior", tipo: "info" }),
+  "receita-federal-pgfn-devedores": genericCnpjLookup({ org: "receita-federal/pgfn", slug: "devedores", titulo: "Devedores PGFN (Receita Federal)", categoria: "certidoes_federais", tipo: "sancao" }),
+
+  // ─── Regulatórios federais ───────────────────────────────────────────────────
+  "anvisa-empresas": genericCnpjLookup({ org: "anvisa", slug: "empresas", titulo: "Empresas (ANVISA)", categoria: "saude", tipo: "cadastro" }),
+  "anp-postos": genericCnpjLookup({ org: "anp", slug: "postos", titulo: "Postos (ANP)", categoria: "ambiental_energetico", tipo: "cadastro" }),
+  "anp-certificados": genericCnpjLookup({ org: "anp", slug: "certificados", titulo: "Certificados (ANP)", categoria: "ambiental_energetico", tipo: "certidao" }),
+  "anp-revendas": genericCnpjLookup({ org: "anp", slug: "revendas", titulo: "Revendas (ANP)", categoria: "ambiental_energetico", tipo: "cadastro" }),
+  "antt-transportador": genericCnpjLookup({ org: "antt", slug: "transportador", titulo: "Transportador (ANTT)", categoria: "transportes", tipo: "cadastro" }),
+  "antt-sifama-lista-autos": genericCnpjLookup({ org: "antt/sifama", slug: "lista-autos", titulo: "Lista de Autos SIFAMA (ANTT)", categoria: "transportes", tipo: "sancao" }),
+  "b3-participantes": genericCnpjLookup({ org: "b3", slug: "participantes", titulo: "Participantes (B3)", categoria: "financeiro", tipo: "cadastro" }),
+  "bcb-cheques-sem-fundo": genericCnpjLookup({ org: "bcb", slug: "cheques-sem-fundo", titulo: "Cheques sem Fundo (BCB)", categoria: "financeiro", tipo: "info" }),
+  "cade-processos": genericCnpjLookup({ org: "cade", slug: "processos", titulo: "Processos (CADE)", categoria: "sancoes", tipo: "sancao" }),
+  "carf-processo": genericCnpjLookup({ org: "carf", slug: "processo", titulo: "Processo Administrativo (CARF)", categoria: "tributario", tipo: "info" }),
+  "cgu-cnc-tipo1": genericCnpjLookup({ org: "cgu", slug: "cnc-tipo1", titulo: "CNC Tipo 1 (CGU)", categoria: "sancoes", tipo: "certidao" }),
+  "cvm-participante": genericCnpjLookup({ org: "cvm", slug: "participante", titulo: "Participante (CVM)", categoria: "financeiro", tipo: "cadastro" }),
+  "cvm-processo-administrativo": genericCnpjLookup({ org: "cvm", slug: "processo-administrativo", titulo: "Processo Administrativo (CVM)", categoria: "financeiro", tipo: "sancao" }),
+  "cvm-sancionadores": genericCnpjLookup({ org: "cvm", slug: "sancionadores", titulo: "Sancionadores (CVM)", categoria: "financeiro", tipo: "sancao" }),
+  "dataprev-fap": genericCnpjLookup({ org: "dataprev", slug: "fap", titulo: "FAP (Dataprev)", categoria: "tributario", tipo: "info" }),
+  "drei-registro": genericCnpjLookup({ org: "drei", slug: "registro", titulo: "Registro (DREI)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "fazenda-sped": genericCnpjLookup({ org: "fazenda", slug: "sped", titulo: "SPED (Fazenda)", categoria: "tributario", tipo: "cadastro" }),
+
+  // ─── IBAMA ───────────────────────────────────────────────────────────────────
+  "ibama-cr": genericCnpjLookup({ org: "ibama", slug: "cr", titulo: "Cadastro Técnico Federal (IBAMA)", categoria: "ambiental", tipo: "certidao" }),
+  "ibama-embargos": genericCnpjLookup({ org: "ibama", slug: "embargos", titulo: "Embargos (IBAMA)", categoria: "ambiental", tipo: "sancao" }),
+  "ibama-infracoes": genericCnpjLookup({ org: "ibama", slug: "infracoes", titulo: "Infrações Ambientais (IBAMA)", categoria: "ambiental", tipo: "sancao" }),
+
+  // ─── Juntas Comerciais ───────────────────────────────────────────────────────
+  "junta-comercial-ba-ficha-completa": genericCnpjLookup({ org: "junta-comercial/ba", slug: "ficha-completa", titulo: "Ficha Completa JUCEB (BA)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-es-ficha-completa": genericCnpjLookup({ org: "junta-comercial/es", slug: "ficha-completa", titulo: "Ficha Completa JUCEES (ES)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-go-ficha-completa": genericCnpjLookup({ org: "junta-comercial/go", slug: "ficha-completa", titulo: "Ficha Completa JUCEG (GO)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-mg-ficha-completa": genericCnpjLookup({ org: "junta-comercial/mg", slug: "ficha-completa", titulo: "Ficha Completa JUCEMG (MG)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-ms-ficha-completa": genericCnpjLookup({ org: "junta-comercial/ms", slug: "ficha-completa", titulo: "Ficha Completa JUCEMS (MS)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-pe-ficha-completa": genericCnpjLookup({ org: "junta-comercial/pe", slug: "ficha-completa", titulo: "Ficha Completa JUCEPE (PE)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-pr-ficha-completa": genericCnpjLookup({ org: "junta-comercial/pr", slug: "ficha-completa", titulo: "Ficha Completa JUCEPAR (PR)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-rj-ficha-completa": genericCnpjLookup({ org: "junta-comercial/rj", slug: "ficha-completa", titulo: "Ficha Completa JUCERJA (RJ)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-rs-ficha-completa": genericCnpjLookup({ org: "junta-comercial/rs", slug: "ficha-completa", titulo: "Ficha Completa JUCERGS (RS)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-sc-ficha-completa": genericCnpjLookup({ org: "junta-comercial/sc", slug: "ficha-completa", titulo: "Ficha Completa JUCESC (SC)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-sp-ficha-completa": genericCnpjLookup({ org: "junta-comercial/sp", slug: "ficha-completa", titulo: "Ficha Completa JUCESP (SP)", categoria: "junta_comercial", tipo: "cadastro" }),
+  "junta-comercial-sp-cli": genericCnpjLookup({ org: "junta-comercial/sp", slug: "cli", titulo: "CLI JUCESP (SP)", categoria: "junta_comercial", tipo: "certidao" }),
+  "junta-comercial-sp-completa": genericCnpjLookup({ org: "junta-comercial/sp", slug: "completa", titulo: "Dados Completos JUCESP (SP)", categoria: "junta_comercial", tipo: "info" }),
+
+  // ─── Sanções / Compliance ────────────────────────────────────────────────────
+  "cnj-improbidade": genericCnpjLookup({ org: "cnj", slug: "improbidade", titulo: "Improbidade Administrativa (CNJ)", categoria: "sancoes", tipo: "sancao" }),
+  "cnj-seeu-processos": genericCnpjLookup({ org: "cnj/seeu", slug: "processos", titulo: "Processos SEEU (CNJ)", categoria: "juridico", tipo: "info" }),
+  "comprot-processo": genericCnpjLookup({ org: "comprot", slug: "processo", titulo: "Processo COMPROT", categoria: "tributario", tipo: "info" }),
+  "cenprot-sp-protestos": genericCnpjLookup({ org: "cenprot-sp", slug: "protestos", titulo: "Protestos CENPROT (SP)", categoria: "financeiro", tipo: "sancao" }),
+  "tce-sp-certidao-apenados": genericCnpjLookup({ org: "tce/sp", slug: "certidao-apenados", titulo: "Certidão de Apenados TCE-SP", categoria: "sancoes", tipo: "sancao" }),
+  "tcu-cnp": genericCnpjLookup({ org: "tcu", slug: "cnp", titulo: "Certidão Negativa de Processo (TCU)", categoria: "sancoes", tipo: "certidao" }),
+  "tcu-consolidada-pj": genericCnpjLookup({ org: "tcu", slug: "consolidada-pj", titulo: "Consulta Consolidada PJ (TCU/APF)", categoria: "sancoes", tipo: "info" }),
+  "tcu-inabilitados": genericCnpjLookup({ org: "tcu", slug: "inabilitados", titulo: "Inabilitados (TCU)", categoria: "sancoes", tipo: "sancao" }),
+  "tcu-inidoneos": genericCnpjLookup({ org: "tcu", slug: "inidoneos", titulo: "Inidôneos (TCU)", categoria: "sancoes", tipo: "sancao" }),
+  "transparencia-cepim": genericCnpjLookup({ org: "portal-transparencia", slug: "cepim", titulo: "CEPIM (Portal da Transparência)", categoria: "sancoes", tipo: "sancao" }),
+  "transparencia-contratos": genericCnpjLookup({ org: "portal-transparencia", slug: "contratos", titulo: "Contratos Federais (Portal da Transparência)", categoria: "contratos_publicos", tipo: "info" }),
+
+  // ─── MPF / MPT ───────────────────────────────────────────────────────────────
+  "mpf-certidao-negativa": genericCnpjLookup({ org: "mpf", slug: "certidao-negativa", titulo: "Certidão Negativa (MPF)", categoria: "juridico", tipo: "certidao" }),
+  "mpt-cnf-unificada": genericCnpjLookup({ org: "mpt/cnf", slug: "unificada", titulo: "CNF Unificada (MPT)", categoria: "trabalhista", tipo: "certidao" }),
+
+  // ─── SUSEP ───────────────────────────────────────────────────────────────────
+  "susep-administradores": genericCnpjLookup({ org: "susep", slug: "administradores", titulo: "Administradores (SUSEP)", categoria: "financeiro", tipo: "cadastro" }),
+
+  // ─── PGE-SP ──────────────────────────────────────────────────────────────────
+  "pge-sp-cndt": genericCnpjLookup({ org: "pge/sp", slug: "cndt", titulo: "CNDT PGE-SP", categoria: "tributario_estadual", tipo: "certidao" }),
+  "pge-sp-divida-ativa": genericCnpjLookup({ org: "pge/sp", slug: "divida-ativa", titulo: "Dívida Ativa PGE-SP", categoria: "tributario_estadual", tipo: "sancao" }),
+
+  // ─── Prefeitura SP Capital ────────────────────────────────────────────────────
+  "pref-sp-sao-paulo-cadin": genericCnpjLookup({ org: "pref/sp/sao-paulo", slug: "cadin", titulo: "CADIN Municipal SP", categoria: "tributario_municipal", tipo: "sancao" }),
+  "pref-sp-sao-paulo-cpom": genericCnpjLookup({ org: "pref/sp/sao-paulo", slug: "cpom", titulo: "CPOM (Prefeitura SP)", categoria: "tributario_municipal", tipo: "cadastro" }),
+  "pref-sp-sao-paulo-ccm": genericCnpjLookup({ org: "pref/sp/sao-paulo", slug: "ccm", titulo: "CCM (Prefeitura SP)", categoria: "tributario_municipal", tipo: "cadastro" }),
+  "pref-sp-sao-paulo-ctm": genericCnpjLookup({ org: "pref/sp/sao-paulo", slug: "ctm", titulo: "CTM Municipal SP", categoria: "tributario_municipal", tipo: "certidao" }),
+
+  // ─── SEFAZ Unificada e estados ───────────────────────────────────────────────
+  "sefaz-certidao-debitos": genericCnpjLookup({ org: "sefaz", slug: "certidao-debitos", titulo: "Certidão de Débitos SEFAZ (Unificada)", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-cadastro-centralizado": genericCnpjLookup({ org: "sefaz", slug: "cadastro-centralizado", titulo: "Cadastro Centralizado SEFAZ", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sefaz-df-iss": genericCnpjLookup({ org: "sefaz/df", slug: "iss", titulo: "ISS SEFAZ-DF", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sefaz-mg-cadin": genericCnpjLookup({ org: "sefaz/mg", slug: "cadin", titulo: "CADIN SEFAZ-MG", categoria: "tributario_estadual", tipo: "sancao" }),
+  "sefaz-mg-protesto": genericCnpjLookup({ org: "sefaz/mg", slug: "protesto", titulo: "Protesto SEFAZ-MG", categoria: "tributario_estadual", tipo: "sancao" }),
+  "sefaz-pr-cadin": genericCnpjLookup({ org: "sefaz/pr", slug: "cadin", titulo: "CADIN SEFAZ-PR", categoria: "tributario_estadual", tipo: "sancao" }),
+  "sefaz-ap-certidao-debitos": genericCnpjLookup({ org: "sefaz/ap", slug: "certidao-debitos", titulo: "CND SEFAZ-AP", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-ba-certidao-debitos": genericCnpjLookup({ org: "sefaz/ba", slug: "certidao-debitos", titulo: "CND SEFAZ-BA", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-ce-certidao-debitos": genericCnpjLookup({ org: "sefaz/ce", slug: "certidao-debitos", titulo: "CND SEFAZ-CE", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-df-certidao-debitos": genericCnpjLookup({ org: "sefaz/df", slug: "certidao-debitos", titulo: "CND SEFAZ-DF", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-es-certidao-debitos": genericCnpjLookup({ org: "sefaz/es", slug: "certidao-debitos", titulo: "CND SEFAZ-ES", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-go-certidao-debitos": genericCnpjLookup({ org: "sefaz/go", slug: "certidao-debitos", titulo: "CND SEFAZ-GO", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-ma-certidao-debitos": genericCnpjLookup({ org: "sefaz/ma", slug: "certidao-debitos", titulo: "CND SEFAZ-MA", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-mg-certidao-debitos": genericCnpjLookup({ org: "sefaz/mg", slug: "certidao-debitos", titulo: "CND SEFAZ-MG", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-ms-certidao-debitos": genericCnpjLookup({ org: "sefaz/ms", slug: "certidao-debitos", titulo: "CND SEFAZ-MS", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-mt-certidao-debitos": genericCnpjLookup({ org: "sefaz/mt", slug: "certidao-debitos", titulo: "CND SEFAZ-MT", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-pa-certidao-debitos": genericCnpjLookup({ org: "sefaz/pa", slug: "certidao-debitos", titulo: "CND SEFAZ-PA", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-pb-certidao-debitos": genericCnpjLookup({ org: "sefaz/pb", slug: "certidao-debitos", titulo: "CND SEFAZ-PB", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-pe-certidao-debitos": genericCnpjLookup({ org: "sefaz/pe", slug: "certidao-debitos", titulo: "CND SEFAZ-PE", categoria: "tributario_estadual", tipo: "certidao" }),
+  "sefaz-pr-certidao-debitos": genericCnpjLookup({ org: "sefaz/pr", slug: "certidao-debitos", titulo: "CND SEFAZ-PR", categoria: "tributario_estadual", tipo: "certidao" }),
+
+  // ─── SINTEGRA ────────────────────────────────────────────────────────────────
+  "sintegra-unificada": genericCnpjLookup({ org: "sintegra", slug: "unificada", titulo: "SINTEGRA Unificado", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ac": genericCnpjLookup({ org: "sintegra", slug: "ac", titulo: "SINTEGRA AC", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-al": genericCnpjLookup({ org: "sintegra", slug: "al", titulo: "SINTEGRA AL", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-am": genericCnpjLookup({ org: "sintegra", slug: "am", titulo: "SINTEGRA AM", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ap": genericCnpjLookup({ org: "sintegra", slug: "ap", titulo: "SINTEGRA AP", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ba": genericCnpjLookup({ org: "sintegra", slug: "ba", titulo: "SINTEGRA BA", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ce": genericCnpjLookup({ org: "sintegra", slug: "ce", titulo: "SINTEGRA CE", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-df": genericCnpjLookup({ org: "sintegra", slug: "df", titulo: "SINTEGRA DF", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-es": genericCnpjLookup({ org: "sintegra", slug: "es", titulo: "SINTEGRA ES", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-go": genericCnpjLookup({ org: "sintegra", slug: "go", titulo: "SINTEGRA GO", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ma": genericCnpjLookup({ org: "sintegra", slug: "ma", titulo: "SINTEGRA MA", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ms": genericCnpjLookup({ org: "sintegra", slug: "ms", titulo: "SINTEGRA MS", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-mt": genericCnpjLookup({ org: "sintegra", slug: "mt", titulo: "SINTEGRA MT", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-pa": genericCnpjLookup({ org: "sintegra", slug: "pa", titulo: "SINTEGRA PA", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-pb": genericCnpjLookup({ org: "sintegra", slug: "pb", titulo: "SINTEGRA PB", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-pe": genericCnpjLookup({ org: "sintegra", slug: "pe", titulo: "SINTEGRA PE", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-pr": genericCnpjLookup({ org: "sintegra", slug: "pr", titulo: "SINTEGRA PR", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-rj": genericCnpjLookup({ org: "sintegra", slug: "rj", titulo: "SINTEGRA RJ", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-rn": genericCnpjLookup({ org: "sintegra", slug: "rn", titulo: "SINTEGRA RN", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-ro": genericCnpjLookup({ org: "sintegra", slug: "ro", titulo: "SINTEGRA RO", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-rr": genericCnpjLookup({ org: "sintegra", slug: "rr", titulo: "SINTEGRA RR", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-rs": genericCnpjLookup({ org: "sintegra", slug: "rs", titulo: "SINTEGRA RS", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-sc": genericCnpjLookup({ org: "sintegra", slug: "sc", titulo: "SINTEGRA SC", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-se": genericCnpjLookup({ org: "sintegra", slug: "se", titulo: "SINTEGRA SE", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-sp": genericCnpjLookup({ org: "sintegra", slug: "sp", titulo: "SINTEGRA SP", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-to": genericCnpjLookup({ org: "sintegra", slug: "to", titulo: "SINTEGRA TO", categoria: "tributario_estadual", tipo: "cadastro" }),
+  "sintegra-suframa": genericCnpjLookup({ org: "sintegra", slug: "suframa", titulo: "SINTEGRA SUFRAMA", categoria: "tributario_estadual", tipo: "cadastro" }),
+
+  // ─── Tribunais TRT (CEAT) ────────────────────────────────────────────────────
+  "tribunal-trt1-ceat": genericCnpjLookup({ org: "tribunal/trt1", slug: "ceat", titulo: "CEAT TRT1 (RJ)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt2-ceat": genericCnpjLookup({ org: "tribunal/trt2", slug: "ceat", titulo: "CEAT TRT2 (SP físico)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt2-ceat-digital": genericCnpjLookup({ org: "tribunal/trt2", slug: "ceat-digital", titulo: "CEAT TRT2 (SP digital)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt3-ceat": genericCnpjLookup({ org: "tribunal/trt3", slug: "ceat", titulo: "CEAT TRT3 (MG)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt4-ceat": genericCnpjLookup({ org: "tribunal/trt4", slug: "ceat", titulo: "CEAT TRT4 (RS)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt5-ceat": genericCnpjLookup({ org: "tribunal/trt5", slug: "ceat", titulo: "CEAT TRT5 (BA)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt6-certidao": genericCnpjLookup({ org: "tribunal/trt6", slug: "certidao", titulo: "CEAT TRT6 (PE)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt7-ceat": genericCnpjLookup({ org: "tribunal/trt7", slug: "ceat", titulo: "CEAT TRT7 (CE)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt7-ceat-digital": genericCnpjLookup({ org: "tribunal/trt7", slug: "ceat-digital", titulo: "CEAT TRT7 (CE digital)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt8-ceat": genericCnpjLookup({ org: "tribunal/trt8", slug: "ceat", titulo: "CEAT TRT8 (PA/AP)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt9-ceat": genericCnpjLookup({ org: "tribunal/trt9", slug: "ceat", titulo: "CEAT TRT9 (PR)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt10-ceat": genericCnpjLookup({ org: "tribunal/trt10", slug: "ceat", titulo: "CEAT TRT10 (DF/TO)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt10-ceat-digital": genericCnpjLookup({ org: "tribunal/trt10", slug: "ceat-digital", titulo: "CEAT TRT10 (DF/TO digital)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt11-ceat": genericCnpjLookup({ org: "tribunal/trt11", slug: "ceat", titulo: "CEAT TRT11 (AM/RR)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt12-ceat": genericCnpjLookup({ org: "tribunal/trt12", slug: "ceat", titulo: "CEAT TRT12 (SC)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt13-ceat": genericCnpjLookup({ org: "tribunal/trt13", slug: "ceat", titulo: "CEAT TRT13 (PB)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt14-ceat": genericCnpjLookup({ org: "tribunal/trt14", slug: "ceat", titulo: "CEAT TRT14 (RO/AC)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt15-ceat": genericCnpjLookup({ org: "tribunal/trt15", slug: "ceat", titulo: "CEAT TRT15 (Campinas)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt16-ceat": genericCnpjLookup({ org: "tribunal/trt16", slug: "ceat", titulo: "CEAT TRT16 (MA)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt17-ceat": genericCnpjLookup({ org: "tribunal/trt17", slug: "ceat", titulo: "CEAT TRT17 (ES)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt18-ceat": genericCnpjLookup({ org: "tribunal/trt18", slug: "ceat", titulo: "CEAT TRT18 (GO)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt19-ceat": genericCnpjLookup({ org: "tribunal/trt19", slug: "ceat", titulo: "CEAT TRT19 (AL)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt20-ceat": genericCnpjLookup({ org: "tribunal/trt20", slug: "ceat", titulo: "CEAT TRT20 (SE)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt21-ceat": genericCnpjLookup({ org: "tribunal/trt21", slug: "ceat", titulo: "CEAT TRT21 (RN)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt23-ceat": genericCnpjLookup({ org: "tribunal/trt23", slug: "ceat", titulo: "CEAT TRT23 (MT)", categoria: "trabalhista", tipo: "certidao" }),
+  "tribunal-trt24-ceat": genericCnpjLookup({ org: "tribunal/trt24", slug: "ceat", titulo: "CEAT TRT24 (MS)", categoria: "trabalhista", tipo: "certidao" }),
+
+  // ─── Tribunais TRF (certidões) ───────────────────────────────────────────────
+  "tribunal-trf-cert-unificada": genericCnpjLookup({ org: "tribunal/trf", slug: "cert-unificada", titulo: "Certidão Unificada Justiça Federal (TRF)", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf1-certidao": genericCnpjLookup({ org: "tribunal/trf1", slug: "certidao", titulo: "Certidão Negativa TRF1", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf2-certidao": genericCnpjLookup({ org: "tribunal/trf2", slug: "certidao", titulo: "Certidão Negativa TRF2", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf3-certidao-distr": genericCnpjLookup({ org: "tribunal/trf3", slug: "certidao-distr", titulo: "Certidão de Distribuição TRF3", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf4-certidao": genericCnpjLookup({ org: "tribunal/trf4", slug: "certidao", titulo: "Certidão Negativa TRF4", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf5-certidao": genericCnpjLookup({ org: "tribunal/trf5", slug: "certidao", titulo: "Certidão Negativa TRF5", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-trf6-certidao": genericCnpjLookup({ org: "tribunal/trf6", slug: "certidao", titulo: "Certidão Negativa TRF6", categoria: "certidoes_federais", tipo: "certidao" }),
+  "tribunal-stj-certidao-negativa": genericCnpjLookup({ org: "tribunal/stj", slug: "certidao-negativa", titulo: "Certidão Negativa STJ", categoria: "certidoes_federais", tipo: "certidao" }),
+
+  // ─── Tribunais TJ (certidões estaduais) ─────────────────────────────────────
+  "tribunal-tjba-primeiro-grau": genericCnpjLookup({ org: "tribunal/tjba", slug: "primeiro-grau", titulo: "Certidão 1º Grau TJBA", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjgo-nada-consta": genericCnpjLookup({ org: "tribunal/tjgo", slug: "nada-consta", titulo: "Nada Consta TJGO", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjma-nada-consta": genericCnpjLookup({ org: "tribunal/tjma", slug: "nada-consta", titulo: "Nada Consta TJMA", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjms-pedido-cert": genericCnpjLookup({ org: "tribunal/tjms", slug: "pedido-cert", titulo: "Pedido de Certidão TJMS", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjpr-processo": genericCnpjLookup({ org: "tribunal/tjpr", slug: "processo", titulo: "Processos TJPR", categoria: "certidoes_estaduais", tipo: "info" }),
+  "tribunal-tjrj-pedido-cert": genericCnpjLookup({ org: "tribunal/tjrj", slug: "pedido-cert", titulo: "Pedido de Certidão TJRJ", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjrs-primeiro-grau": genericCnpjLookup({ org: "tribunal/tjrs", slug: "primeiro-grau", titulo: "Certidão 1º Grau TJRS", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjsc-pedido-certidao": genericCnpjLookup({ org: "tribunal/tjsc", slug: "pedido-certidao", titulo: "Pedido de Certidão TJSC", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjsp-pedido-certidao": genericCnpjLookup({ org: "tribunal/tjsp", slug: "pedido-certidao", titulo: "Pedido de Certidão TJSP", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjsp-pedido-civel": genericCnpjLookup({ org: "tribunal/tjsp", slug: "pedido-civel", titulo: "Certidão Cível 1º Grau TJSP", categoria: "certidoes_estaduais", tipo: "certidao" }),
+  "tribunal-tjsp-primeiro-grau": genericCnpjLookup({ org: "tribunal/tjsp", slug: "primeiro-grau", titulo: "Processos 1º Grau TJSP", categoria: "certidoes_estaduais", tipo: "info" }),
+  "tribunal-tjsp-segundo-grau": genericCnpjLookup({ org: "tribunal/tjsp", slug: "segundo-grau", titulo: "Processos 2º Grau TJSP", categoria: "certidoes_estaduais", tipo: "info" }),
+  "tribunal-tjto-cert-judicial": genericCnpjLookup({ org: "tribunal/tjto", slug: "cert-judicial", titulo: "Certidão Judicial TJTO", categoria: "certidoes_estaduais", tipo: "certidao" }),
+
+  // ─── TST extras ───────────────────────────────────────────────────────────────
+  "tribunal-tst-banco-falencias": genericCnpjLookup({ org: "tribunal/tst", slug: "banco-falencias", titulo: "Banco de Falências (TST)", categoria: "juridico", tipo: "info" }),
+
+  // ─── SIVISA ───────────────────────────────────────────────────────────────────
+  "sivisa-sp": genericCnpjLookup({ org: "sivisa", slug: "sp", titulo: "Alvará Vigilância Sanitária (SIVISA/SP)", categoria: "saude", tipo: "certidao" }),
 };
+
+// ─── Catálogo público de consultas disponíveis ────────────────────────────────
+// Usado pelo GET /catalog — não requer plano pago.
+interface CatalogEntry {
+  kind: string;
+  titulo: string;
+  categoria: string;
+  inputs: string[];
+}
+
+const CATALOG: CatalogEntry[] = Object.entries(LOOKUPS).map(([kind, def]) => {
+  // Para ricos: extrair titulo do normalize("") não é prático — usar mapa fixo p/ os 10 ricos.
+  const richTitles: Record<string, { titulo: string; categoria: string }> = {
+    "receita-federal-cnpj":   { titulo: "Cadastro CNPJ (Receita Federal)",               categoria: "cadastro_federal" },
+    "receita-federal-simples":{ titulo: "Simples Nacional (Receita Federal)",             categoria: "cadastro_federal" },
+    "receita-federal-pgfn":   { titulo: "CND Federal (PGFN)",                            categoria: "certidoes_federais" },
+    "tst-cndt":               { titulo: "CNDT (TST)",                                    categoria: "trabalhista" },
+    "caixa-fgts":             { titulo: "Regularidade do Empregador (FGTS/CRF)",         categoria: "trabalhista" },
+    "transparencia-ceis":     { titulo: "CEIS (Portal da Transparência)",                categoria: "sancoes" },
+    "transparencia-cnep":     { titulo: "CNEP (Portal da Transparência)",                categoria: "sancoes" },
+    "tcu-inidoneo":           { titulo: "TCU — Inidôneos para Licitar",                  categoria: "sancoes" },
+    "mte-trabalho-escravo":   { titulo: "Lista de Trabalho Escravo (SIT/MTE)",           categoria: "sancoes" },
+    "inpi-marcas-cnpj":       { titulo: "Marcas por CNPJ (INPI)",                        categoria: "propriedade_intelectual" },
+  };
+  const rich = richTitles[kind];
+  const anyDef = def as Record<string, unknown>;
+  return {
+    kind,
+    titulo: rich?.titulo ?? (typeof anyDef["_titulo"] === "string" ? anyDef["_titulo"] : kind),
+    categoria: rich?.categoria ?? (typeof anyDef["_categoria"] === "string" ? anyDef["_categoria"] : "outros"),
+    inputs: ["cnpj"],
+  };
+});
 
 // ─── Plano do usuario (gating: so plano pago dispara consulta paga) ──────────
 async function isPaidUser(req: Request, supabaseUrl: string): Promise<boolean> {
@@ -977,6 +1297,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
+  // Catalogo de consultas disponíveis — sem custo, sem sessao, so apikey.
+  if (url.pathname.endsWith("/catalog")) {
+    return reply({ ok: true, kinds: CATALOG });
+  }
+
   // DORMENTE: sem token => 200 configured:false, SEM erro. O front mantem o
   // comportamento atual (RPI/base ingerida). Responde antes de qualquer authz
   // de sessao p/ nunca custar nada e nunca quebrar a tela.
@@ -1016,6 +1341,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
       403,
     );
+  }
+
+  // Status da autenticação gov.br — apikey + sessao + plano; SEM custo.
+  if (url.pathname.endsWith("/govbr-status")) {
+    try {
+      const res = await fetchWithRetry("https://api.infosimples.com/api/admin/autenticacao-govbr", {
+        timeoutMs: 15000,
+        retries: 1,
+        init: {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+          body: new URLSearchParams({ token }).toString(),
+        },
+      });
+      if (!res.ok) {
+        return reply({ ok: false, configured: true, error: "govbr_unavailable", message: `InfoSimples respondeu ${res.status}` });
+      }
+      const body = (await res.json()) as { code?: number; data?: unknown[] };
+      const sessions = Array.isArray(body.data) ? body.data : [];
+      return reply({ ok: true, configured: true, sessions });
+    } catch (e) {
+      return reply({ ok: false, configured: true, error: "govbr_error", message: String(e) });
+    }
   }
 
   // Roteamento por `kind` (default = caso de uso #1: INPI marcas por CNPJ).

@@ -36,6 +36,7 @@ import {
   Loader2,
   Maximize2,
   Search,
+  ShieldAlert,
   Sparkles,
   Users,
   X,
@@ -81,6 +82,13 @@ import {
   type NodeKind,
 } from "../../features/cerebro/types";
 import CerebroGuide from "../../components/cerebro/cerebro-guide";
+import {
+  verificarIdoneidade,
+  computarSelo,
+  type IdoneidadeCardState,
+  type IdoneidadeSelo,
+} from "../../features/cerebro/idoneidade";
+import IdoneidadePanel from "../../features/cerebro/IdoneidadePanel";
 
 // ─── Helpers de grafo ───────────────────────────────────────────────────────────
 
@@ -280,6 +288,13 @@ export function CerebroPage() {
   const [uboLoading, setUboLoading] = useState(false);
   const [showUbo, setShowUbo] = useState(false);
 
+  // Estado do painel de Idoneidade / Compliance.
+  const [idoneidade, setIdoneidade] = useState<IdoneidadeCardState[] | null>(null);
+  const [idoneiadadeLoading, setIdoneidadeLoading] = useState(false);
+  const [showIdoneidade, setShowIdoneidade] = useState(false);
+  // Mapa de selos já consultados: nodeId → IdoneidadeSelo.
+  const [nodeSeloMap, setNodeSeloMap] = useState<Map<string, IdoneidadeSelo>>(new Map());
+
   // Camadas ativas (filtro por módulo). Set vazio = todas visíveis (default).
   const [hiddenKinds, setHiddenKinds] = useState<Set<GraphKind>>(new Set());
   // Busca DENTRO do grafo (realça/filtra nós por texto).
@@ -301,6 +316,8 @@ export function CerebroPage() {
   const reducedRef = useRef<boolean>(false);
   const hiddenRef = useRef<Set<GraphKind>>(hiddenKinds);
   const queryRef = useRef<string>("");
+  // Ref para o mapa de selos de idoneidade — acessado no loop de render (draw).
+  const nodeSeloMapRef = useRef<Map<string, IdoneidadeSelo>>(new Map());
 
   // Estado de interação por ponteiro (drag de nó / pan).
   const dragRef = useRef<{
@@ -345,6 +362,12 @@ export function CerebroPage() {
     else ensureRaf();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphQuery]);
+  useEffect(() => {
+    nodeSeloMapRef.current = nodeSeloMap;
+    if (reducedRef.current) draw();
+    else ensureRaf();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeSeloMap]);
 
   // ── Conversões de coordenadas tela ↔ mundo ──
   const screenToWorld = useCallback((sx: number, sy: number): { x: number; y: number } => {
@@ -496,6 +519,23 @@ export function CerebroPage() {
         ctx.strokeStyle = hexWithAlpha(color, 0.7);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
+
+      // Badge de alerta de idoneidade — ponto vermelho/âmbar no canto do nó.
+      // Só quando não esmaecido e o nó tem um selo irregular ou de atenção.
+      const nodeSelo = nodeSeloMapRef.current.get(node.id);
+      if (nodeSelo && nodeSelo !== "indisponivel" && nodeSelo !== "regular" && !dimmed) {
+        const badgeColor = nodeSelo === "irregular" ? "#EF4444" : "#F59E0B";
+        const bx = node.x + node.radius * 0.7;
+        const by = node.y - node.radius * 0.7;
+        const br = 5 / cam.scale;
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fillStyle = badgeColor;
+        ctx.fill();
+        ctx.strokeStyle = dark ? "#070C16" : "#FFFFFF";
+        ctx.lineWidth = 1.5 / cam.scale;
+        ctx.stroke();
       }
 
       if (showLabels || node.isCenter) {
@@ -846,6 +886,26 @@ export function CerebroPage() {
       });
     } finally {
       setUboLoading(false);
+    }
+  }, []);
+
+  /**
+   * Dispara as 7 consultas de compliance em paralelo para um nó com CNPJ.
+   * Abre o painel de idoneidade e armazena o selo calculado para o nó.
+   */
+  const runIdoneidade = useCallback(async (cnpj: string, nodeId: string) => {
+    setIdoneidadeLoading(true);
+    setShowIdoneidade(true);
+    setIdoneidade(null);
+    try {
+      const cards = await verificarIdoneidade(cnpj);
+      setIdoneidade(cards);
+      const selo = computarSelo(cards);
+      setNodeSeloMap((prev) => new Map(prev).set(nodeId, selo));
+    } catch {
+      setIdoneidade([]);
+    } finally {
+      setIdoneidadeLoading(false);
     }
   }, []);
 
@@ -1555,6 +1615,47 @@ export function CerebroPage() {
                     {uboLoading && showUbo ? "Investigando…" : "Beneficiário final"}
                   </button>
                 )}
+                {selectedNode.cnpj &&
+                  (selectedNode.kind === "company" ||
+                    selectedNode.kind === "entity" ||
+                    selectedNode.isCenter) && (
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      type="button"
+                      onClick={() => void runIdoneidade(selectedNode.cnpj!, selectedNode.id)}
+                      disabled={isLoading || idoneiadadeLoading}
+                      title="Verifica sanções, dívida ativa e idoneidade via InfoSimples (consulta premium, cache 60d)"
+                      style={{ gap: 6 }}
+                    >
+                      <ShieldAlert size={13} aria-hidden="true" />
+                      {idoneiadadeLoading && showIdoneidade ? "Verificando…" : "Verificar idoneidade"}
+                      {(() => {
+                        const s = nodeSeloMap.get(selectedNode.id);
+                        if (!s) return null;
+                        const c =
+                          s === "irregular"
+                            ? "var(--danger)"
+                            : s === "atencao"
+                              ? "var(--warn)"
+                              : s === "regular"
+                                ? "var(--ok)"
+                                : "var(--t-low)";
+                        return (
+                          <span
+                            aria-label={`Idoneidade: ${s}`}
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: "50%",
+                              background: c,
+                              flexShrink: 0,
+                              display: "inline-block",
+                            }}
+                          />
+                        );
+                      })()}
+                    </button>
+                  )}
               </div>
             </div>
           ) : (
@@ -1647,6 +1748,20 @@ export function CerebroPage() {
           onClose={() => {
             setShowUbo(false);
             setUboResult(null);
+          }}
+        />
+      )}
+
+      {/* Painel de Idoneidade / Compliance — aparece abaixo do grafo (após UBO) */}
+      {showIdoneidade && selectedNode?.cnpj && (
+        <IdoneidadePanel
+          cnpj={selectedNode.cnpj}
+          empresaNome={selectedNode.label}
+          cards={idoneidade ?? []}
+          loading={idoneiadadeLoading}
+          onClose={() => {
+            setShowIdoneidade(false);
+            setIdoneidade(null);
           }}
         />
       )}

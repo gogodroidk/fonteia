@@ -35,6 +35,7 @@ import {
   type SemaforoGeral,
 } from "../../features/dossie/certidoes-helper";
 import type { CertidaoPayload } from "../../features/infosimples/infosimples-client";
+import { MaisConsultasSection } from "./MaisConsultasSection";
 
 // ─── Helpers de cor/ícone por status ─────────────────────────────────────────
 
@@ -718,6 +719,41 @@ interface CertidoesSectionProps {
   cnpj: string;
 }
 
+// ─── Extrai a UF da sede a partir dos itens do receita-federal-cnpj ──────────
+
+/**
+ * Tenta extrair a UF da empresa a partir dos itens do kind receita-federal-cnpj.
+ * Procura nos `itens` por campos cujo rótulo contenha "UF", "Estado" ou "Munic".
+ * Retorna a sigla em maiúsculas (2 chars) ou undefined se não encontrar.
+ */
+function extractUfFromCards(cards: CertidaoCardState[]): string | undefined {
+  const rfCard = cards.find((c) => c.kind === "receita-federal-cnpj");
+  if (!rfCard || rfCard.result.state !== "ok") return undefined;
+
+  const { data } = rfCard.result;
+  const itens = data.itens;
+
+  // Procura por item cujo rótulo sugira UF/estado
+  for (const item of itens) {
+    const rotulo = item.rotulo.toUpperCase();
+    if (
+      rotulo.includes("UF") ||
+      rotulo.includes("ESTADO") ||
+      rotulo === "UF" ||
+      rotulo === "ESTADO" ||
+      rotulo.includes("MUNIC")
+    ) {
+      // Valor pode ser sigla ("SP") ou nome extenso ("São Paulo - SP")
+      // Tenta extrair sigla de 2 letras
+      const siglaMatch = /\b([A-Z]{2})\b/.exec(item.valor.toUpperCase());
+      const sigla = siglaMatch?.[1];
+      if (sigla !== undefined) return sigla;
+    }
+  }
+
+  return undefined;
+}
+
 export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
   const [loadingState, setLoadingState] = useState<LoadingState>("idle");
   const sectionId = useId();
@@ -742,6 +778,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
 
   const cards = Array.isArray(loadingState) ? loadingState : null;
   const isLoading = loadingState === "loading";
+  const ufEmpresa = cards !== null ? extractUfFromCards(cards) : undefined;
 
   // Detecta se TODOS os cards são dormant, login ou plan — estado global prioritário
   const globalState = (() => {
@@ -928,6 +965,12 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             fontes oficiais antes de tomar decisões. Os links "Fonte oficial" em cada
             card apontam para o orgao emissor.
           </div>
+
+          {/* Mais consultas — acordeões sob demanda (nunca auto-disparados) */}
+          <MaisConsultasSection
+            cnpj={cnpj}
+            {...(ufEmpresa !== undefined ? { ufEmpresa } : {})}
+          />
         </div>
       )}
     </section>
