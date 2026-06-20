@@ -84,7 +84,9 @@ export function normalizeReceitaDestaque(raw: ReceitaLeiloesDestaqueRaw, collect
     displayNumber: String(raw.numero),
     city: raw.cidade,
     agency: raw.orgao,
-    minimumBidCents: Math.round(raw.valor * 100),
+    // Guarda contra `valor` ausente/não-numérico no payload cru (o fetch só valida
+    // que `destaques` é array): sem isto, NaN se propaga para o score e o display R$.
+    minimumBidCents: Number.isFinite(raw.valor) ? Math.round(raw.valor * 100) : 0,
     proposalDeadline: parseReceitaDate(raw.dtFimProposta),
     eligiblePersonTypes: raw.permitePF ? ["pf", "pj"] : ["pj"],
     // fix #5: URL humana do portal, não o endpoint JSON da API interna.

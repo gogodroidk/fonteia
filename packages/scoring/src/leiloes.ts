@@ -174,7 +174,11 @@ export function scoreReceitaLeilaoLot(lot: ReceitaLeilaoLot, now = new Date()): 
     score: finalScore,
     label,
     factors,
-    maxSuggestedBidCents: Math.round(lot.minimumBidCents * marginMultiplier),
+    // Guarda contra minimumBidCents NaN/ausente vindo de payload externo:
+    // evita maxSuggestedBidCents = NaN no resultado do scoring.
+    maxSuggestedBidCents: Number.isFinite(lot.minimumBidCents)
+      ? Math.round(lot.minimumBidCents * marginMultiplier)
+      : 0,
   };
 }
 
