@@ -2,39 +2,37 @@ import { useEffect, useState } from "react";
 import { SOURCE_CATALOG } from "@fonteia/sources";
 import type { PublicSource, SourceStatus } from "@fonteia/domain";
 import { CountUp } from "../../components/ui/CountUp";
-import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
+import {
+  fetchSourceHealth,
+  humanizeAge,
+  shortDate,
+  type SourceHealth,
+  type SourceHealthMap,
+} from "../../features/sources/source-health";
 
 // ---------------------------------------------------------------------------
-// Status overrides — applied HERE (not in packages/sources) because the
-// package is shared domain territory. Only flip when the module truly has
-// ingested data confirmed in production (CLAUDE.md § Estado real, 2026-06).
+// STATUS HONESTO — derivado da REALIDADE, não de um mapa hardcoded.
 //
-// Sources with real data in the platform:
-//   leilões        → receita-leiloes-sle        (already fragile_operational / runtime overrides to connected)
-//   licitações     → pncp-consulta              (already connected in catalog)
-//   empresas       → compras-gov-dados-abertos  (already connected in catalog)
-//   política/câmara → camara-dados-abertos      → connected  ← FLIPPED (deputados, CEAP, votações ingeridos)
-//   jurídico        → cnj-datajud               → connected  ← FLIPPED (DataJud ingerido)
-//   INPI            → inpi-dados-abertos        → connected  ← FLIPPED (29.5k marcas RPI ingeridas)
-//   ambiental       → ibama-dados-abertos       → connected  ← FLIPPED (IBAMA ambiental ingerido)
-//   sanções         → portal-transparencia-api  → connected  ← FLIPPED (2.492 sanções CEIS/CNEP no D1)
-//   transferências  → transferegov-dados-abertos → connected ← FLIPPED (400 transferências federais no D1)
-//   queimadas       → inpe-queimadas            → connected  ← FLIPPED (focos de incêndio por município no D1)
-//   fiscal          → tesouro-siconfi           → connected  ← FLIPPED (Siconfi — ingestão em ativação)
-//   municípios/IBGE não têm entrada própria no catálogo ainda; outros (Senado,
-//   TSE, ANA, INPE TerraBrasilis, DOU, BNDES, CKAN) NÃO têm dados ingeridos — permanecem como estão.
+// Antes, esta página tinha um STATUS_OVERRIDES que flipava fontes para
+// "conectado" à mão. Isso mente quando uma coleta quebra: o badge fica verde
+// para sempre. Agora o status efetivo de cada fonte vem da última coleta
+// registrada em public.source_runs, lida pela RPC pública agregada
+// `source_health()` (ver features/sources/source-health.ts + a migration
+// infra/migrations/0021_source_health_public_rpc.sql, que PRECISA ser aplicada).
+//
+// Regra de ouro: SEM dado de saúde → "sem dados de saúde" (nunca "conectado").
+//
+// TODO (próxima onda — NÃO faz parte desta tarefa): construir as integrações de
+// fato e registrar suas coletas em source_runs para que apareçam saudáveis:
+//   • DOU / Imprensa Nacional (dou-inlabs)
+//   • ANA HidroWebservice (ana-hidrowebservice)
+//   • MapBiomas Alerta (mapbiomas-alerta)
+//   • INPE TerraBrasilis (inpe-terrabrasilis) — PRODES/DETER
+//   • INPE Queimadas (inpe-queimadas) — focos de incêndio
+//   • TSE, Senado (votações), Siconfi, Transferegov, BNDES, CKAN
+// Enquanto não houver coleta registrada, estas fontes aparecem honestamente
+// como "em integração" + "sem dados de saúde" — nunca verdes por decreto.
 // ---------------------------------------------------------------------------
-
-const STATUS_OVERRIDES: Partial<Record<string, SourceStatus>> = {
-  "camara-dados-abertos": "connected",
-  "cnj-datajud": "connected",
-  "inpi-dados-abertos": "connected",
-  "ibama-dados-abertos": "connected",
-  "portal-transparencia-api": "connected",
-  "transferegov-dados-abertos": "connected",
-  "inpe-queimadas": "connected",
-  "tesouro-siconfi": "connected",
-};
 
 // ---------------------------------------------------------------------------
 // Plain-language purpose notes — shown to lay users alongside each source.
@@ -70,15 +68,15 @@ const SOURCE_PURPOSE: Record<string, string> = {
   "inpe-terrabrasilis":
     "Quando integrado: desmatamento anual (PRODES) e alertas de corte raso (DETER) por município e bioma.",
   "inpe-queimadas":
-    "Alimenta Ambiental — focos de incêndio por município indexados no D1, com coordenada, bioma e data de detecção.",
+    "Quando integrado: focos de incêndio por município, com coordenada, bioma e data de detecção.",
   "mapbiomas-alerta":
     "Fonte complementar: alertas de desmatamento com validação por satélite — usada para enriquecer o módulo Ambiental.",
   "ana-hidrowebservice":
     "Quando integrado: dados hidrológicos oficiais (chuva, nível de rios) — relevante para municípios em zona de risco hídrico.",
   "tesouro-siconfi":
-    "Alimenta Municípios — balanço fiscal e contábil de estados e municípios via Siconfi; ingestão em ativação, dados em breve disponíveis.",
+    "Quando integrado: balanço fiscal e contábil de estados e municípios via Siconfi.",
   "transferegov-dados-abertos":
-    "Alimenta Municípios — 400 transferências federais (convênios e repasses) indexadas no D1, consultáveis por município beneficiário.",
+    "Quando integrado: transferências federais (convênios e repasses) por município beneficiário.",
   "bndes-dados-abertos":
     "Quando integrado: financiamentos do BNDES por empresa e setor, com valores e prazo de carência.",
   "dados-gov-br-ckan":
@@ -90,26 +88,34 @@ const SOURCE_PURPOSE: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Derived stats — computed AFTER merging overrides so counters are accurate
+// Catálogo base (sem overrides). O status efetivo é resolvido em runtime a
+// partir da saúde real (source_health). Aqui só ficam métricas estáticas que
+// não dependem de coleta: total de fontes e proporção governamental.
 // ---------------------------------------------------------------------------
 
-const CATALOG_WITH_OVERRIDES = SOURCE_CATALOG.map((s) => ({
-  ...s,
-  status: (STATUS_OVERRIDES[s.id] ?? s.status) as SourceStatus,
-}));
+const TOTAL_SOURCES = SOURCE_CATALOG.length;
 
-const TOTAL_SOURCES = CATALOG_WITH_OVERRIDES.length;
-const CONNECTED_SOURCES = CATALOG_WITH_OVERRIDES.filter(
-  (s) => s.status === "connected" || s.status === "fragile_operational",
-).length;
-const INTEGRATING_SOURCES = CATALOG_WITH_OVERRIDES.filter(
-  (s) => s.status === "integrating" || s.status === "open_no_api",
-).length;
-
-const GOVT_SOURCES = CATALOG_WITH_OVERRIDES.filter(
+const GOVT_SOURCES = SOURCE_CATALOG.filter(
   (s) => s.reliability === "official_stable" || s.reliability === "official_fragile",
 ).length;
 const PCT_GOVT = Math.round((GOVT_SOURCES / TOTAL_SOURCES) * 100);
+
+/**
+ * Conta fontes ativas/em integração a partir do STATUS EFETIVO (derivado da
+ * saúde real), com fallback para o status do catálogo enquanto a saúde carrega.
+ * Uma fonte "verde/amarela" conta como ativa; sem dado de saúde nunca infla o
+ * número de conectadas.
+ */
+function countByEffectiveStatus(health: SourceHealthMap): { connected: number; integrating: number } {
+  let connected = 0;
+  let integrating = 0;
+  for (const source of SOURCE_CATALOG) {
+    const status = health[source.id]?.effectiveStatus ?? source.status;
+    if (status === "connected" || status === "fragile_operational") connected += 1;
+    else if (status === "integrating" || status === "open_no_api") integrating += 1;
+  }
+  return { connected, integrating };
+}
 
 // ---------------------------------------------------------------------------
 // Status display mapping
@@ -188,6 +194,73 @@ function StatusBadge({ status }: { status: SourceStatus }) {
 }
 
 // ---------------------------------------------------------------------------
+// HealthIndicator — verde/amarelo/vermelho + data e contagem da última coleta.
+// Lê a saúde real (source_health). Sem dado → "sem dados de saúde" (cinza).
+// ---------------------------------------------------------------------------
+
+function healthDotColor(level: SourceHealth["level"] | undefined): string {
+  switch (level) {
+    case "green":
+      return "var(--ok)";
+    case "yellow":
+      return "var(--warn)";
+    case "red":
+      return "var(--danger, #e5484d)";
+    default:
+      return "var(--t-low)";
+  }
+}
+
+function HealthIndicator({ health, loading }: { health: SourceHealth | undefined; loading: boolean }) {
+  if (loading && !health) {
+    return (
+      <span className="tiny" style={{ color: "var(--t-low)" }}>
+        verificando saúde…
+      </span>
+    );
+  }
+
+  // Sem dado de saúde: explícito e honesto — nunca "conectado".
+  if (!health || health.level === "unknown") {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }} title={health?.note ?? "Sem coleta registrada"}>
+        <span className="dot" style={{ background: healthDotColor("unknown"), flexShrink: 0 }} />
+        <span className="tiny" style={{ color: "var(--t-low)" }}>
+          sem dados de saúde
+        </span>
+      </div>
+    );
+  }
+
+  const age = humanizeAge(health.lastSuccessAt ?? health.lastRunAt);
+  const exact = shortDate(health.lastSuccessAt ?? health.lastRunAt);
+  const count =
+    typeof health.lastInserted === "number" ? health.lastInserted.toLocaleString("pt-BR") : null;
+
+  return (
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 2 }}
+      title={`${health.note} (${exact})`}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <span
+          className={health.level === "red" ? "dot pulse" : "dot"}
+          style={{ background: healthDotColor(health.level), flexShrink: 0 }}
+        />
+        <span className="tiny" style={{ color: "var(--t-mid)", fontWeight: 600 }}>
+          {age}
+        </span>
+      </div>
+      {count !== null ? (
+        <span className="tiny" style={{ color: "var(--t-low)", paddingLeft: 15 }}>
+          {count} registros na última coleta
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // BadgesLegend — brief key shown above the catalog table/cards
 // ---------------------------------------------------------------------------
 
@@ -223,6 +296,25 @@ function BadgesLegend() {
           </span>
         </div>
       ))}
+
+      {/* Saúde da coleta — verde/amarelo/vermelho derivado de source_runs */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        {(
+          [
+            { level: "green", label: "coleta recente" },
+            { level: "yellow", label: "obsoleta/instável" },
+            { level: "red", label: "falhando" },
+            { level: "unknown", label: "sem dados de saúde" },
+          ] as const
+        ).map(({ level, label }) => (
+          <span key={level} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <span className="dot" style={{ background: healthDotColor(level), flexShrink: 0 }} />
+            <span className="tiny" style={{ color: "var(--t-low)" }}>
+              {label}
+            </span>
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -235,16 +327,17 @@ function SourceRow({
   source,
   index,
   isActive,
-  runtimeStatus,
-  checkLoading,
+  health,
+  loading,
 }: {
-  source: PublicSource & { status: SourceStatus };
+  source: PublicSource;
   index: number;
   isActive: boolean;
-  runtimeStatus: SourceStatus | undefined;
-  checkLoading: boolean;
+  health: SourceHealth | undefined;
+  loading: boolean;
 }) {
-  const effectiveStatus: SourceStatus = runtimeStatus ?? source.status;
+  // Status efetivo derivado da saúde real (com fallback ao catálogo enquanto carrega).
+  const effectiveStatus: SourceStatus = health?.effectiveStatus ?? source.status;
   const modules = source.modules.map(moduleLabel).join(", ");
   const dotColor = reliabilityDot(source.reliability);
   const reliabilityText = reliabilityLabel(source.reliability);
@@ -288,15 +381,20 @@ function SourceRow({
         </div>
       </td>
 
-      {/* Status — runtime override when available, catalog (+ static overrides) otherwise */}
+      {/* Status — derivado da saúde real (source_runs) */}
       <td style={{ padding: "15px 20px", verticalAlign: "top", paddingTop: 17 }}>
-        {isActive && checkLoading ? (
+        {loading && !health ? (
           <span className="badge badge--neutral" style={{ color: "var(--t-mid)" }}>
             verificando…
           </span>
         ) : (
           <StatusBadge status={effectiveStatus} />
         )}
+      </td>
+
+      {/* Saúde da coleta — verde/amarelo/vermelho + data + contagem */}
+      <td style={{ padding: "15px 20px", verticalAlign: "top", paddingTop: 17 }}>
+        <HealthIndicator health={health} loading={loading} />
       </td>
 
       {/* Módulos */}
@@ -348,15 +446,15 @@ function SourceRow({
 function SourceCard({
   source,
   isActive,
-  runtimeStatus,
-  checkLoading,
+  health,
+  loading,
 }: {
-  source: PublicSource & { status: SourceStatus };
+  source: PublicSource;
   isActive: boolean;
-  runtimeStatus: SourceStatus | undefined;
-  checkLoading: boolean;
+  health: SourceHealth | undefined;
+  loading: boolean;
 }) {
-  const effectiveStatus: SourceStatus = runtimeStatus ?? source.status;
+  const effectiveStatus: SourceStatus = health?.effectiveStatus ?? source.status;
   const modules = source.modules.map(moduleLabel).join(", ");
   const dotColor = reliabilityDot(source.reliability);
   const reliabilityText = reliabilityLabel(source.reliability);
@@ -411,7 +509,7 @@ function SourceCard({
 
         {/* Status badge */}
         <div style={{ flexShrink: 0 }}>
-          {isActive && checkLoading ? (
+          {loading && !health ? (
             <span className="badge badge--neutral" style={{ color: "var(--t-mid)" }}>
               verificando…
             </span>
@@ -419,6 +517,11 @@ function SourceCard({
             <StatusBadge status={effectiveStatus} />
           )}
         </div>
+      </div>
+
+      {/* Saúde da coleta */}
+      <div style={{ marginBottom: purpose ? 8 : 10 }}>
+        <HealthIndicator health={health} loading={loading} />
       </div>
 
       {/* Purpose note */}
@@ -479,34 +582,24 @@ function SourceCard({
 export function SourcesPage() {
   const activeSourceId = "receita-leiloes-sle";
 
-  // Runtime health-check: call listLeilaoLots() once on mount. If it returns
-  // dados reais (source !== "empty"), promovemos a Receita para "conectado".
-  //
-  // IMPORTANTE: "empty" (a coleta rodou mas não há lote AGORA) e uma falha de
-  // rede NÃO significam que a fonte oficial foi descontinuada. Marcar a Receita
-  // como "descontinuado" nesses casos destrói a credibilidade do produto. Por
-  // isso, sem dados, mantemos o status estático do catálogo ("operacional
-  // frágil"), em vez de aplicar um override enganoso. As demais fontes mantêm o
-  // status estático ou os overrides declarados em STATUS_OVERRIDES acima.
-  const [runtimeStatus, setRuntimeStatus] = useState<Record<string, SourceStatus>>({});
+  // Saúde REAL das fontes: lida de source_runs via a RPC pública agregada
+  // source_health() (uma única chamada no mount). O status efetivo de cada
+  // fonte é derivado dessa saúde — sem dado → "sem dados de saúde", nunca
+  // "conectado". Falha de rede / migration ausente não derruba a página:
+  // fetchSourceHealth devolve {} e a UI cai para o status do catálogo + cinza.
+  const [health, setHealth] = useState<SourceHealthMap>({});
   const [checkLoading, setCheckLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setCheckLoading(true);
 
-    listLeilaoLots()
-      .then((result) => {
-        if (cancelled) return;
-        // Só fazemos override quando há dados confirmados; sem lotes no momento,
-        // o status estático ("operacional frágil") já é honesto.
-        if (result.source !== "empty") {
-          setRuntimeStatus({ [activeSourceId]: "connected" });
-        }
+    fetchSourceHealth(SOURCE_CATALOG)
+      .then((map) => {
+        if (!cancelled) setHealth(map);
       })
       .catch(() => {
-        // Falha transitória de rede não é "descontinuado": preservamos o
-        // status estático do catálogo.
+        // fetchSourceHealth já trata erros internamente; este catch é só defesa.
       })
       .finally(() => {
         if (!cancelled) setCheckLoading(false);
@@ -516,6 +609,10 @@ export function SourcesPage() {
       cancelled = true;
     };
   }, []);
+
+  // Contadores derivados da saúde real (com fallback ao catálogo enquanto carrega).
+  const { connected: connectedSources, integrating: integratingSources } =
+    countByEffectiveStatus(health);
 
   return (
     <section
@@ -529,7 +626,7 @@ export function SourcesPage() {
         Scoped responsive styles for this page only.
         - .sources-table-wrap: desktop = normal table; mobile = hidden (cards shown instead)
         - .sources-cards-wrap: mobile = shown; desktop = hidden
-        Breakpoint 640px matches the point where a 5-column table gets cramped.
+        Breakpoint 640px matches the point where a 6-column table gets cramped.
       */}
       <style>{`
         .sources-table-wrap { display: block; }
@@ -591,19 +688,19 @@ export function SourcesPage() {
               className="h1"
               style={{ marginTop: 8, fontSize: 24, lineHeight: 1.2 }}
             >
-              {CONNECTED_SOURCES} fontes conectadas —{" "}
+              {connectedSources} fontes com coleta ativa —{" "}
               <span style={{ color: "var(--accent-ink)" }}>
-                cada número aponta à origem oficial.
+                status verificado na última coleta.
               </span>
             </h1>
             <p
               className="muted small"
               style={{ marginTop: 10, lineHeight: 1.65, maxWidth: 480 }}
             >
-              Todo dado exibido na plataforma vem de uma fonte pública oficial e carrega
-              link, data e identificador rastreável — você pode verificar diretamente no
-              órgão. Mais {INTEGRATING_SOURCES} fontes estão em integração e serão
-              ativadas conforme novos módulos forem ao ar.
+              O status de cada fonte é derivado da última coleta registrada — não é fixo no
+              código. Todo dado carrega link, data e identificador rastreável, verificável no
+              órgão. Outras {integratingSources} fontes estão em integração e só aparecem
+              como ativas quando a primeira coleta for confirmada.
             </p>
           </div>
 
@@ -616,10 +713,10 @@ export function SourcesPage() {
                 className="display num"
                 style={{ fontSize: 34, color: "var(--t-hi)" }}
               >
-                <CountUp value={CONNECTED_SOURCES} durationMs={800} />
+                <CountUp value={connectedSources} durationMs={800} />
               </div>
               <div className="tiny muted" style={{ marginTop: 3 }}>
-                {CONNECTED_SOURCES === 1 ? "fonte conectada" : "fontes conectadas"}
+                {connectedSources === 1 ? "fonte com coleta ativa" : "fontes com coleta ativa"}
               </div>
             </div>
 
@@ -628,7 +725,7 @@ export function SourcesPage() {
                 className="display num"
                 style={{ fontSize: 34, color: "var(--brand-ink)" }}
               >
-                <CountUp value={INTEGRATING_SOURCES} durationMs={800} />
+                <CountUp value={integratingSources} durationMs={800} />
               </div>
               <div className="tiny muted" style={{ marginTop: 3 }}>
                 em integração
@@ -667,7 +764,7 @@ export function SourcesPage() {
           <div>
             <div className="h3">Fontes cadastradas</div>
             <div className="tiny muted" style={{ marginTop: 3 }}>
-              {CONNECTED_SOURCES} ativas · {INTEGRATING_SOURCES} em integração · {TOTAL_SOURCES} total
+              {connectedSources} ativas · {integratingSources} em integração · {TOTAL_SOURCES} total
             </div>
           </div>
           <span
@@ -702,7 +799,7 @@ export function SourcesPage() {
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)" }}>
                   {(
-                    ["Fonte / Órgão", "Status", "Módulos", "Confiabilidade", "Link oficial"] as const
+                    ["Fonte / Órgão", "Status", "Saúde da coleta", "Módulos", "Confiabilidade", "Link oficial"] as const
                   ).map((h) => (
                     <th
                       key={h}
@@ -723,14 +820,14 @@ export function SourcesPage() {
                 </tr>
               </thead>
               <tbody>
-                {CATALOG_WITH_OVERRIDES.map((source, i) => (
+                {SOURCE_CATALOG.map((source, i) => (
                   <SourceRow
                     key={source.id}
                     source={source}
                     index={i}
                     isActive={source.id === activeSourceId}
-                    runtimeStatus={runtimeStatus[source.id]}
-                    checkLoading={checkLoading}
+                    health={health[source.id]}
+                    loading={checkLoading}
                   />
                 ))}
               </tbody>
@@ -740,13 +837,13 @@ export function SourcesPage() {
 
         {/* ── MOBILE: stacked cards ─────────────────────── */}
         <div className="sources-cards-wrap" aria-label="Catálogo de fontes públicas">
-          {CATALOG_WITH_OVERRIDES.map((source) => (
+          {SOURCE_CATALOG.map((source) => (
             <SourceCard
               key={source.id}
               source={source}
               isActive={source.id === activeSourceId}
-              runtimeStatus={runtimeStatus[source.id]}
-              checkLoading={checkLoading}
+              health={health[source.id]}
+              loading={checkLoading}
             />
           ))}
         </div>
@@ -776,8 +873,12 @@ export function SourcesPage() {
         >
           Todas as fontes listadas são públicas ou de acesso aberto. Cada registro exibido
           na plataforma carrega link direto à publicação original, data de extração e hash
-          de verificação — você pode conferir na fonte oficial a qualquer momento. Fontes
-          marcadas como{" "}
+          de verificação — você pode conferir na fonte oficial a qualquer momento. O{" "}
+          <strong style={{ color: "var(--t-mid)" }}>status e a saúde</strong> de cada fonte
+          são derivados da última coleta real registrada, não fixados no código: verde indica
+          coleta recente, amarelo coleta obsoleta ou instável, vermelho coleta falhando, e{" "}
+          <em>sem dados de saúde</em> quando ainda não há coleta registrada — nesse caso
+          nunca marcamos como conectada. Fontes marcadas como{" "}
           <span className="badge badge--warn" style={{ fontSize: 10 }}>
             operacional frágil
           </span>{" "}
@@ -786,8 +887,7 @@ export function SourcesPage() {
           <span className="badge badge--info" style={{ fontSize: 10 }}>
             em integração
           </span>{" "}
-          fazem parte do roadmap e ainda não têm dados indexados — nunca exibimos
-          informação de uma fonte que não esteja ativa. Nenhum dado é estimado ou
+          fazem parte do roadmap e ainda não têm dados indexados. Nenhum dado é estimado ou
           gerado por IA; só publicamos o que o órgão divulga.
         </p>
       </div>
