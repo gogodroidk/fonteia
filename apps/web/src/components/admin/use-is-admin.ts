@@ -34,15 +34,19 @@ export function useIsAdmin(): IsAdminState {
       .select("role")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setState({ isAdmin: data?.role === "admin", loading: false });
-      })
-      .catch(() => {
-        // Falha de rede/PostgREST: degrada para não-admin em vez de deixar o nav
-        // travado em loading=true para sempre (promessa rejeitada sem handler).
-        if (!cancelled) setState({ isAdmin: false, loading: false });
-      });
+      // O builder do Supabase é PromiseLike (não tem `.catch`); usamos o segundo
+      // argumento de `.then` para tratar rejeição sem quebrar o tipo.
+      .then(
+        ({ data }) => {
+          if (cancelled) return;
+          setState({ isAdmin: data?.role === "admin", loading: false });
+        },
+        () => {
+          // Falha de rede/PostgREST: degrada para não-admin em vez de deixar o nav
+          // travado em loading=true para sempre (promessa rejeitada sem handler).
+          if (!cancelled) setState({ isAdmin: false, loading: false });
+        },
+      );
 
     return () => {
       cancelled = true;

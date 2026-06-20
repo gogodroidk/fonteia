@@ -717,7 +717,7 @@ function InpiCnpjLookup() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="CNPJ do titular (ex.: 00.000.000/0001-91)"
-                inputMode="numeric"
+                inputMode="text"
                 aria-label="CNPJ do titular a consultar"
               />
               {input !== "" && (

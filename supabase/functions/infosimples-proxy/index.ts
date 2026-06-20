@@ -46,6 +46,11 @@ const DEFAULT_DAILY_PER_USER = 100; // was 20; adjustable via INFOSIMPLES_DAILY_
 const DEFAULT_CACHE_TTL_DAYS = 60;
 const DEFAULT_TIMEOUT_S = 300;
 
+// Cota de cortesia para usuarios trial/free: numero maximo de consultas LIVE
+// (nao cache) que podem ser feitas no total, para demonstracao do produto.
+// Cache hits nao consomem cota. Sobrescrevivel via INFOSIMPLES_TRIAL_QUOTA.
+const DEFAULT_TRIAL_QUOTA = 3;
+
 function envInt(name: string, fallback: number): number {
   const raw = (Deno.env.get(name) ?? "").trim();
   const n = Number.parseInt(raw, 10);
@@ -1240,6 +1245,27 @@ async function userDayCount(db: DbCtx, userId: string): Promise<number> {
   }
 }
 
+// Conta TODAS as chamadas 'live' do usuario (sem limite de data) — usada para
+// a cota de cortesia do trial. Fail-OPEN: em erro de infra retorna 0, deixando
+// a trava mensal global como ultima linha de defesa de custo.
+async function userTotalLiveCount(db: DbCtx, userId: string): Promise<number> {
+  try {
+    const res = await fetchWithRetry(`${db.url}/rest/v1/rpc/external_lookup_user_total_count`, {
+      timeoutMs: 8000,
+      retries: 1,
+      init: {
+        method: "POST",
+        headers: dbHeaders(db),
+        body: JSON.stringify({ p_provider: PROVIDER, p_user: userId }),
+      },
+    });
+    if (!res.ok) return 0;
+    return Number(await res.json()) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 // ─── Chamada a InfoSimples ───────────────────────────────────────────────────
 interface InfosimplesEnvelope {
   code?: number;
@@ -1330,20 +1356,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  // Gate 3: so plano PAGO dispara consulta paga.
-  if (!(await isPaidUser(req, supabaseUrl))) {
-    return reply(
-      {
-        ok: false,
-        configured: true,
-        error: "plano_requerido",
-        message: "A consulta InfoSimples e do plano pago. Assine para liberar.",
-      },
-      403,
-    );
-  }
-
-  // Status da autenticação gov.br — apikey + sessao + plano; SEM custo.
+  // Status da autenticação gov.br — apikey + sessao; SEM custo (nao exige plano pago).
   if (url.pathname.endsWith("/govbr-status")) {
     try {
       const res = await fetchWithRetry("https://api.infosimples.com/api/admin/autenticacao-govbr", {
@@ -1388,11 +1401,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   // CACHE-FIRST: hit fresco (dentro do TTL) => devolve do cache, custo ZERO.
+  // Posicionado ANTES do gate de plano/cota: cache hits sao gratis para qualquer
+  // usuario autenticado (trial ou pago) e nao consomem cota de cortesia.
   const ttlMs = envInt("INFOSIMPLES_CACHE_TTL_DAYS", DEFAULT_CACHE_TTL_DAYS) * 86_400_000;
   const cached = await readCache(db, kind, built.key);
   if (cached && Date.now() - new Date(cached.fetched_at).getTime() < ttlMs) {
     // Spread do payload PRIMEIRO p/ os campos do envelope (source:'cache' etc.) vencerem.
     return reply({ ...(cached.payload as object), ok: true, configured: true, source: "cache", kind, cachedAt: cached.fetched_at });
+  }
+
+  // GATE 3 (cache miss): so aqui e que uma chamada live seria disparada.
+  // Plano pago => prossegue sem restricao de cota de cortesia.
+  // Trial/free => verifica cota de cortesia (INFOSIMPLES_TRIAL_QUOTA consultas live no total).
+  const paid = await isPaidUser(req, supabaseUrl);
+  if (!paid) {
+    const trialQuota = envInt("INFOSIMPLES_TRIAL_QUOTA", DEFAULT_TRIAL_QUOTA);
+    const totalUsed = await userTotalLiveCount(db, userId);
+    if (totalUsed >= trialQuota) {
+      return reply(
+        {
+          ok: false,
+          configured: true,
+          error: "plano_requerido",
+          message:
+            `Voce ja utilizou suas ${trialQuota} consultas de demonstracao gratuitas. ` +
+            "Assine um plano para continuar consultando dados premium.",
+          quotaUsed: totalUsed,
+          quotaLimit: trialQuota,
+        },
+        403,
+      );
+    }
+    // Dentro da cota: prossegue, sujeito tambem aos caps globais de gasto abaixo.
   }
 
   // RATE-LIMIT por usuario (chamadas 'live'/dia). Acima do limite, recusa.

@@ -24,6 +24,7 @@ import { fetchCatalog, groupByCategoria } from "../../features/infosimples/catal
 import type { CertidaoItem, CertidaoPayload, CertidaoResult } from "../../features/infosimples/infosimples-client";
 import { consultarCertidao } from "../../features/infosimples/infosimples-client";
 import { EmptyState, SourceBadge } from "../../components/ui";
+import { sanitizeCnpj, formatCnpj, isValidCnpj } from "../../lib/cnpj";
 
 // ---------------------------------------------------------------------------
 // Tipos de estado da página
@@ -47,20 +48,15 @@ type KindResultState =
   | { state: "done"; result: CertidaoResult };
 
 // ---------------------------------------------------------------------------
-// Utilitários de CNPJ
+// Utilitários de CNPJ (live mask — progressivo enquanto o usuário digita)
 // ---------------------------------------------------------------------------
 
-function onlyDigits(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function formatCnpj(digits: string): string {
-  const d = digits.slice(0, 14);
-  if (d.length <= 2) return d;
-  if (d.length <= 5) return `${d.slice(0, 2)}.${d.slice(2)}`;
-  if (d.length <= 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
-  if (d.length <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
-  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+function formatCnpjLive(v: string): string {
+  if (v.length <= 2) return v;
+  if (v.length <= 5) return `${v.slice(0, 2)}.${v.slice(2)}`;
+  if (v.length <= 8) return `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5)}`;
+  if (v.length <= 12) return `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5, 8)}/${v.slice(8)}`;
+  return `${v.slice(0, 2)}.${v.slice(2, 5)}.${v.slice(5, 8)}/${v.slice(8, 12)}-${v.slice(12)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -525,33 +521,6 @@ function CatalogSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Validação de CNPJ (dígito verificador)
-// ---------------------------------------------------------------------------
-
-function isValidCnpj(digits: string): boolean {
-  if (digits.length !== 14) return false;
-  // Rejeita sequências de dígitos iguais (00000000000000, 11111111111111, etc.)
-  if (/^(\d)\1{13}$/.test(digits)) return false;
-
-  function calcDigit(d: string, weights: number[]): number {
-    let sum = 0;
-    for (let i = 0; i < weights.length; i++) {
-      sum += Number(d[i]) * (weights[i] ?? 0);
-    }
-    const remainder = sum % 11;
-    return remainder < 2 ? 0 : 11 - remainder;
-  }
-
-  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
-
-  const d1 = calcDigit(digits, w1);
-  const d2 = calcDigit(digits, w2);
-
-  return Number(digits[12]) === d1 && Number(digits[13]) === d2;
-}
-
-// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 
@@ -562,7 +531,7 @@ export function ConsultasPage() {
   const [cnpjFlash, setCnpjFlash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const cnpjDigits = onlyDigits(cnpjDisplay);
+  const cnpjDigits = sanitizeCnpj(cnpjDisplay);
   const cnpjValid = isValidCnpj(cnpjDigits);
 
   // Chamado quando o usuário tenta consultar sem CNPJ válido: leva o foco ao campo
@@ -595,8 +564,9 @@ export function ConsultasPage() {
   useEffect(() => { runCatalogFetch(); }, []);
 
   function handleCnpjChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const raw = onlyDigits(e.target.value);
-    setCnpjDisplay(formatCnpj(raw));
+    const raw = e.target.value.replace(/[.\-/\s]/g, "").toUpperCase();
+    const trimmed = raw.slice(0, 14);
+    setCnpjDisplay(formatCnpjLive(trimmed));
   }
 
   function handleCnpjClear() {
@@ -665,7 +635,7 @@ export function ConsultasPage() {
             ref={inputRef}
             id="cnpj-input"
             type="text"
-            inputMode="numeric"
+            inputMode="text"
             autoComplete="off"
             placeholder="00.000.000/0000-00"
             value={cnpjDisplay}
@@ -701,7 +671,7 @@ export function ConsultasPage() {
         {/* Contador / validação */}
         {cnpjDisplay && !cnpjValid && (
           <span className="tiny" style={{ color: "var(--t-low)" }}>
-            {cnpjDigits.length} dígito{cnpjDigits.length !== 1 ? "s" : ""} — faltam {14 - cnpjDigits.length}
+            {cnpjDigits.length} caractere{cnpjDigits.length !== 1 ? "s" : ""} — faltam {14 - cnpjDigits.length}
           </span>
         )}
         {cnpjValid && (
@@ -763,7 +733,7 @@ export function ConsultasPage() {
             title="Consultas premium não configuradas"
             description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
             tone="warning"
-            action={{ label: "Ver planos", href: "/billing" }}
+            action={{ label: "Ver planos", href: "/app/planos" }}
           />
         </div>
       ) : catalogData !== null ? (

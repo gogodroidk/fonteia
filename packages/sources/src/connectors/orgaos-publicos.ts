@@ -6,11 +6,13 @@
 // órgão contratante (razão social + CNPJ + UF); aqui agregamos os órgãos únicos.
 //
 // Por isso a "fonte" é interna: sourceId = "orgaos-publicos". A chave estável de
-// cada órgão é o CNPJ (14 dígitos) quando houver; senão, um slug do nome — para
-// que dois registros do mesmo órgão sem CNPJ não dupliquem.
+// cada órgão é o CNPJ (14 chars alfanuméricos) quando houver; senão, um slug do
+// nome — para que dois registros do mesmo órgão sem CNPJ não dupliquem.
 //
 // Estratégia: igual ao conector de municípios — achatamos/normalizamos um objeto
 // estável guardado em entities.attributes (kind = organization).
+
+import { normalizeCnpj } from "@fonteia/domain";
 
 /** Identificador da fonte gravado em cada item. Fonte interna (derivada do PNCP). */
 export const ORGAOS_PUBLICOS_SOURCE_ID = "orgaos-publicos";
@@ -23,7 +25,7 @@ export const ORGAOS_PUBLICOS_SOURCE_ID = "orgaos-publicos";
 export interface BiddingOrgaoRaw {
   /** Razão social / nome do órgão contratante (attributes.orgao). */
   orgao?: string;
-  /** CNPJ do órgão (14 dígitos, sem máscara) (attributes.orgaoCnpj). */
+  /** CNPJ do órgão (14 chars alfanuméricos, sem máscara) (attributes.orgaoCnpj). */
   orgaoCnpj?: string;
   /** Sigla da UF do órgão (attributes.uf). "" quando ausente. */
   uf?: string;
@@ -39,10 +41,10 @@ export interface BiddingOrgaoRaw {
 // ---------------------------------------------------------------------------
 
 export interface OrgaoPublico {
-  /** Id estável = CNPJ (14 dígitos) quando houver; senão, slug do nome. */
+  /** Id estável = CNPJ (14 chars alfanuméricos) quando houver; senão, slug do nome. */
   id: string;
   sourceId: string;
-  /** CNPJ do órgão (14 dígitos, sem máscara). "" quando ausente. */
+  /** CNPJ do órgão (14 chars alfanuméricos, sem máscara). "" quando ausente. */
   cnpj: string;
   /** Razão social / nome do órgão (ex.: "MUNICIPIO DE ITABUNA"). */
   nome: string;
@@ -57,12 +59,6 @@ export interface OrgaoPublico {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Mantém só os dígitos de um CNPJ; devolve "" se não restarem 14. */
-export function normalizeCnpj(value: string | undefined | null): string {
-  const digits = (value ?? "").replace(/\D/g, "");
-  return digits.length === 14 ? digits : "";
-}
 
 /**
  * Slug estável de um nome de órgão (sem acento, minúsculo, hífens). Usado como

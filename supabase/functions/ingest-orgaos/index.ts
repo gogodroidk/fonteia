@@ -23,6 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { hasValidBearerSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { normalizeCnpj } from "../_shared/br.ts";
 
 const SOURCE_ID = "orgaos-publicos";
 // Itens por chamada de RPC (evita payload gigante).
@@ -49,12 +50,6 @@ interface OrgaoItem {
   uf: string;
   ufNome: string;
   licitacoesCount: number;
-}
-
-/** Mantém só os dígitos de um CNPJ; "" se não restarem 14. */
-function normalizeCnpj(value: string | undefined): string {
-  const digits = (value ?? "").replace(/\D/g, "");
-  return digits.length === 14 ? digits : "";
 }
 
 /** Slug estável do nome do órgão (chave quando não há CNPJ). */
