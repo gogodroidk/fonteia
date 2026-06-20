@@ -22,6 +22,7 @@ import type { CatalogKind, CatalogResult } from "../../features/infosimples/cata
 import { fetchCatalog, groupByCategoria } from "../../features/infosimples/catalog-api";
 import type { CertidaoItem, CertidaoPayload, CertidaoResult } from "../../features/infosimples/infosimples-client";
 import { consultarCertidao } from "../../features/infosimples/infosimples-client";
+import { EmptyState, SourceBadge } from "../../components/ui";
 
 // ---------------------------------------------------------------------------
 // Tipos de estado da página
@@ -199,16 +200,24 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
 
       {/* Fonte oficial */}
       {payload.fonteUrl && (
-        <a
-          href={payload.fonteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn--ghost btn--sm"
-          style={{ alignSelf: "flex-start", display: "inline-flex", gap: 6, alignItems: "center" }}
-        >
-          <ExternalLink size={13} />
-          Fonte oficial
-        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <a
+            href={payload.fonteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn--ghost btn--sm"
+            style={{ alignSelf: "flex-start", display: "inline-flex", gap: 6, alignItems: "center" }}
+          >
+            <ExternalLink size={13} />
+            Fonte oficial
+          </a>
+          <SourceBadge
+            tipo="oficial"
+            fonte={payload.titulo !== "" ? payload.titulo : "Fonte oficial"}
+            url={payload.fonteUrl}
+            {...(payload.validade !== undefined ? { data: payload.validade } : {})}
+          />
+        </div>
       )}
 
       {/* Detalhes colapsáveis */}
@@ -698,23 +707,13 @@ export function ConsultasPage() {
           </button>
         </div>
       ) : pageState === "dormant" ? (
-        <div
-          className="panel"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            padding: "20px 24px",
-            maxWidth: 480,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Info size={18} style={{ color: "var(--brand)" }} />
-            <span style={{ fontWeight: 600, color: "var(--t-hi)" }}>Consultas premium não configuradas</span>
-          </div>
-          <p className="small" style={{ color: "var(--t-mid)", margin: 0 }}>
-            O proxy InfoSimples não está ativo neste ambiente. Entre em contato com o administrador para habilitar consultas premium.
-          </p>
+        <div className="panel" style={{ maxWidth: 480 }}>
+          <EmptyState
+            title="Consultas premium não configuradas"
+            description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
+            tone="warning"
+            action={{ label: "Ver planos", href: "/billing" }}
+          />
         </div>
       ) : catalogData !== null ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>

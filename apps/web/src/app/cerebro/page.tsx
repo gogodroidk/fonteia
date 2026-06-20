@@ -37,6 +37,7 @@ import {
   Maximize2,
   Search,
   ShieldAlert,
+  ShieldQuestion,
   Sparkles,
   Users,
   X,
@@ -294,6 +295,8 @@ export function CerebroPage() {
   const [showIdoneidade, setShowIdoneidade] = useState(false);
   // Mapa de selos já consultados: nodeId → IdoneidadeSelo.
   const [nodeSeloMap, setNodeSeloMap] = useState<Map<string, IdoneidadeSelo>>(new Map());
+  // Hint contextual de idoneidade: dispensado pelo usuário para o nó atual.
+  const [hintDismissed, setHintDismissed] = useState(false);
 
   // Camadas ativas (filtro por módulo). Set vazio = todas visíveis (default).
   const [hiddenKinds, setHiddenKinds] = useState<Set<GraphKind>>(new Set());
@@ -352,9 +355,11 @@ export function CerebroPage() {
   }, [selectedId]);
   // Quando o nó selecionado muda, fecha e limpa o painel de idoneidade para evitar
   // que cards de um nó anterior apareçam enquanto o cabeçalho já mostra o novo CNPJ.
+  // Também reseta o hint para que reapareça ao trocar de nó (se aplicável).
   useEffect(() => {
     setShowIdoneidade(false);
     setIdoneidade(null);
+    setHintDismissed(false);
   }, [selectedId]);
   useEffect(() => {
     hiddenRef.current = hiddenKinds;
@@ -1093,6 +1098,23 @@ export function CerebroPage() {
     [graph.nodes, selectedId],
   );
 
+  /**
+   * Mostra o hint de idoneidade quando:
+   * - Há um nó selecionado que é empresa/entidade com CNPJ
+   * - O painel de idoneidade ainda não está aberto
+   * - O nó ainda não tem um selo calculado no nodeSeloMap
+   * - O hint não foi dispensado pelo usuário para este nó
+   */
+  const showIdoneidadeHint =
+    selectedNode !== null &&
+    selectedNode.cnpj !== undefined &&
+    (selectedNode.kind === "company" ||
+      selectedNode.kind === "entity" ||
+      selectedNode.isCenter) &&
+    !showIdoneidade &&
+    !nodeSeloMap.has(selectedNode.id) &&
+    !hintDismissed;
+
   /** Contagem de nós por kind (para badges das camadas). */
   const countByKind = useMemo(() => {
     const map = new Map<GraphKind, number>();
@@ -1572,6 +1594,32 @@ export function CerebroPage() {
                 </dl>
               )}
 
+              {/* Hint contextual de idoneidade — nudge sutil antes de o usuário usar o recurso */}
+              {showIdoneidadeHint && (
+                <div
+                  className="cerebro-hint"
+                  role="note"
+                  aria-label="Dica: verificar idoneidade desta empresa"
+                >
+                  <ShieldQuestion
+                    size={13}
+                    className="cerebro-hint-icon"
+                    aria-hidden="true"
+                  />
+                  <span className="cerebro-hint-text">
+                    Verifique a idoneidade desta empresa
+                  </span>
+                  <button
+                    type="button"
+                    className="cerebro-hint-close"
+                    onClick={() => setHintDismissed(true)}
+                    aria-label="Dispensar dica de idoneidade"
+                  >
+                    <X size={10} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
               {/* Ações: fonte oficial + expandir + recentralizar + UBO */}
               <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
                 {selectedNode.sourceUrl && (
@@ -1878,6 +1926,35 @@ export function CerebroPage() {
         .ubo-arrow{color:var(--t-low);font-weight:700}
         @media (max-width:600px){
           .ubo-panel{padding:12px 14px}
+        }
+        /* Hint contextual de idoneidade */
+        .cerebro-hint{
+          display:flex;align-items:center;gap:7px;
+          padding:6px 9px;border-radius:var(--r-sm,8px);
+          background:color-mix(in srgb,var(--accent,var(--brand)) 8%,var(--surface));
+          border:1px solid var(--border);
+          font-size:12.5px;color:var(--t-mid);
+          animation:cerebro-hint-in .18s ease both;
+        }
+        @media (prefers-reduced-motion:reduce){
+          .cerebro-hint{animation:none}
+        }
+        @keyframes cerebro-hint-in{
+          from{opacity:0;transform:translateY(-4px)}
+          to{opacity:1;transform:translateY(0)}
+        }
+        .cerebro-hint-icon{color:var(--brand-ink,var(--accent));flex-shrink:0}
+        .cerebro-hint-text{flex:1;line-height:1.35}
+        .cerebro-hint-close{
+          display:flex;align-items:center;justify-content:center;
+          width:18px;height:18px;flex-shrink:0;
+          background:transparent;border:0;border-radius:4px;
+          cursor:pointer;color:var(--t-low);padding:0;font-family:inherit;
+          transition:background .12s,color .12s;
+        }
+        .cerebro-hint-close:hover,.cerebro-hint-close:focus-visible{
+          background:color-mix(in srgb,var(--accent,var(--brand)) 14%,transparent);
+          color:var(--t-hi);
         }
       `}</style>
     </div>
