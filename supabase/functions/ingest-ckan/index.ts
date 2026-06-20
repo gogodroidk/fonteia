@@ -8,7 +8,8 @@
 //                        Desde a migração de 2023 há um gateway na frente do CKAN: as rotas
 //                        legadas /api/3/action/* continuam existindo, mas requisições anônimas
 //                        de servidor costumam levar 401/403 do WAF. Quando o Vault tiver o
-//                        segredo DADOS_GOV_TOKEN, ele é enviado no header `chave-api-dados`.
+//                        segredo DADOS_GOV_BR_TOKEN (ou o alias legado DADOS_GOV_TOKEN),
+//                        ele é enviado no header `chave-api-dados`.
 //                        Se a fonte recusar, devolvemos { ok:false, status } honesto — sem 200 mentiroso.
 //
 // COMO O CKAN ENTREGA DADOS (dois caminhos, nesta ordem de preferência):
@@ -49,8 +50,8 @@
 //
 // SECRETS: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY injetados pelo Supabase.
 //          INGEST_CRON_SECRET (opcional) — se definido, exige Bearer correspondente.
-//          DADOS_GOV_TOKEN (opcional, Vault) — token do gateway do dados.gov.br.
-//          NENHUM segredo hardcoded.
+//          DADOS_GOV_BR_TOKEN (opcional, Vault; alias legado DADOS_GOV_TOKEN) —
+//            token do gateway do dados.gov.br. NENHUM segredo hardcoded.
 //
 // PARÂMETROS (query OU corpo JSON):
 //   portal=sp|dadosgov            (obrigatório)
@@ -111,8 +112,13 @@ interface PortalConfig {
   apiBase: string;
   /** Caminho para a página humana do dataset no portal (link de evidência). */
   datasetPath: (dataset: string) => string;
-  /** Nome do segredo no Vault com o token do gateway (se houver). */
-  vaultTokenName?: string;
+  /**
+   * Nomes do(s) segredo(s) no Vault com o token do gateway (se houver), em ordem
+   * de preferência. O primeiro que existir é usado. Mantemos uma LISTA porque o
+   * Vault de produção provisionou `DADOS_GOV_BR_TOKEN`, mas versões anteriores
+   * documentavam `DADOS_GOV_TOKEN` — tentamos ambos para não depender do nome.
+   */
+  vaultTokenNames?: string[];
 }
 
 const PORTALS: Record<string, PortalConfig> = {
@@ -128,7 +134,9 @@ const PORTALS: Record<string, PortalConfig> = {
     // Rotas CKAN legadas seguem atrás do gateway. Configurável aqui caso o caminho mude.
     apiBase: "https://dados.gov.br/api/3/action",
     datasetPath: (d) => `https://dados.gov.br/dados/conjuntos-dados/${encodeURIComponent(d)}`,
-    vaultTokenName: "DADOS_GOV_TOKEN",
+    // DADOS_GOV_BR_TOKEN é o nome provisionado no Vault; DADOS_GOV_TOKEN fica como
+    // alias retrocompatível.
+    vaultTokenNames: ["DADOS_GOV_BR_TOKEN", "DADOS_GOV_TOKEN"],
   },
 };
 
@@ -596,13 +604,18 @@ Deno.serve(async (req) => {
     );
 
     // Token opcional do gateway do portal (lido do Vault em runtime; nunca hardcoded).
+    // Tenta os nomes de segredo na ordem de preferência; usa o primeiro que existir.
     let token: string | null = null;
-    if (portal.vaultTokenName) {
+    for (const name of portal.vaultTokenNames ?? []) {
       try {
-        const { data } = await supabase.rpc("get_vault_secret", { p_name: portal.vaultTokenName });
-        token = typeof data === "string" && data.trim() !== "" ? data.trim() : null;
+        const { data } = await supabase.rpc("get_vault_secret", { p_name: name });
+        if (typeof data === "string" && data.trim() !== "") {
+          token = data.trim();
+          break;
+        }
       } catch {
-        token = null; // Vault indisponível -> segue sem token (pode levar 401 honesto adiante)
+        // Vault indisponível p/ este nome -> tenta o próximo; senão segue sem token
+        // (pode levar 401 honesto adiante).
       }
     }
 
