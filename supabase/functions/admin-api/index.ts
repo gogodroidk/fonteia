@@ -267,6 +267,113 @@ async function setModuleAccess(
 }
 
 // ---------------------------------------------------------------------------
+// Audit: consultas CNPJ via infosimples-proxy (external_lookups)
+// ---------------------------------------------------------------------------
+
+interface ExternalLookupRow {
+  id: string;
+  provider: string;
+  lookup_kind: string;
+  lookup_key: string;
+  source: string;
+  requested_by: string | null;
+  fetched_at: string;
+}
+
+interface AuditEvent {
+  id: string;
+  fetched_at: string;
+  user_id: string | null;
+  user_email: string | null;
+  lookup_kind: string;
+  lookup_key: string;
+  source: string;
+  provider: string;
+}
+
+async function listAuditEvents(admin: SupabaseClient, url: URL): Promise<Response> {
+  const params = url.searchParams;
+
+  // --- Parse pagination ---
+  const page = Math.max(1, parseInt(params.get("page") ?? "1", 10) || 1);
+  const perPage = Math.min(200, Math.max(1, parseInt(params.get("per_page") ?? "50", 10) || 50));
+  const offset = (page - 1) * perPage;
+
+  // --- Parse filters ---
+  const fromRaw = params.get("from");
+  const toRaw = params.get("to");
+  const cnpj = params.get("cnpj");
+  const userId = params.get("user_id");
+  const kind = params.get("kind");
+
+  const now = new Date();
+  const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const fromDate = fromRaw ? new Date(fromRaw).toISOString() : defaultFrom;
+  const toDate = toRaw ? new Date(toRaw).toISOString() : now.toISOString();
+
+  // --- Query external_lookups ---
+  let query = admin
+    .from("external_lookups")
+    .select("id, provider, lookup_kind, lookup_key, source, requested_by, fetched_at", {
+      count: "exact",
+    })
+    .gte("fetched_at", fromDate)
+    .lte("fetched_at", toDate)
+    .order("fetched_at", { ascending: false })
+    .range(offset, offset + perPage - 1);
+
+  if (cnpj) {
+    query = query.ilike("lookup_key", `%${cnpj}%`);
+  }
+  if (userId) {
+    query = query.eq("requested_by", userId);
+  }
+  if (kind) {
+    query = query.eq("lookup_kind", kind);
+  }
+
+  const { data, count, error } = await query;
+
+  if (error) {
+    return json({ error: "Falha ao consultar external_lookups.", detail: error.message }, 502);
+  }
+
+  const rows = (data ?? []) as ExternalLookupRow[];
+  const total = count ?? 0;
+  const totalPages = Math.ceil(total / perPage) || 1;
+
+  // --- Resolve emails for unique requested_by UUIDs ---
+  const uniqueUserIds = [...new Set(rows.map((r) => r.requested_by).filter((id): id is string => id !== null))];
+
+  const emailById = new Map<string, string | null>();
+
+  // getUserById for small sets (≤50 unique IDs per page is always true given max per_page=200)
+  await Promise.all(
+    uniqueUserIds.map(async (uid) => {
+      const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(uid);
+      if (!authErr && authUser?.user) {
+        emailById.set(uid, authUser.user.email ?? null);
+      } else {
+        emailById.set(uid, null);
+      }
+    }),
+  );
+
+  const events: AuditEvent[] = rows.map((row) => ({
+    id: row.id,
+    fetched_at: row.fetched_at,
+    user_id: row.requested_by,
+    user_email: row.requested_by ? (emailById.get(row.requested_by) ?? null) : null,
+    lookup_kind: row.lookup_kind,
+    lookup_key: row.lookup_key,
+    source: row.source,
+    provider: row.provider,
+  }));
+
+  return json({ events, total, page, per_page: perPage, total_pages: totalPages });
+}
+
+// ---------------------------------------------------------------------------
 // Handler principal
 // ---------------------------------------------------------------------------
 
@@ -324,6 +431,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
         allowed?: boolean;
       };
       return await setModuleAccess(admin, body);
+    }
+    if (req.method === "GET" && route === "/audit") {
+      return await listAuditEvents(admin, new URL(req.url));
     }
     return json({ error: "Rota não encontrada", path: route }, 404);
   } catch (error) {

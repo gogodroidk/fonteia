@@ -32,6 +32,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { fetchWithRetry, sleep } from "../_shared/http.ts";
 import { hasValidBearerSecret } from "../_shared/auth.ts";
 import { handlePreflight, jsonResponse } from "../_shared/cors.ts";
+import { normalizeCnpj } from "../_shared/br.ts";
 
 const API_BASE = "https://api.portaldatransparencia.gov.br/api-de-dados";
 const PORTAL_BASE = "https://portaldatransparencia.gov.br";
@@ -113,12 +114,6 @@ interface RawSancao {
 
 function trimStr(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-/** Mantém só dígitos de um CNPJ; retorna "" se não tiver 14 dígitos. */
-function normalizeCnpj(raw: string | undefined): string {
-  const digits = (raw ?? "").replace(/\D/g, "");
-  return digits.length === 14 ? digits : "";
 }
 
 /** Retorna true se o codigoFormatado/cnpjFormatado indicar pessoa jurídica (tem "/"). */

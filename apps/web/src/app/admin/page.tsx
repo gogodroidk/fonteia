@@ -7,14 +7,17 @@
 //      rejeita (403) qualquer não-admin, então a UI nunca é fonte de verdade.
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, Database, Layers, RefreshCw, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, ClipboardList, Database, Layers, RefreshCw, ShieldAlert, ShieldCheck, Users } from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { useIsAdmin } from "../../components/admin/use-is-admin";
 import {
+  fetchAuditEvents,
   fetchOverview,
   fetchUsers,
   type AdminOverview,
   type AdminUsersResponse,
+  type AuditEventsResponse,
+  type AuditFilters,
 } from "../../components/admin/admin-api";
 import {
   DataSection,
@@ -22,14 +25,16 @@ import {
   SourcesModulesSection,
   UsersSection,
 } from "../../components/admin/admin-sections";
+import { AuditSection } from "../../components/admin/audit-section";
 
-type AdminTab = "overview" | "users" | "data" | "sources";
+type AdminTab = "overview" | "users" | "data" | "sources" | "audit";
 
 const TABS: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Visão geral", icon: BarChart3 },
   { id: "users", label: "Usuários", icon: Users },
   { id: "data", label: "Dados", icon: Database },
   { id: "sources", label: "Fontes & Módulos", icon: Layers },
+  { id: "audit", label: "Auditoria", icon: ClipboardList },
 ];
 
 // ─── Estado de acesso negado ─────────────────────────────────────────────────────
@@ -71,6 +76,8 @@ export function AdminPage() {
 
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminUsersResponse | null>(null);
+  const [auditData, setAuditData] = useState<AuditEventsResponse | null>(null);
+  const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,6 +105,19 @@ export function AdminPage() {
     }
   }, []);
 
+  const loadAudit = useCallback(async (filters: AuditFilters = {}) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setAuditData(await fetchAuditEvents(filters));
+      setAuditFilters(filters);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao carregar eventos de auditoria.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Carrega os dados da aba ativa quando admin é confirmado.
   useEffect(() => {
     if (gateLoading || !isAdmin) return;
@@ -107,7 +127,10 @@ export function AdminPage() {
     if (tab === "users" && !users) {
       void loadUsers();
     }
-  }, [gateLoading, isAdmin, tab, overview, users, loadOverview, loadUsers]);
+    if (tab === "audit" && !auditData) {
+      void loadAudit({});
+    }
+  }, [gateLoading, isAdmin, tab, overview, users, auditData, loadOverview, loadUsers, loadAudit]);
 
   if (gateLoading) {
     return <LoadingState label="Verificando acesso…" />;
@@ -119,6 +142,7 @@ export function AdminPage() {
 
   const refresh = () => {
     if (tab === "users") void loadUsers();
+    else if (tab === "audit") void loadAudit(auditFilters);
     else void loadOverview();
   };
 
@@ -206,6 +230,19 @@ export function AdminPage() {
           <SourcesModulesSection sources={overview.sources} modules={overview.modules} />
         ) : loading ? (
           <LoadingState label="Carregando fontes…" />
+        ) : null)}
+
+      {tab === "audit" &&
+        (auditData ? (
+          <AuditSection
+            data={auditData}
+            filters={auditFilters}
+            onFilterChange={(f) => void loadAudit(f)}
+            onRefresh={() => void loadAudit(auditFilters)}
+            loading={loading}
+          />
+        ) : loading ? (
+          <LoadingState label="Carregando auditoria…" />
         ) : null)}
 
       <style>{`@keyframes adminspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>

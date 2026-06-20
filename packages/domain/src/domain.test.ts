@@ -16,11 +16,14 @@ describe("Fonte.ia domain model", () => {
     }
   });
 
-  it("starts with leiloes active and every other module locked", () => {
+  it("keeps the launched data modules active and gates only the api module", () => {
+    // O produto evoluiu do MVP de 1 módulo para 8 módulos com dados reais no ar.
+    // Hoje só o módulo `api` (ticket alto, ainda não exposto) fica locked.
     expect(PRODUCT_MODULES.find((module) => module.id === "leiloes")?.status).toBe("active");
+    expect(PRODUCT_MODULES.find((module) => module.id === "api")?.status).toBe("locked");
 
-    for (const module of PRODUCT_MODULES.filter((item) => item.id !== "leiloes")) {
-      expect(module.status).toBe("locked");
+    for (const module of PRODUCT_MODULES.filter((item) => item.id !== "api")) {
+      expect(module.status).toBe("active");
     }
   });
 

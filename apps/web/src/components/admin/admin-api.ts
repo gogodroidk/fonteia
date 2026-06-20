@@ -150,3 +150,47 @@ export function setModuleAccess(
     body: JSON.stringify({ user_id: userId, module_id: moduleId, allowed }),
   });
 }
+
+// ─── Auditoria de consultas ───────────────────────────────────────────────────
+
+export interface AuditEvent {
+  id: string;
+  fetched_at: string;
+  user_id: string | null;
+  user_email: string | null;
+  lookup_kind: string;
+  lookup_key: string;
+  source: "live" | "cache" | string;
+  provider: string;
+}
+
+export interface AuditEventsResponse {
+  events: AuditEvent[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export interface AuditFilters {
+  from?: string;       // ISO date
+  to?: string;         // ISO date
+  cnpj?: string;
+  user_id?: string;
+  kind?: string;
+  page?: number;
+  per_page?: number;
+}
+
+export function fetchAuditEvents(filters: AuditFilters = {}): Promise<AuditEventsResponse> {
+  const params = new URLSearchParams();
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.cnpj) params.set("cnpj", filters.cnpj.replace(/\D/g, ""));
+  if (filters.user_id) params.set("user_id", filters.user_id);
+  if (filters.kind) params.set("kind", filters.kind);
+  if (filters.page != null) params.set("page", String(filters.page));
+  if (filters.per_page != null) params.set("per_page", String(filters.per_page));
+  const qs = params.toString();
+  return request<AuditEventsResponse>(`/audit${qs ? `?${qs}` : ""}`, { method: "GET" });
+}

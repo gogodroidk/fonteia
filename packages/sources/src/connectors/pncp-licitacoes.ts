@@ -257,11 +257,13 @@ export interface NumeroControleParts {
 
 /**
  * Quebra o numeroControlePNCP "cnpj-X-sequencial/ano" (ex.:
- * "01612612000106-1-000001/2024"). O sequencial é a parte numérica após o último
- * "-" e antes da "/"; o ano vem depois da "/". Devolve null se não casar.
+ * "01612612000106-1-000001/2024" ou "12ABC3450001XX-1-000001/2026" após IN RFB
+ * 2.229/2026). O CNPJ pode ser alfanumérico [0-9A-Z]{14}. O sequencial é a
+ * parte numérica após o último "-" e antes da "/"; o ano vem depois da "/".
+ * Devolve null se não casar.
  */
 export function parseNumeroControle(numeroControlePNCP: string): NumeroControleParts | null {
-  const match = /^(\d{14})-\d+-(\d+)\/(\d{4})$/.exec(numeroControlePNCP.trim());
+  const match = /^([0-9A-Z]{14})-\d+-(\d+)\/(\d{4})$/.exec(numeroControlePNCP.trim());
   if (!match) return null;
   const [, cnpj, sequencial, ano] = match;
   if (!cnpj || !sequencial || !ano) return null;

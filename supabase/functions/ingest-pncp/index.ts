@@ -126,7 +126,8 @@ function toCents(value: unknown): number {
 }
 
 function parseNumeroControle(num: string): { cnpj: string; sequencial: string; ano: string } | null {
-  const m = /^(\d{14})-\d+-(\d+)\/(\d{4})$/.exec(num.trim());
+  // [0-9A-Z]{14} — suporte a CNPJ alfanumérico (IN RFB 2.229/2026, vigência 01/07/2026)
+  const m = /^([0-9A-Z]{14})-\d+-(\d+)\/(\d{4})$/.exec(num.trim().toUpperCase());
   if (!m) return null;
   const cnpj = m[1], seq = m[2], ano = m[3];
   if (!cnpj || !seq || !ano) return null;
