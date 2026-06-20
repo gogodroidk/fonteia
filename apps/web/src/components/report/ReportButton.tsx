@@ -1,13 +1,16 @@
 /**
  * ReportButton.tsx
- * Reusable "Gerar relatório" button for any entity detail page.
+ * Reusable "Exportar relatório" button for any entity detail page.
  *
  * Usage:
  *   <ReportButton report={buildReport(entity)} />
- *   <ReportButton report={buildReport(entity)} label="Ver relatório" />
+ *   <ReportButton report={buildReport(entity)} label="Ver relatório completo" />
  *
  * On click: saves the report to localStorage and navigates to /app/relatorios.
  * Self-contained; detail pages only need to build the SavedReport object.
+ *
+ * Accessibility: aria-label reflects the current state (idle / saving).
+ * The button is disabled while navigating to prevent double-saves.
  */
 
 import { useState } from "react";
@@ -20,7 +23,10 @@ import { navigateSpa } from "../../app/_nav";
 export interface ReportButtonProps {
   /** The fully-formed report to save. Build it with the entity's data before passing. */
   report: SavedReport;
-  /** Button label; defaults to "Gerar relatório" */
+  /**
+   * Button label.
+   * Defaults to "Exportar relatório" — clear action language for compliance/M&A users.
+   */
   label?: string | undefined;
   /** Extra CSS className for the button element */
   className?: string | undefined;
@@ -30,7 +36,7 @@ export interface ReportButtonProps {
 
 export function ReportButton({
   report,
-  label = "Gerar relatório",
+  label = "Exportar relatório",
   className,
 }: ReportButtonProps) {
   const [saved, setSaved] = useState(false);
@@ -50,11 +56,16 @@ export function ReportButton({
       className={["btn btn--soft btn--sm", className].filter(Boolean).join(" ")}
       onClick={handleClick}
       disabled={saved}
-      aria-label={saved ? "Relatório salvo, redirecionando…" : label}
+      aria-label={
+        saved
+          ? "Relatório salvo, redirecionando para a lista de relatórios…"
+          : `${label}: ${report.title}`
+      }
+      title={saved ? "Redirecionando…" : label}
       style={{ transition: "opacity .2s" }}
     >
       <FileText size={13} aria-hidden="true" />
-      {saved ? "Salvo…" : label}
+      {saved ? "Salvando…" : label}
     </button>
   );
 }

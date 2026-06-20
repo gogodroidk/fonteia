@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -22,6 +22,7 @@ import type { CatalogKind, CatalogResult } from "../../features/infosimples/cata
 import { fetchCatalog, groupByCategoria } from "../../features/infosimples/catalog-api";
 import type { CertidaoItem, CertidaoPayload, CertidaoResult } from "../../features/infosimples/infosimples-client";
 import { consultarCertidao } from "../../features/infosimples/infosimples-client";
+import { EmptyState, SourceBadge } from "../../components/ui";
 
 // ---------------------------------------------------------------------------
 // Tipos de estado da página
@@ -81,6 +82,9 @@ function statusBadgeStyle(status: string): { background: string; color: string }
 function CertidaoResultView({ result }: { result: CertidaoResult }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [rawOpen, setRawOpen] = useState(false);
+  const uid = useId();
+  const detailsId = `${uid}-details`;
+  const rawId = `${uid}-raw`;
 
   if (result.state === "dormant") {
     return (
@@ -150,8 +154,6 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
   // state === "ok"
   const payload: CertidaoPayload = result.data;
   const badgeStyle = statusBadgeStyle(payload.status);
-  const detailsId = `details-${payload.titulo.replace(/\s+/g, "-").toLowerCase()}`;
-  const rawId = `raw-${payload.titulo.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
     <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -198,16 +200,24 @@ function CertidaoResultView({ result }: { result: CertidaoResult }) {
 
       {/* Fonte oficial */}
       {payload.fonteUrl && (
-        <a
-          href={payload.fonteUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn btn--ghost btn--sm"
-          style={{ alignSelf: "flex-start", display: "inline-flex", gap: 6, alignItems: "center" }}
-        >
-          <ExternalLink size={13} />
-          Fonte oficial
-        </a>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <a
+            href={payload.fonteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn--ghost btn--sm"
+            style={{ alignSelf: "flex-start", display: "inline-flex", gap: 6, alignItems: "center" }}
+          >
+            <ExternalLink size={13} />
+            Fonte oficial
+          </a>
+          <SourceBadge
+            tipo="oficial"
+            fonte={payload.titulo !== "" ? payload.titulo : "Fonte oficial"}
+            url={payload.fonteUrl}
+            {...(payload.validade !== undefined ? { data: payload.validade } : {})}
+          />
+        </div>
       )}
 
       {/* Detalhes colapsáveis */}
@@ -413,7 +423,7 @@ interface CategorySectionProps {
 }
 
 function CategorySection({ categoria, kinds, cnpjDigits, cnpjValid }: CategorySectionProps) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const sectionId = `section-${categoria.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
@@ -490,6 +500,33 @@ function CatalogSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
+// Validação de CNPJ (dígito verificador)
+// ---------------------------------------------------------------------------
+
+function isValidCnpj(digits: string): boolean {
+  if (digits.length !== 14) return false;
+  // Rejeita sequências de dígitos iguais (00000000000000, 11111111111111, etc.)
+  if (/^(\d)\1{13}$/.test(digits)) return false;
+
+  function calcDigit(d: string, weights: number[]): number {
+    let sum = 0;
+    for (let i = 0; i < weights.length; i++) {
+      sum += Number(d[i]) * (weights[i] ?? 0);
+    }
+    const remainder = sum % 11;
+    return remainder < 2 ? 0 : 11 - remainder;
+  }
+
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  const d1 = calcDigit(digits, w1);
+  const d2 = calcDigit(digits, w2);
+
+  return Number(digits[12]) === d1 && Number(digits[13]) === d2;
+}
+
+// ---------------------------------------------------------------------------
 // Página principal
 // ---------------------------------------------------------------------------
 
@@ -500,7 +537,7 @@ export function ConsultasPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const cnpjDigits = onlyDigits(cnpjDisplay);
-  const cnpjValid = cnpjDigits.length === 14;
+  const cnpjValid = isValidCnpj(cnpjDigits);
 
   function runCatalogFetch() {
     setPageState("loading-catalog");
@@ -670,23 +707,13 @@ export function ConsultasPage() {
           </button>
         </div>
       ) : pageState === "dormant" ? (
-        <div
-          className="panel"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            padding: "20px 24px",
-            maxWidth: 480,
-          }}
-        >
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Info size={18} style={{ color: "var(--brand)" }} />
-            <span style={{ fontWeight: 600, color: "var(--t-hi)" }}>Consultas premium não configuradas</span>
-          </div>
-          <p className="small" style={{ color: "var(--t-mid)", margin: 0 }}>
-            O proxy InfoSimples não está ativo neste ambiente. Entre em contato com o administrador para habilitar consultas premium.
-          </p>
+        <div className="panel" style={{ maxWidth: 480 }}>
+          <EmptyState
+            title="Consultas premium não configuradas"
+            description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
+            tone="warning"
+            action={{ label: "Ver planos", href: "/billing" }}
+          />
         </div>
       ) : catalogData !== null ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>

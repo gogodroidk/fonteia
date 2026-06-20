@@ -1,12 +1,15 @@
 /**
  * EntityReport.tsx
  * Presentational, print-friendly report view for a SavedReport.
- * Screen: dark/light safe. Print (@media print): always light, document layout.
- * Provides: export-CSV action, print button.
+ *
+ * Screen: dark/light safe via CSS custom property tokens.
+ * Print (@media print): always light, A4 document layout with brand header
+ * and auditable sources footer. Scoped under .er-doc to avoid conflicts.
+ *
  * Mobile-first, reduced-motion safe, WCAG AA.
  */
 
-import { Download, ExternalLink, Printer } from "lucide-react";
+import { Download, ExternalLink, Printer, ShieldCheck } from "lucide-react";
 import type { SavedReport } from "../../features/reports/reports-store";
 import { LogoMark } from "../ui/logo-mark";
 
@@ -18,10 +21,24 @@ export interface EntityReportProps {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Format ISO date → "DD de mês de AAAA" */
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+/** Format ISO date+time → "DD/MM/AAAA HH:mm" */
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function buildCsv(report: SavedReport): string {
@@ -51,7 +68,261 @@ function downloadCsv(report: SavedReport): void {
   URL.revokeObjectURL(url);
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Print CSS (scoped to .er-doc) ───────────────────────────────────────────
+//
+// Injected via <style> so it is co-located with the component and does not
+// require changes to design-system.css. Scoped to .er-doc to avoid
+// conflicting with the existing .print-report / .report-* rules.
+//
+// Rules:
+//  - A4 margins (20mm sides, 16mm top/bottom)
+//  - Force light theme: white background, near-black text
+//  - page-break-inside: avoid on every section block
+//  - Hide all app chrome; show only .er-print-doc
+//  - Optimise for ink: no heavy shadows, no decorative gradients
+
+const PRINT_STYLES = `
+/* Screen: hide print-only document */
+.er-print-doc {
+  display: none;
+}
+
+@media print {
+  /* Hide everything except the print document */
+  body > *:not(.er-print-root),
+  .app-root,
+  .chat-panel,
+  .sidebar-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show the print-only container */
+  .er-print-doc {
+    display: block !important;
+  }
+
+  /* A4 page setup */
+  @page {
+    size: A4 portrait;
+    margin: 16mm 20mm;
+  }
+
+  /* Force light colour regardless of system/app dark mode */
+  html, body {
+    background: #ffffff !important;
+    color: #0B2240 !important;
+    font-family: 'Figtree', 'Figtree Variable', system-ui, sans-serif;
+    font-size: 10.5pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Document root ── */
+  .er-print-doc {
+    background: #ffffff !important;
+    color: #0B2240 !important;
+    max-width: 100%;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+
+  /* ── Brand header ── */
+  .er-print-header {
+    display: flex !important;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding-bottom: 10pt;
+    border-bottom: 2pt solid #0B2240;
+    margin-bottom: 14pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .er-print-logo-row {
+    display: flex !important;
+    align-items: center;
+    gap: 8pt;
+  }
+  .er-print-logo-svg {
+    color: #1D5FE0;
+    flex-shrink: 0;
+  }
+  .er-print-brand-name {
+    font-size: 15pt;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #0B2240;
+    line-height: 1;
+  }
+  .er-print-brand-sub {
+    font-size: 7.5pt;
+    color: #5A6B82;
+    margin-top: 2pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .er-print-meta {
+    text-align: right;
+    font-size: 8pt;
+    color: #5A6B82;
+    line-height: 1.6;
+  }
+  .er-print-meta strong {
+    color: #0B2240;
+    font-weight: 700;
+  }
+
+  /* ── Entity title block ── */
+  .er-print-title-block {
+    margin-bottom: 14pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .er-print-kind-label {
+    font-size: 7.5pt;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #1D5FE0;
+    margin-bottom: 3pt;
+  }
+  .er-print-entity-name {
+    font-size: 16pt;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #0B2240;
+    line-height: 1.2;
+    margin: 0 0 3pt;
+  }
+  .er-print-subtitle {
+    font-size: 9pt;
+    color: #5A6B82;
+  }
+
+  /* ── Trust note ── */
+  .er-print-trust {
+    display: flex !important;
+    align-items: center;
+    gap: 5pt;
+    background: #EEF4FF;
+    border: 0.5pt solid #C5D7F5;
+    border-radius: 4pt;
+    padding: 5pt 8pt;
+    font-size: 8pt;
+    color: #1D5FE0;
+    font-weight: 600;
+    margin-bottom: 14pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* ── Sections ── */
+  .er-print-section {
+    margin-bottom: 14pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .er-print-section-title {
+    font-size: 8pt;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #0B2240;
+    border-bottom: 0.5pt solid #D7E0EC;
+    padding-bottom: 3pt;
+    margin-bottom: 7pt;
+  }
+
+  /* ── Field rows ── */
+  .er-print-field-row {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 3pt 0;
+    border-bottom: 0.5pt solid #F2F4F8;
+    gap: 12pt;
+    font-size: 9.5pt;
+  }
+  .er-print-field-label {
+    color: #5A6B82;
+    font-size: 8pt;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    width: 36%;
+  }
+  .er-print-field-value {
+    color: #0B2240;
+    font-weight: 600;
+    word-break: break-word;
+    text-align: right;
+    flex: 1;
+  }
+
+  /* ── Source entries ── */
+  .er-print-source-entry {
+    padding: 5pt 0;
+    border-bottom: 0.5pt solid #F2F4F8;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .er-print-source-name {
+    font-weight: 700;
+    font-size: 9pt;
+    color: #0B2240;
+    margin-bottom: 1pt;
+  }
+  .er-print-source-url {
+    font-size: 7pt;
+    color: #5A6B82;
+    word-break: break-all;
+  }
+  .er-print-source-meta {
+    font-size: 7.5pt;
+    color: #8A9BB0;
+    margin-top: 1pt;
+    display: flex !important;
+    gap: 12pt;
+    flex-wrap: wrap;
+  }
+  .er-print-hash {
+    font-family: 'Courier New', monospace;
+    font-size: 7pt;
+    color: #8A9BB0;
+    letter-spacing: 0.02em;
+  }
+
+  /* ── Footer ── */
+  .er-print-footer {
+    margin-top: 16pt;
+    padding-top: 7pt;
+    border-top: 1pt solid #D7E0EC;
+    display: flex !important;
+    justify-content: space-between;
+    align-items: flex-start;
+    font-size: 7.5pt;
+    color: #8A9BB0;
+    gap: 8pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .er-print-footer-left {
+    line-height: 1.5;
+  }
+  .er-print-footer-right {
+    text-align: right;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+  .er-print-footer strong {
+    color: #5A6B82;
+  }
+}
+`;
+
+// ─── Sub-components (screen) ──────────────────────────────────────────────────
 
 function FieldTable({ fields }: { fields: SavedReport["fields"] }) {
   if (fields.length === 0) return null;
@@ -107,13 +378,7 @@ function FieldTable({ fields }: { fields: SavedReport["fields"] }) {
 function SourcesList({ sources }: { sources: SavedReport["sources"] }) {
   if (sources.length === 0) return null;
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {sources.map((s) => (
         <div
           key={s.label}
@@ -128,7 +393,7 @@ function SourcesList({ sources }: { sources: SavedReport["sources"] }) {
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: "var(--t-hi)" }}>{s.label}</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "var(--t-hi)" }}>{s.label}</div>
             {s.url !== undefined && (
               <a
                 href={s.url}
@@ -148,23 +413,40 @@ function SourcesList({ sources }: { sources: SavedReport["sources"] }) {
                 {s.url}
               </a>
             )}
+            {s.collectedAt !== undefined && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--t-low)",
+                  fontWeight: 600,
+                  marginTop: 4,
+                  letterSpacing: ".04em",
+                }}
+              >
+                Coletado em: {formatDate(s.collectedAt)}
+              </div>
+            )}
           </div>
-          {s.collectedAt !== undefined && (
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--t-low)",
-                fontWeight: 600,
-                letterSpacing: ".04em",
-                whiteSpace: "nowrap",
-                marginTop: 2,
-              }}
-            >
-              Coletado: {formatDate(s.collectedAt)}
-            </div>
-          )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Print-only document sub-components ──────────────────────────────────────
+
+function PrintSourceEntry({ s }: { s: SavedReport["sources"][number] }) {
+  return (
+    <div className="er-print-source-entry">
+      <div className="er-print-source-name">{s.label}</div>
+      {s.url !== undefined && (
+        <div className="er-print-source-url">{s.url}</div>
+      )}
+      <div className="er-print-source-meta">
+        {s.collectedAt !== undefined && (
+          <span>Coletado: {formatDate(s.collectedAt)}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -173,24 +455,32 @@ function SourcesList({ sources }: { sources: SavedReport["sources"] }) {
 
 export function EntityReport({ report }: EntityReportProps) {
   const generatedAt = formatDate(report.createdAt);
+  const generatedAtFull = formatDateTime(report.createdAt);
 
   return (
     <>
-      {/* ── Screen view ─────────────────────────────────────────────────────── */}
+      {/* Inject scoped print CSS once per mount */}
+      <style>{PRINT_STYLES}</style>
+
+      {/* ── Screen view ───────────────────────────────────────────────────────
+          Shown on screen (light + dark). Hidden during @media print via
+          .app-root display:none in design-system.css and the er-print-doc rule.
+      ─────────────────────────────────────────────────────────────────────── */}
       <div
         className="panel"
         style={{ overflow: "hidden" }}
-        aria-label={`Relatório: ${report.title}`}
+        aria-label={`Relatório de Due Diligence: ${report.title}`}
       >
-        {/* Header bar */}
+        {/* ── Document header bar ── */}
         <div
-          className="row between wrap"
+          className="row between wrap no-print"
           style={{
             padding: "16px 22px",
             borderBottom: "1px solid var(--border)",
             gap: 12,
           }}
         >
+          {/* Brand identity */}
           <div className="row" style={{ gap: 10 }}>
             <div
               style={{
@@ -200,39 +490,43 @@ export function EntityReport({ report }: EntityReportProps) {
                 flexShrink: 0,
               }}
             >
-              <LogoMark size={22} />
+              <LogoMark size={24} />
             </div>
             <div>
               <div
                 style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: ".1em",
-                  textTransform: "uppercase",
-                  color: "var(--accent-ink)",
+                  fontSize: 14,
+                  fontWeight: 800,
+                  letterSpacing: "-.01em",
+                  color: "var(--brand-ink)",
+                  lineHeight: 1,
                 }}
               >
-                Fonte.ia — Relatório
+                Fonte.ia
               </div>
               <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: ".06em",
+                  textTransform: "uppercase",
                   color: "var(--t-low)",
-                  marginTop: 1,
+                  marginTop: 2,
                 }}
               >
-                {report.kindLabel} · Gerado em {generatedAt}
+                Relatório de Due Diligence
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="row no-print" style={{ gap: 8, flexWrap: "wrap" }}>
+          <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <button
               type="button"
               className="btn btn--ghost btn--sm"
               onClick={() => downloadCsv(report)}
-              title="Exportar CSV"
+              title="Exportar dados em CSV"
+              aria-label="Exportar dados em CSV"
             >
               <Download size={13} aria-hidden="true" />
               CSV
@@ -241,19 +535,36 @@ export function EntityReport({ report }: EntityReportProps) {
               type="button"
               className="btn btn--soft btn--sm"
               onClick={() => window.print()}
-              title="Imprimir / salvar como PDF"
+              title="Exportar como PDF via impressao"
+              aria-label="Exportar relatório como PDF"
             >
               <Printer size={13} aria-hidden="true" />
-              Imprimir PDF
+              Exportar PDF
             </button>
           </div>
         </div>
 
-        {/* Kind badge + title */}
+        {/* ── Document identity + trust note ── */}
         <div style={{ padding: "20px 22px 0" }}>
-          <span className="badge badge--info" style={{ marginBottom: 10 }}>
-            {report.kindLabel}
-          </span>
+          {/* Kind + generation timestamp */}
+          <div
+            className="row wrap"
+            style={{ gap: 8, marginBottom: 12, alignItems: "center" }}
+          >
+            <span className="badge badge--info">{report.kindLabel}</span>
+            <span
+              style={{
+                fontSize: 11,
+                color: "var(--t-low)",
+                fontWeight: 600,
+                letterSpacing: ".03em",
+              }}
+            >
+              Gerado em {generatedAtFull}
+            </span>
+          </div>
+
+          {/* Entity title */}
           <h2
             style={{
               margin: "0 0 4px",
@@ -272,9 +583,39 @@ export function EntityReport({ report }: EntityReportProps) {
               {report.subtitle}
             </div>
           )}
+
+          {/* Trust note */}
+          <div
+            className="row"
+            style={{
+              gap: 7,
+              marginTop: 14,
+              marginBottom: 4,
+              padding: "9px 13px",
+              background: "color-mix(in srgb, var(--brand) 8%, var(--surface-2))",
+              borderRadius: "var(--r-md)",
+              border: "1px solid color-mix(in srgb, var(--brand) 20%, var(--border))",
+            }}
+          >
+            <ShieldCheck
+              size={14}
+              aria-hidden="true"
+              style={{ color: "var(--brand-ink)", flexShrink: 0 }}
+            />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--brand-ink)",
+                letterSpacing: ".01em",
+              }}
+            >
+              Documento rastreavel — cada dado cita a fonte oficial
+            </span>
+          </div>
         </div>
 
-        {/* Fields */}
+        {/* ── Fields ── */}
         {report.fields.length > 0 && (
           <div style={{ padding: "16px 22px" }}>
             <div
@@ -293,7 +634,7 @@ export function EntityReport({ report }: EntityReportProps) {
           </div>
         )}
 
-        {/* Sources */}
+        {/* ── Sources (rastreabilidade) ── */}
         {report.sources.length > 0 && (
           <div
             style={{
@@ -316,64 +657,115 @@ export function EntityReport({ report }: EntityReportProps) {
             <SourcesList sources={report.sources} />
           </div>
         )}
+
+        {/* ── Screen footer note ── */}
+        <div
+          style={{
+            padding: "12px 22px",
+            borderTop: "1px solid var(--border)",
+            background: "var(--surface-2)",
+            fontSize: 11,
+            color: "var(--t-low)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            justifyContent: "space-between",
+          }}
+        >
+          <span>fontebrasil.online · ID: {report.id}</span>
+          <span>Gerado em {generatedAtFull}</span>
+        </div>
       </div>
 
-      {/* ── Print-only document ──────────────────────────────────────────────
-          Rendered but hidden on screen; @media print shows it and hides the
-          rest of the app via the rules in design-system.css (.app-root hidden,
-          .print-report displayed).
-      ──────────────────────────────────────────────────────────────────────── */}
-      <div className="print-report" aria-hidden="true">
-        <div className="report-header">
-          <div>
-            <div className="report-title">Fonte.ia — {report.kindLabel}</div>
-            <div className="report-sub">
-              {report.title}
-              {report.subtitle !== undefined ? ` · ${report.subtitle}` : ""}
+      {/* ── Print-only A4 document ────────────────────────────────────────────
+          Hidden on screen (display:none via .er-print-doc rule).
+          @media print makes it block and hides the rest of the app.
+          aria-hidden="true" because screen readers use the screen view above.
+      ─────────────────────────────────────────────────────────────────────── */}
+      <div className="er-print-doc" aria-hidden="true">
+
+        {/* Brand header */}
+        <div className="er-print-header">
+          <div className="er-print-logo-row">
+            <div className="er-print-logo-svg">
+              <LogoMark size={28} />
+            </div>
+            <div>
+              <div className="er-print-brand-name">Fonte.ia</div>
+              <div className="er-print-brand-sub">Relatório de Due Diligence</div>
             </div>
           </div>
-          <div className="report-sub" style={{ textAlign: "right" }}>
-            Gerado em: {generatedAt}
+          <div className="er-print-meta">
+            <div>
+              <strong>{report.kindLabel}</strong>
+            </div>
+            <div>Gerado em: {generatedAtFull}</div>
+            <div>fontebrasil.online</div>
           </div>
         </div>
 
+        {/* Entity title block */}
+        <div className="er-print-title-block">
+          <div className="er-print-kind-label">{report.kindLabel}</div>
+          <h1 className="er-print-entity-name">{report.title}</h1>
+          {report.subtitle !== undefined && (
+            <div className="er-print-subtitle">{report.subtitle}</div>
+          )}
+        </div>
+
+        {/* Trust note */}
+        <div className="er-print-trust">
+          <span style={{ fontWeight: 800, fontSize: "8pt", letterSpacing: ".04em" }}>
+            DOCUMENTO RASTREAVEL
+          </span>
+          <span>—</span>
+          <span>
+            Cada dado cita a fonte oficial (orgao, data de coleta). Gerado automaticamente
+            pela plataforma Fonte.ia a partir de fontes publicas verificaveis.
+          </span>
+        </div>
+
+        {/* Data fields */}
         {report.fields.length > 0 && (
-          <div className="report-section">
-            <div className="report-section-title">Dados</div>
+          <div className="er-print-section">
+            <div className="er-print-section-title">Dados do relatório</div>
             {report.fields.map((f) => (
-              <div key={f.label} className="report-row">
-                <span>{f.label}</span>
-                <b>{f.value || "—"}</b>
+              <div key={f.label} className="er-print-field-row">
+                <span className="er-print-field-label">{f.label}</span>
+                <span className="er-print-field-value">{f.value || "—"}</span>
               </div>
             ))}
           </div>
         )}
 
+        {/* Sources */}
         {report.sources.length > 0 && (
-          <div className="report-section">
-            <div className="report-section-title">Fontes (rastreabilidade)</div>
+          <div className="er-print-section">
+            <div className="er-print-section-title">
+              Fontes e rastreabilidade — {report.sources.length}{" "}
+              {report.sources.length === 1 ? "fonte" : "fontes"} verificadas
+            </div>
             {report.sources.map((s) => (
-              <div key={s.label} className="report-row" style={{ flexDirection: "column", gap: 2 }}>
-                <b>{s.label}</b>
-                {s.url !== undefined && (
-                  <span style={{ fontSize: "8pt", color: "#5A6B82", wordBreak: "break-all" }}>
-                    {s.url}
-                  </span>
-                )}
-                {s.collectedAt !== undefined && (
-                  <span style={{ fontSize: "8pt", color: "#9AA8BC" }}>
-                    Coletado: {formatDate(s.collectedAt)}
-                  </span>
-                )}
-              </div>
+              <PrintSourceEntry key={s.label} s={s} />
             ))}
           </div>
         )}
 
-        <div className="report-footer">
-          <span>fontebrasil.online</span>
-          <span>Fonte.ia — dados públicos com rastreabilidade</span>
-          <span>ID: {report.id}</span>
+        {/* Page footer */}
+        <div className="er-print-footer">
+          <div className="er-print-footer-left">
+            <div>
+              <strong>Fonte.ia</strong> · fontebrasil.online
+            </div>
+            <div>Gerado por Fonte.ia · {generatedAt}</div>
+            <div>Documento rastreavel — cada dado cita a fonte oficial (orgao, data, hash)</div>
+          </div>
+          <div className="er-print-footer-right">
+            <div>
+              <strong>ID do relatório</strong>
+            </div>
+            <div className="er-print-hash">{report.id}</div>
+          </div>
         </div>
       </div>
     </>

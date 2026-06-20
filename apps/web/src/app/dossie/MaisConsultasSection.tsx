@@ -13,7 +13,7 @@
  * Design: CSS custom properties; mobile-first 375px; sem Tailwind, sem shadcn.
  */
 
-import { useState, useEffect, useId } from "react";
+import { useState, useEffect, useId, useRef } from "react";
 import {
   AlertTriangle,
   ChevronDown,
@@ -31,6 +31,7 @@ import type { CatalogKind } from "../../features/infosimples/catalog-api";
 import { fetchCatalog, groupByCategoria } from "../../features/infosimples/catalog-api";
 import type { CertidaoResult } from "../../features/infosimples/infosimples-client";
 import { consultarCertidao } from "../../features/infosimples/infosimples-client";
+import { EmptyState } from "../../components/ui";
 
 // ─── Kinds excluídos (já cobertos por CertidoesSection) ──────────────────────
 
@@ -643,6 +644,7 @@ function CategoryAccordion({
   defaultOpen,
 }: CategoryAccordionProps) {
   const [open, setOpen] = useState(defaultOpen);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
   const sectionId = useId();
   const headerId = useId();
 
@@ -761,7 +763,7 @@ function CategoryAccordion({
           onClick={(e) => {
             e.stopPropagation();
             if (!open) setOpen(true);
-            onDispatchCategoria(kinds);
+            setPendingConfirm(true);
           }}
           style={{
             display: "inline-flex",
@@ -779,6 +781,60 @@ function CategoryAccordion({
           {anyLoading ? "Consultando…" : "Consultar categoria"}
         </button>
       </div>
+
+      {/* Confirmação inline de disparo de categoria */}
+      {pendingConfirm && (
+        <div
+          role="alertdialog"
+          aria-modal="false"
+          aria-label={`Confirmar consulta da categoria ${categoria}`}
+          tabIndex={-1}
+          onKeyDown={(e) => { if (e.key === "Escape") setPendingConfirm(false); }}
+          style={{
+            padding: "12px 16px",
+            background: "color-mix(in srgb,var(--warn) 8%,var(--surface))",
+            borderTop: "1px solid color-mix(in srgb,var(--warn) 25%,transparent)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: "var(--t-mid)", lineHeight: 1.5 }}>
+            Consultar <strong style={{ color: "var(--t-hi)" }}>{categoria}</strong>?
+            {" "}Serão{" "}
+            <strong style={{ color: "var(--t-hi)" }}>
+              {kinds.filter((k) => {
+                const s = kindStates.get(k.kind);
+                return s === undefined || s.phase === "idle";
+              }).length}
+            </strong>{" "}
+            consulta{kinds.filter((k) => {
+              const s = kindStates.get(k.kind);
+              return s === undefined || s.phase === "idle";
+            }).length !== 1 ? "s" : ""} e consumirá créditos do plano.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => {
+                setPendingConfirm(false);
+                onDispatchCategoria(kinds);
+              }}
+              autoFocus
+            >
+              Confirmar
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => setPendingConfirm(false)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Painel de kinds */}
       {open && (
@@ -825,13 +881,17 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
   // forçar re-render ao mudar (spread + novo Map a cada escrita).
   const [kindStates, setKindStates] = useState<Map<string, KindState>>(new Map());
 
+  // Ref para o cnpj atual — usado para cancelar resultados de consultas stale
+  // quando o usuário troca de CNPJ enquanto uma requisição está em andamento.
+  const currentCnpjRef = useRef(cnpj);
+  useEffect(() => {
+    currentCnpjRef.current = cnpj;
+  }, [cnpj]);
+
   // ── Carga do catálogo ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (cnpj === "") return;
-
     let cancelled = false;
     setCatalogState({ phase: "loading" });
-    setKindStates(new Map());
 
     void fetchCatalog().then((result) => {
       if (cancelled) return;
@@ -852,7 +912,8 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     return () => {
       cancelled = true;
     };
-  }, [cnpj]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Dispatch de um kind individual ────────────────────────────────────────
   function dispatchKind(kind: string) {
@@ -860,9 +921,11 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     const current = kindStates.get(kind);
     if (current?.phase === "loading") return;
 
+    const dispatchedCnpj = cnpj;
     setKindStates((prev) => new Map([...prev, [kind, { phase: "loading" }]]));
 
-    void consultarCertidao(kind, cnpj).then((result) => {
+    void consultarCertidao(kind, dispatchedCnpj).then((result) => {
+      if (currentCnpjRef.current !== dispatchedCnpj) return;
       setKindStates((prev) =>
         new Map([...prev, [kind, { phase: "done", result }]])
       );
@@ -891,8 +954,10 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     });
 
     // Dispara em paralelo
+    const dispatchedCnpj = cnpj;
     for (const k of toDispatch) {
-      void consultarCertidao(k.kind, cnpj).then((result) => {
+      void consultarCertidao(k.kind, dispatchedCnpj).then((result) => {
+        if (currentCnpjRef.current !== dispatchedCnpj) return;
         setKindStates((prev) =>
           new Map([...prev, [k.kind, { phase: "done", result }]])
         );
@@ -979,24 +1044,13 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
 
       {/* ── Catálogo dormant ────────────────────────────────────────────────── */}
       {catalogState.phase === "dormant" && (
-        <div
-          className="panel"
-          style={{
-            padding: "18px 20px",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-          }}
-          role="status"
-        >
-          <Info
-            size={15}
-            aria-hidden="true"
-            style={{ color: "var(--t-low)", flexShrink: 0, marginTop: 2 }}
+        <div className="panel">
+          <EmptyState
+            title="Consultas premium não configuradas"
+            description="O proxy InfoSimples não está ativo neste ambiente. Disponível nos planos Escritório e Corporativo."
+            tone="warning"
+            action={{ label: "Ver planos", href: "/billing" }}
           />
-          <p style={{ margin: 0, fontSize: 13, color: "var(--t-low)", lineHeight: 1.55 }}>
-            Consultas premium não configuradas neste ambiente.
-          </p>
         </div>
       )}
 

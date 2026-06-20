@@ -36,6 +36,7 @@ import {
 } from "../../features/dossie/certidoes-helper";
 import type { CertidaoPayload } from "../../features/infosimples/infosimples-client";
 import { MaisConsultasSection } from "./MaisConsultasSection";
+import { EmptyState, SourceBadge } from "../../components/ui";
 
 // ─── Helpers de cor/ícone por status ─────────────────────────────────────────
 
@@ -90,6 +91,8 @@ function statusLabel(status: CertidaoStatus | SemaforoGeral): string {
       return "Atenção";
     case "indisponivel":
       return "Indisponível";
+    default:
+      return status;
   }
 }
 
@@ -440,6 +443,7 @@ function CertidaoCard({ card }: CertidaoCardProps) {
                       background: "color-mix(in srgb,var(--danger) 5%,transparent)",
                       borderRadius: "var(--r-sm)",
                       padding: "6px 8px",
+                      borderTop: undefined,
                     }
                   : {}),
               }}
@@ -480,25 +484,20 @@ function CertidaoCard({ card }: CertidaoCardProps) {
           fontSize: 10.5,
           color: "var(--t-low)",
           background: "var(--surface-2)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexWrap: "wrap",
         }}
       >
-        Consultado via InfoSimples
+        <span>Consultado via InfoSimples</span>
         {fonteUrl !== undefined && (
-          <>
-            {" · "}
-            <a
-              href={fonteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: "var(--brand-ink)",
-                textDecoration: "none",
-                wordBreak: "break-all",
-              }}
-            >
-              {fonteUrl}
-            </a>
-          </>
+          <SourceBadge
+            tipo="oficial"
+            fonte={titulo !== "" ? titulo : label}
+            url={fonteUrl}
+            {...(validade !== undefined ? { data: validade } : {})}
+          />
         )}
       </div>
     </div>
@@ -818,7 +817,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
             color: "inherit",
           }}
         >
-          Certidoes &amp; Idoneidade
+          Certidões &amp; Idoneidade
         </h3>
       </div>
 
@@ -837,89 +836,40 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
 
       {/* ── Estado global: dormant ────────────────────────────────────────── */}
       {globalState === "dormant" && (
-        <div
-          className="panel"
-          style={{
-            padding: "16px 20px",
-            display: "flex",
-            gap: 10,
-            alignItems: "flex-start",
-          }}
-          role="status"
-        >
-          <Info
-            size={15}
-            aria-hidden="true"
-            style={{ color: "var(--t-low)", flexShrink: 0, marginTop: 1 }}
+        <div className="panel">
+          <EmptyState
+            icon={Lock}
+            title="Certidões automatizadas"
+            description="A integração com InfoSimples não está configurada neste ambiente. Disponível nos planos Escritório e Corporativo."
+            tone="warning"
+            action={{ label: "Ver planos", href: "/billing" }}
           />
-          <p style={{ margin: 0, fontSize: 13, color: "var(--t-low)", lineHeight: 1.55 }}>
-            Consultas premium indisponíveis. A integração com InfoSimples não está
-            configurada neste ambiente.
-          </p>
         </div>
       )}
 
       {/* ── Estado global: login ──────────────────────────────────────────── */}
       {globalState === "login" && (
-        <div
-          className="panel"
-          style={{
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-          role="status"
-        >
-          <div className="row" style={{ gap: 8 }}>
-            <Lock
-              size={15}
-              aria-hidden="true"
-              style={{ color: "var(--brand-ink)", flexShrink: 0 }}
-            />
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t-hi)" }}>
-              Acesso restrito
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--t-mid)", lineHeight: 1.55 }}>
-            Certidões e consultas de idoneidade exigem login.
-          </p>
-          <a href="/auth/login" className="btn btn--primary btn--sm">
-            Entrar
-          </a>
+        <div className="panel">
+          <EmptyState
+            icon={Lock}
+            title="Entre para consultar"
+            description="Certidões e consultas de idoneidade exigem login."
+            tone="info"
+            action={{ label: "Entrar", href: "/auth/login" }}
+          />
         </div>
       )}
 
       {/* ── Estado global: plano ──────────────────────────────────────────── */}
       {globalState === "plan" && (
-        <div
-          className="panel"
-          style={{
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            alignItems: "flex-start",
-          }}
-          role="status"
-        >
-          <div className="row" style={{ gap: 8 }}>
-            <Lock
-              size={15}
-              aria-hidden="true"
-              style={{ color: "var(--brand-ink)", flexShrink: 0 }}
-            />
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--t-hi)" }}>
-              Recurso do plano pago
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--t-mid)", lineHeight: 1.55 }}>
-            Certidões automatizadas estao disponíveis nos planos Escritório e Corporativo.
-          </p>
-          <a href="/billing" className="btn btn--primary btn--sm">
-            Ver planos
-          </a>
+        <div className="panel">
+          <EmptyState
+            icon={Lock}
+            title="Certidões automatizadas"
+            description="Disponível nos planos Escritório e Corporativo. Automatize a verificação de compliance da sua carteira de clientes."
+            tone="warning"
+            action={{ label: "Ver planos", href: "/billing" }}
+          />
         </div>
       )}
 
@@ -933,6 +883,67 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
           {/* Semáforo geral */}
           <SemaforoHeader semaforo={semaforo} cards={cards} />
 
+          {/* Frase de conclusão do semáforo */}
+          {(() => {
+            const okCards = cards.filter(
+              (c) => c.result.state === "ok",
+            ) as Array<CertidaoCardState & { result: Extract<CertidaoCardState["result"], { state: "ok" }> }>;
+
+            const irregularCards = okCards.filter((c) => c.result.data.status === "irregular");
+            const atencaoCards = okCards.filter((c) => c.result.data.status === "atencao");
+            const regularCards = okCards.filter((c) => c.result.data.status === "regular");
+
+            function extractOrgao(label: string): string {
+              const idx = label.indexOf(" — ");
+              return idx !== -1 ? label.slice(0, idx) : label;
+            }
+
+            function buildOrgaoList(sourceCards: typeof okCards): string {
+              const orgaos = sourceCards.map((c) => extractOrgao(c.label));
+              const MAX = 4;
+              if (orgaos.length <= MAX) return orgaos.join(", ");
+              const visible = orgaos.slice(0, MAX);
+              const resto = orgaos.length - MAX;
+              return `${visible.join(", ")} e mais ${resto}`;
+            }
+
+            let prefix = "";
+            let orgaoList = "";
+
+            if (irregularCards.length > 0) {
+              prefix = `${irregularCards.length} irregularidade${irregularCards.length > 1 ? "s" : ""} ativa${irregularCards.length > 1 ? "s" : ""}`;
+              orgaoList = buildOrgaoList(irregularCards);
+            } else if (atencaoCards.length > 0) {
+              prefix = `${atencaoCards.length} ponto${atencaoCards.length > 1 ? "s" : ""} de atenção`;
+              orgaoList = buildOrgaoList(atencaoCards);
+            } else if (regularCards.length > 0) {
+              return (
+                <p
+                  style={{ margin: 0, fontSize: 12.5, color: "var(--t-mid)", lineHeight: 1.5 }}
+                  aria-live="polite"
+                >
+                  Tudo regular nas{" "}
+                  <strong style={{ color: "var(--t-hi)", fontWeight: 600 }}>
+                    {regularCards.length} certidões
+                  </strong>{" "}
+                  verificadas.
+                </p>
+              );
+            } else {
+              return null;
+            }
+
+            return (
+              <p
+                style={{ margin: 0, fontSize: 12.5, color: "var(--t-mid)", lineHeight: 1.5 }}
+                aria-live="polite"
+              >
+                {prefix} —{" "}
+                <strong style={{ color: "var(--t-hi)", fontWeight: 600 }}>{orgaoList}</strong>
+              </p>
+            );
+          })()}
+
           {/* QSA via receita-federal-cnpj */}
           <QsaCard cards={cards} />
 
@@ -940,7 +951,7 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
           <div
             style={{ display: "flex", flexDirection: "column", gap: 8 }}
             role="list"
-            aria-label="Certidoes por orgao"
+            aria-label="Certidões por órgão"
           >
             {cards.map((card) => (
               <div key={card.kind} role="listitem">
@@ -961,9 +972,9 @@ export function CertidoesSection({ cnpj }: CertidoesSectionProps) {
               border: "1px solid var(--border)",
             }}
           >
-            Certidoes obtidas automaticamente via InfoSimples. Sempre verifique nas
+            Certidões obtidas automaticamente via InfoSimples. Sempre verifique nas
             fontes oficiais antes de tomar decisões. Os links "Fonte oficial" em cada
-            card apontam para o orgao emissor.
+            card apontam para o órgão emissor.
           </div>
 
           {/* Mais consultas — acordeões sob demanda (nunca auto-disparados) */}

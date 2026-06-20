@@ -28,7 +28,7 @@ export type CatalogResult =
 function buildCatalogUrl(): string | null {
   const fonteiaUrl = getConfiguredApiUrl();
   if (!fonteiaUrl) return null;
-  const proxyBase = trimTrailingSlash(fonteiaUrl).replace(/\/[^/]+$/, "/infosimples-proxy");
+  const proxyBase = trimTrailingSlash(fonteiaUrl).replace(/\/functions\/v1\/[^/]+$/, "/functions/v1/infosimples-proxy");
   return `${proxyBase}/catalog`;
 }
 

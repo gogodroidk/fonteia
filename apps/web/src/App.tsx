@@ -269,25 +269,53 @@ type RouteKey =
   | "consultas"
   | "onboarding";
 
-const NAV: Array<{ path: string; route: RouteKey; label: string; icon: typeof LayoutGrid }> = [
-  { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
-  { path: "/app/cerebro", route: "cerebro", label: "Cérebro", icon: Brain },
-  { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
-  { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
-  { path: "/app/politica", route: "politica", label: "Política", icon: Users },
-  { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
-  { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
-  { path: "/app/dossie", route: "dossie", label: "Dossiê", icon: FileSearch2 },
-  { path: "/app/consultas", route: "consultas", label: "Consultas", icon: BadgeCheck },
-  { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
-  { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
-  { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
-  { path: "/app/raio-x", route: "raio-x", label: "Raio-X", icon: ScanLine },
-  { path: "/app/leads", route: "leads", label: "Leads", icon: Sparkles },
-  { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
-  { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
-  { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
+type NavItem = { path: string; route: RouteKey; label: string; icon: typeof LayoutGrid };
+
+// Navegação agrupada em clusters — cara enterprise para a sidebar desktop + drawer mobile.
+// A bottom-nav (mobile) consome o NAV plano derivado abaixo e NÃO é afetada.
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
+  {
+    label: "Visão geral",
+    items: [
+      { path: "/app", route: "painel", label: "Painel", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "Inteligência",
+    items: [
+      { path: "/app/cerebro", route: "cerebro", label: "Cérebro", icon: Brain },
+      { path: "/app/dossie", route: "dossie", label: "Dossiê", icon: FileSearch2 },
+      { path: "/app/consultas", route: "consultas", label: "Consultas", icon: BadgeCheck },
+      { path: "/app/raio-x", route: "raio-x", label: "Raio-X", icon: ScanLine },
+      { path: "/app/leads", route: "leads", label: "Leads", icon: Sparkles },
+    ],
+  },
+  {
+    label: "Dados públicos",
+    items: [
+      { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
+      { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
+      { path: "/app/politica", route: "politica", label: "Política", icon: Users },
+      { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
+      { path: "/app/empresas", route: "empresas", label: "Empresas", icon: Building2 },
+      { path: "/app/ambiental", route: "ambiental", label: "Ambiental", icon: Leaf },
+      { path: "/app/juridico", route: "juridico", label: "Jurídico", icon: Scale },
+      { path: "/app/inpi", route: "inpi", label: "INPI", icon: BadgeCheck },
+    ],
+  },
+  {
+    label: "Operação",
+    items: [
+      { path: "/app/alertas", route: "alertas", label: "Alertas", icon: Bell },
+      { path: "/app/relatorios", route: "relatorios", label: "Relatórios", icon: FileText },
+      { path: "/app/fontes", route: "fontes", label: "Fontes", icon: Database },
+    ],
+  },
 ];
+
+// NAV plano derivado — preserva compatibilidade com a bottom-nav mobile e qualquer
+// código que precise de NAV.find() / NAV[0] sem ter que saber dos grupos.
+const NAV: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 // Item de navegação exclusivo do admin (renderizado só quando isAdmin === true).
 const ADMIN_NAV: { path: string; route: RouteKey; label: string; icon: typeof LayoutGrid } = {
@@ -546,9 +574,62 @@ function AppShell({ path, navigate }: AppShellProps) {
         </button>
       </div>
 
-      <nav aria-label="Navegação principal" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px", display: "flex", flexDirection: "column", gap: 3 }}>
-        {NAV.map((item) => navItem(item, inDrawer))}
-        {isAdmin && navItem(ADMIN_NAV, inDrawer)}
+      <nav aria-label="Navegação principal" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px", display: "flex", flexDirection: "column", gap: 0 }}>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label} role="group" aria-label={group.label} style={{ marginBottom: 6 }}>
+            {/* Cabeçalho de seção: visível apenas quando expandido; divisor fino quando colapsado */}
+            {collapsed && !inDrawer ? (
+              <div aria-hidden="true" style={{ margin: "8px 0 6px", borderTop: "1px solid var(--border)" }} />
+            ) : (
+              <p
+                aria-hidden="true"
+                style={{
+                  margin: "10px 4px 3px",
+                  padding: 0,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase",
+                  color: "var(--t-low)",
+                  userSelect: "none",
+                  lineHeight: 1,
+                }}
+              >
+                {group.label}
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {group.items.map((item) => navItem(item, inDrawer))}
+            </div>
+          </div>
+        ))}
+        {isAdmin && (
+          <div role="group" aria-label="Administração" style={{ marginBottom: 6 }}>
+            {collapsed && !inDrawer ? (
+              <div aria-hidden="true" style={{ margin: "8px 0 6px", borderTop: "1px solid var(--border)" }} />
+            ) : (
+              <p
+                aria-hidden="true"
+                style={{
+                  margin: "10px 4px 3px",
+                  padding: 0,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: "0.09em",
+                  textTransform: "uppercase",
+                  color: "var(--t-low)",
+                  userSelect: "none",
+                  lineHeight: 1,
+                }}
+              >
+                Sistema
+              </p>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {navItem(ADMIN_NAV, inDrawer)}
+            </div>
+          </div>
+        )}
       </nav>
 
       <div style={{ flex: 1 }} />

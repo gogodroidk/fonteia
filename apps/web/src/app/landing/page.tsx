@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck,
-  Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale, Layers,
+  Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale,
 } from "lucide-react";
 import { ScoreRing, FonteDots, ThemeToggle, LogoMark } from "../../components/ui";
 import {
@@ -32,6 +32,20 @@ function useReveal() {
   return [ref, seen] as const;
 }
 
+// Check prefers-reduced-motion at component level (SSG-safe: only accessed in effects)
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduced(mq.matches);
+    const h = (e: MediaQueryListEvent) => setReduced(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+  return reduced;
+}
+
 function Reveal({
   children,
   delay = 0,
@@ -44,6 +58,15 @@ function Reveal({
   style?: React.CSSProperties;
 }) {
   const [ref, seen] = useReveal();
+  const reduced = usePrefersReducedMotion();
+  // When reduced motion is preferred: skip transition entirely, show immediately
+  if (reduced) {
+    return (
+      <div ref={ref} className={className} style={style}>
+        {children}
+      </div>
+    );
+  }
   return (
     <div
       ref={ref}
@@ -428,6 +451,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
         .lp-root { width: 100%; }
         /* CTA shows full label by default; a compact label kicks in on tiny screens. */
         .lp-nav-cta-short { display: none; }
+
         /* ── Below the hero breakpoint: stack hero, calm the mock card ── */
         @media (max-width: 920px) {
           .lp-hero-grid {
@@ -436,25 +460,75 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           }
           .lp-hero-scene { transform: scale(.9); transform-origin: top center; }
         }
-        /* ── Phones: hide secondary nav, shrink padding, drop heavy mock ── */
-        @media (max-width: 720px) {
+
+        /* ── Phones (≤ 600px): tighten gutters, drop 3D mock, surface mobile glimpse ── */
+        @media (max-width: 600px) {
           .lp-nav-links { display: none !important; }
-          .lp-nav-inner { padding: 11px 18px !important; gap: 10px !important; }
-          /* Tighten the generous 24px gutters to 18px on every section/footer.
-             Structural + !important so it beats the inline padding. */
-          .lp-root > section { padding-left: 18px !important; padding-right: 18px !important; }
-          .lp-root > section { padding-top: 64px !important; padding-bottom: 64px !important; }
-          .lp-root > footer { padding-left: 18px !important; padding-right: 18px !important; }
-          #inicio { padding-top: 112px !important; padding-bottom: 64px !important; }
-          .lp-hero-grid { padding-left: 18px !important; padding-right: 18px !important; }
-          /* The 3D parallax mock is decorative — remove it on phones so nothing
-             can overflow and the hero copy + CTAs lead. */
+          .lp-nav-inner { padding: 10px 16px !important; gap: 8px !important; }
+
+          /* Section vertical rhythm: hero gets extra top for fixed nav */
+          .lp-root > section {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+            padding-top: 56px !important;
+            padding-bottom: 56px !important;
+          }
+          .lp-root > footer {
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+          }
+          #inicio {
+            padding-top: 104px !important;
+            padding-bottom: 56px !important;
+          }
+          .lp-hero-grid { padding-left: 16px !important; padding-right: 16px !important; }
+
+          /* Hero CTAs go full-width on small screens so tap targets are generous */
+          .lp-hero-ctas { flex-direction: column !important; }
+          .lp-hero-ctas > * { width: 100% !important; justify-content: center !important; text-align: center !important; }
+
+          /* The 3D parallax mock can overflow and is decorative — hide on phones.
+             The lp-mobile-glimpse replaces it below. */
           .lp-hero-scene-wrap { display: none !important; }
+          .lp-mobile-glimpse { display: flex !important; }
+
+          /* Traction strip: drop the divider that orphans on wrap */
+          .lp-traction-divider { display: none !important; }
+
+          /* Lote rows: collapse to two-column layout */
+          .lp-lote-row { flex-wrap: wrap !important; gap: 10px !important; }
+          .lp-lote-value { text-align: left !important; }
+
+          /* Plan grid: single column on mobile, no overflow risk */
+          .lp-plan-grid { grid-template-columns: 1fr !important; }
+
+          /* Fontes strip pill sizing */
+          .lp-fonte-pill { padding: 9px 14px !important; }
         }
-        @media (max-width: 420px) {
+
+        @media (max-width: 400px) {
           .lp-nav-signin { display: none !important; }
           .lp-nav-cta-full { display: none !important; }
           .lp-nav-cta-short { display: inline !important; }
+          /* h1 already uses clamp — no override needed */
+        }
+
+        /* Reduced motion: kill all CSS animations added here */
+        @media (prefers-reduced-motion: reduce) {
+          .lp-glimpse-pulse { animation: none !important; }
+          .lp-glimpse-bar { transition: none !important; }
+        }
+
+        /* Mobile product glimpse — hidden by default, shown ≤ 600px */
+        .lp-mobile-glimpse { display: none; }
+
+        /* Score ring pulse on the glimpse card */
+        @keyframes lp-score-pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: .65; }
+        }
+        .lp-glimpse-pulse {
+          animation: lp-score-pulse 2.4s ease-in-out infinite;
         }
       `}</style>
 
@@ -664,11 +738,15 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
             </Reveal>
 
             <Reveal delay={0.15}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 32 }}>
+              <div
+                className="lp-hero-ctas"
+                style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 32 }}
+              >
                 <button
                   type="button"
                   className="btn btn--accent btn--lg"
                   onClick={onLogin}
+                  style={{ minHeight: 48 }}
                 >
                   <Zap size={18} fill="currentColor" aria-hidden="true" />
                   Experimentar 7 dias grátis
@@ -676,6 +754,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 <a
                   href="#como-funciona"
                   className="btn btn--ghost btn--lg"
+                  style={{ minHeight: 48 }}
                 >
                   Como funciona <ArrowRight size={16} aria-hidden="true" />
                 </a>
@@ -685,6 +764,232 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               </p>
             </Reveal>
 
+          </div>
+
+          {/* Mobile-only product glimpse: replaces the 3D mock on ≤ 600px.
+              Decorative, aria-hidden, no images, no overflow. */}
+          <div
+            className="lp-mobile-glimpse"
+            aria-hidden="true"
+            style={{
+              flexDirection: "column",
+              gap: 10,
+              width: "100%",
+            }}
+          >
+            {/* Mini window chrome */}
+            <div
+              style={{
+                borderRadius: "var(--r-xl)",
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                overflow: "hidden",
+                boxShadow: "var(--shadow-lg)",
+              }}
+            >
+              {/* Chrome bar */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "10px 14px",
+                  borderBottom: "1px solid var(--border)",
+                  background: "var(--surface-2)",
+                }}
+              >
+                {(["#ff5f57", "#febc2e", "#28c840"] as const).map((c) => (
+                  <span
+                    key={c}
+                    style={{ width: 9, height: 9, borderRadius: "50%", background: c, display: "inline-block" }}
+                  />
+                ))}
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: "var(--t-low)",
+                    fontFamily: "var(--font)",
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  fonte.ia/lotes · exemplo ilustrativo
+                </span>
+              </div>
+
+              {/* Card body */}
+              <div style={{ padding: "16px" }}>
+                {/* Header: title + score ring */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: "var(--accent-ink)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      RFB · Alfândega SP
+                    </div>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 14,
+                        color: "var(--t-hi)",
+                        fontFamily: "var(--font)",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      Lote de eletrônicos
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--t-low)", marginTop: 2 }}>
+                      Lance mín.: <strong style={{ color: "var(--t-hi)" }}>R$ 414.000</strong>
+                    </div>
+                  </div>
+
+                  {/* Score ring — CSS-only */}
+                  <div
+                    className="lp-glimpse-pulse"
+                    style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}
+                  >
+                    <svg width={52} height={52} style={{ transform: "rotate(-90deg)" }}>
+                      <circle cx={26} cy={26} r={21} fill="none" stroke="var(--surface-2)" strokeWidth="6" />
+                      <circle
+                        cx={26} cy={26} r={21}
+                        fill="none"
+                        stroke="var(--ok)"
+                        strokeWidth="6"
+                        strokeDasharray={String(2 * Math.PI * 21)}
+                        strokeDashoffset={String(2 * Math.PI * 21 * (1 - 0.82))}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div
+                      style={{
+                        position: "absolute", inset: 0,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontWeight: 800, fontSize: 14, color: "var(--ok)",
+                        fontFamily: "var(--font)",
+                      }}
+                    >
+                      82
+                    </div>
+                  </div>
+                </div>
+
+                {/* Score bars */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {(
+                    [
+                      ["Participação (PF/PJ)", 90, "var(--ok)"],
+                      ["Prazo para análise", 85, "var(--accent-ink)"],
+                      ["Valor acessível", 88, "var(--brand-ink)"],
+                    ] as const
+                  ).map(([lb, v, c]) => (
+                    <div key={lb}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, color: "var(--t-low)", fontFamily: "var(--font)" }}>{lb}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: c, fontFamily: "var(--font)" }}>{v}</span>
+                      </div>
+                      <div
+                        style={{
+                          height: 5,
+                          borderRadius: 999,
+                          background: "var(--surface-2)",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          className="lp-glimpse-bar"
+                          style={{ width: `${v}%`, height: "100%", background: c, borderRadius: 999 }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div
+                  style={{
+                    marginTop: 14,
+                    paddingTop: 12,
+                    borderTop: "1px solid var(--border)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "var(--t-low)",
+                      fontFamily: "var(--font)",
+                    }}
+                  >
+                    Fonte: Receita Federal
+                  </span>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "var(--ok)",
+                      background: "color-mix(in srgb,var(--ok) 12%,var(--surface-2))",
+                      padding: "3px 8px",
+                      borderRadius: 999,
+                      fontFamily: "var(--font)",
+                    }}
+                  >
+                    <ShieldCheck size={10} />
+                    Rastreável
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Two floating chips below the card (inline, no absolute positioning = safe on mobile) */}
+            <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+              <div
+                className="glass"
+                style={{
+                  padding: "9px 13px",
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flex: 1,
+                  justifyContent: "center",
+                }}
+              >
+                <Zap size={13} fill="var(--accent-ink)" color="var(--accent-ink)" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)", fontFamily: "var(--font)" }}>
+                  Dados direto da fonte
+                </span>
+              </div>
+              <div
+                className="glass"
+                style={{
+                  padding: "9px 13px",
+                  borderRadius: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flex: 1,
+                  justifyContent: "center",
+                }}
+              >
+                <span style={{ color: "var(--brand-ink)", fontWeight: 800, fontSize: 13 }}>★</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)", fontFamily: "var(--font)" }}>
+                  Score 82
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Right: 3D mock card */}
@@ -975,6 +1280,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 </div>
               ))}
               <div
+                className="lp-traction-divider"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -1049,7 +1355,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 return (
                 <div
                   key={f.id}
-                  className="card"
+                  className="card lp-fonte-pill"
                   style={{
                     padding: "11px 18px",
                     display: "flex",
@@ -1565,6 +1871,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   return (
                     <div
                       key={lote.id}
+                      className="lp-lote-row"
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -1583,7 +1890,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                           {lote.cidade} · prazo {lote.dataFim}
                         </div>
                       </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div className="lp-lote-value" style={{ textAlign: "right", flexShrink: 0 }}>
                         <div className="num" style={{ fontWeight: 800, fontSize: 14, color: "var(--t-hi)" }}>
                           {formatBRL(lote.minimo)}
                         </div>
@@ -1624,9 +1931,10 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           </Reveal>
 
           <div
+            className="lp-plan-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 270px), 1fr))",
               gap: 22,
               alignItems: "start",
             }}
