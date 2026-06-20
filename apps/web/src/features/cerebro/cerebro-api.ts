@@ -89,6 +89,32 @@ const SEARCH_KINDS: GraphKind[] = [
 /** Teto de nós por kind — protege a performance do canvas (centenas, não milhares). */
 const MAX_PER_KIND = 50;
 
+/**
+ * Teto MAIOR de nós aplicado SÓ ao kind dominante da entidade-centro
+ * (normalmente `public_contract`). Empresas grandes — Banco do Brasil, Vivo —
+ * têm dezenas a centenas de contratos no MESMO CNPJ; cortar em 50 fazia o grafo
+ * parecer "pobre". 120 ainda renderiza liso no canvas (viewport culling).
+ */
+const MAX_PER_PRIMARY_KIND = 120;
+
+/**
+ * Teto de ESTABELECIMENTOS irmãos (mesmo CNPJ-raiz de 8 dígitos) abertos como
+ * "empresas relacionadas". Matriz + filiais compartilham os 8 primeiros dígitos
+ * do CNPJ (ex.: Banco do Brasil aparece em `00000000000191`, `00000000288519`,
+ * `00000000005746`…). Cada CNPJ irmão distinto vira um nó-empresa expansível —
+ * é o vínculo mais forte que existe entre dois CNPJs e 100% factual (a Receita
+ * define filial pela mesma raiz). Sem isso, contratos de filiais ficam invisíveis.
+ */
+const MAX_RELATED_ESTABLISHMENTS = 10;
+
+/**
+ * Página varrida ao caçar estabelecimentos irmãos. O d1-bridge não filtra por
+ * prefixo de CNPJ, então varremos `public_contract` (o kind com mais CNPJs) por
+ * NOME da entidade-centro e agrupamos os CNPJs que compartilham a raiz de 8
+ * dígitos. Cap modesto: queremos os irmãos mais frequentes, não varrer tudo.
+ */
+const RELATED_SCAN_LIMIT = 400;
+
 /** Teto de municípios distintos abertos a partir de contratos/licitações. */
 const MAX_MUNICIPIOS = 12;
 
@@ -230,6 +256,17 @@ function validCnpj(value: unknown): string {
   if (cnpj === "") return "";
   if (/^(.)\1{13}$/.test(cnpj)) return ""; // todos os 14 caracteres iguais (dígitos ou letras)
   return cnpj;
+}
+
+/**
+ * Raiz do CNPJ (8 primeiros caracteres) — identifica a EMPRESA, e os 4 dígitos
+ * seguintes o ESTABELECIMENTO (0001 = matriz, 0002+ = filiais). Dois CNPJs com a
+ * mesma raiz são, por definição da Receita, a mesma pessoa jurídica. Devolve "" se
+ * o CNPJ for inválido (não confiamos numa raiz derivada de lixo estrutural).
+ */
+function cnpjRoot(value: unknown): string {
+  const cnpj = validCnpj(value);
+  return cnpj === "" ? "" : cnpj.slice(0, 8);
 }
 
 function attrs(row: D1EntityRow): Record<string, unknown> {
@@ -1019,6 +1056,7 @@ async function fetchKindByCnpj(
   cnpj: string,
   fetcher: typeof fetch,
   rel: EdgeKind = "cnpj",
+  maxLeaves: number = MAX_PER_KIND,
 ): Promise<{ leaves: RawLeaf[]; centerLabel: string; rows: D1EntityRow[] }> {
   const { rows } = await fetchD1Entities({ kind, cnpj, limit: PAGE_LIMIT }, fetcher);
 
@@ -1027,18 +1065,29 @@ async function fetchKindByCnpj(
   const center: CenterRef = { cnpj };
   const leaves: RawLeaf[] = [];
   const kept: D1EntityRow[] = [];
-  let centerLabel = "";
+  // Rótulo do centro: votamos no nome mais FREQUENTE entre as linhas (não o
+  // primeiro), porque o 1º contrato pode trazer um rótulo ruim ("CONTRATADA: …")
+  // enquanto a maioria traz a razão social limpa. Mais estável p/ o name-cross.
+  const nameVotes = new Map<string, number>();
   for (const row of rows) {
-    if (centerLabel === "") {
-      const candidate = cleanCompanyName(str(attr(row, "fornecedorNome")) || str(row.name));
-      if (candidate) centerLabel = candidate;
+    const candidate = cleanCompanyName(str(attr(row, "fornecedorNome")) || str(row.name));
+    if (candidate && candidate.length >= 3) {
+      nameVotes.set(candidate, (nameVotes.get(candidate) ?? 0) + 1);
     }
     const leaf = leafFromRow(kind, row, rel, center);
     if (leaf) {
       leaves.push(leaf);
       kept.push(row);
     }
-    if (leaves.length >= MAX_PER_KIND) break;
+    if (leaves.length >= maxLeaves) break;
+  }
+  let centerLabel = "";
+  let bestVotes = 0;
+  for (const [name, votes] of nameVotes) {
+    if (votes > bestVotes) {
+      bestVotes = votes;
+      centerLabel = name;
+    }
   }
   return { leaves, centerLabel, rows: kept };
 }
@@ -1136,6 +1185,96 @@ async function fetchMunicipiosForLeaves(
     }
   }
   return { municipios, edges };
+}
+
+// ─── Estabelecimentos relacionados (matriz/filiais por raiz de CNPJ) ──────────────
+
+/**
+ * Descobre os ESTABELECIMENTOS irmãos da empresa-centro: outros CNPJs que
+ * compartilham a mesma raiz de 8 dígitos (matriz + filiais). Como o d1-bridge não
+ * filtra por prefixo de CNPJ, varremos `public_contract` por NOME da entidade
+ * (o kind com de longe mais CNPJs distintos) e agrupamos os CNPJs por raiz,
+ * mantendo só os que batem com a raiz do centro e que NÃO são o próprio CNPJ.
+ *
+ * Cada irmão vira um nó `company` expansível (rel `cnpj` ligado ao centro) — clicar
+ * nele abre a rede daquele estabelecimento. É 100% factual (mesma raiz = mesma PJ
+ * na Receita) e o vínculo mais forte possível entre dois CNPJs. Degrada para vazio
+ * quando não há nome de centro, a raiz é inválida, ou não há irmãos — nunca fabrica.
+ *
+ * @returns nós-empresa irmãos (sem o próprio centro) ordenados por frequência.
+ */
+async function fetchRelatedEstablishments(
+  centerCnpj: string,
+  centerName: string,
+  fetcher: typeof fetch,
+): Promise<RawLeaf[]> {
+  const root = cnpjRoot(centerCnpj);
+  const nome = cleanCompanyName(centerName).trim();
+  if (root === "" || nome.length < 3) return [];
+
+  let rows: D1EntityRow[];
+  try {
+    const res = await fetchD1Entities(
+      { kind: "public_contract", q: nome, limit: RELATED_SCAN_LIMIT },
+      fetcher,
+    );
+    rows = res.rows;
+  } catch {
+    return []; // sem rede de contratos por nome — degrada em silêncio
+  }
+
+  // Agrupa por CNPJ irmão (mesma raiz, ≠ centro), contando frequência e guardando
+  // o melhor rótulo (razão social mais "limpa") e um exemplo de UF/município.
+  interface Sibling {
+    cnpj: string;
+    count: number;
+    label: string;
+    uf: string;
+    municipio: string;
+  }
+  const byCnpj = new Map<string, Sibling>();
+  for (const row of rows) {
+    const cnpj = validCnpj(str(attr(row, "fornecedorCnpj")) || str(row.cnpj));
+    if (cnpj === "" || cnpj === centerCnpj) continue;
+    if (cnpj.slice(0, 8) !== root) continue;
+    const label = cleanCompanyName(str(attr(row, "fornecedorNome")) || str(row.name));
+    const entry = byCnpj.get(cnpj) ?? {
+      cnpj,
+      count: 0,
+      label: label || formatCnpj(cnpj),
+      uf: str(attr(row, "uf")),
+      municipio: str(attr(row, "municipio")),
+    };
+    entry.count += 1;
+    // Prefere um rótulo de razão social plausível (>4 chars, com letra).
+    if (entry.label.length < 5 && label.length >= 5) entry.label = label;
+    byCnpj.set(cnpj, entry);
+  }
+
+  const siblings = [...byCnpj.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, MAX_RELATED_ESTABLISHMENTS);
+
+  return siblings.map((s) => {
+    const ehMatriz = s.cnpj.slice(8, 12) === "0001";
+    const details: DetailField[] = [];
+    pushField(details, "Empresa", s.label);
+    pushField(details, "CNPJ", formatCnpj(s.cnpj));
+    pushField(details, "Estabelecimento", ehMatriz ? "Matriz (0001)" : `Filial (${s.cnpj.slice(8, 12)})`);
+    pushField(details, "Município/UF", [s.municipio, s.uf].filter(Boolean).join(" / "));
+    pushField(details, "Contratos públicos (amostra)", String(s.count));
+    return {
+      id: `company:related:${s.cnpj}`,
+      kind: "company",
+      rel: "cnpj",
+      label: s.label,
+      sublabel: `${ehMatriz ? "Matriz" : "Filial"} · ${formatCnpj(s.cnpj)}`,
+      cnpj: s.cnpj,
+      // Fonte: PNCP/portais (onde os contratos com este CNPJ foram encontrados).
+      sourceUrl: `https://pncp.gov.br/app/contratos?q=${encodeURIComponent(s.cnpj)}`,
+      details,
+    };
+  });
 }
 
 // ─── Cruzamentos "siga o dinheiro" e atividade legislativa ───────────────────────
@@ -1304,12 +1443,24 @@ export async function searchEntities(
 ): Promise<SearchHit[]> {
   const q = termo.trim();
   if (q.length < 2) return [];
+  const qn = norm(q);
+
+  // Kinds cujos hits são EMPRESAS por nome (carregam CNPJ no registro): contratos
+  // e órgãos. Para esses, deduplicamos por RAIZ de CNPJ (8 dígitos) — assim "Banco
+  // do Brasil" aparece UMA vez (matriz), não 5 (uma por filial). Pedimos uma página
+  // maior nesses kinds para ter material suficiente p/ escolher a matriz/mais comum.
+  const companyByNameKinds = new Set<GraphKind>([
+    "public_contract",
+    "organization",
+    "bidding_opportunity",
+  ]);
 
   const results = await Promise.allSettled(
     SEARCH_KINDS.map(async (kind) => {
-      const { rows } = await fetchD1Entities({ kind, q, limit: 25 }, fetcher);
+      const limit = companyByNameKinds.has(kind) ? 80 : 25;
+      const { rows } = await fetchD1Entities({ kind, q, limit }, fetcher);
       return rows.map<SearchHit>((row) => {
-        const cnpj = validCnpj(str(row.cnpj) || str(attr(row, "cnpj")));
+        const cnpj = validCnpj(str(row.cnpj) || str(attr(row, "fornecedorCnpj")) || str(attr(row, "cnpj")));
         const ibge =
           str(attr(row, "codigoIbge")) || str(row.external_ids?.["codigoIbge"]);
         const uf = str(attr(row, "uf")) || str(attr(row, "ufNome"));
@@ -1326,10 +1477,12 @@ export async function searchEntities(
           kind === "politician"
             ? str(attr(row, "id")) || str(row.external_ids?.["camaraId"])
             : "";
+        const rawName = str(attr(row, "fornecedorNome")) || str(row.name) || "—";
         return {
           id: row.id,
           kind,
-          name: str(attr(row, "fornecedorNome")) || str(row.name) || "—",
+          // Para empresas vindas de contratos, limpamos o rótulo ("CONTRATADA: …").
+          name: companyByNameKinds.has(kind) ? cleanCompanyName(rawName) || rawName : rawName,
           cnpj: cnpj || undefined,
           codigoIbge: ibge || undefined,
           deputadoId: deputadoId || undefined,
@@ -1339,34 +1492,71 @@ export async function searchEntities(
     }),
   );
 
-  const hits: SearchHit[] = [];
-  const seen = new Set<string>();
+  // Conta a frequência por RAIZ de CNPJ (entre os kinds-empresa) para escolher o
+  // estabelecimento mais relevante quando o usuário busca por nome.
+  const rootCount = new Map<string, number>();
   for (const r of results) {
     if (r.status !== "fulfilled") continue;
     for (const hit of r.value) {
-      if (hit.name === "—") continue;
-      // Chave de dedupe:
-      //   • com CNPJ → CNPJ+kind (contratos/empresas repetem muito a mesma empresa);
-      //   • sem CNPJ → NOME normalizado+kind. Sem isso, marcas idênticas (ex.: a
-      //     mesma "PETROBRAS ENERGIAS" em vários processos INPI) apareceriam N vezes,
-      //     pois cada registro tem id (UUID) distinto. Município mantém o IBGE como
-      //     desempate quando houver (homônimos legítimos em UFs diferentes).
-      const dedupe = hit.cnpj
-        ? `${hit.kind}:${hit.cnpj}`
-        : hit.codigoIbge
-          ? `${hit.kind}:ibge:${hit.codigoIbge}`
-          : `${hit.kind}:name:${norm(hit.name)}`;
-      if (seen.has(dedupe)) continue;
-      seen.add(dedupe);
-      hits.push(hit);
+      if (!hit.cnpj || !companyByNameKinds.has(hit.kind)) continue;
+      const root = hit.cnpj.slice(0, 8);
+      rootCount.set(root, (rootCount.get(root) ?? 0) + 1);
     }
   }
 
-  // Empresas/órgãos com CNPJ primeiro (são os centros mais ricos), depois o resto.
+  // Dedup + escolha do melhor representante por chave.
+  const chosen = new Map<string, { hit: SearchHit; score: number }>();
+  for (const r of results) {
+    if (r.status !== "fulfilled") continue;
+    for (const hit of r.value) {
+      if (hit.name === "—" || hit.name.trim() === "") continue;
+
+      // Chave de dedupe:
+      //   • empresa por nome COM CNPJ → RAIZ de CNPJ (colapsa matriz+filiais);
+      //   • outros COM CNPJ          → CNPJ+kind;
+      //   • sem CNPJ                 → NOME normalizado+kind (ou IBGE p/ município).
+      const dedupe =
+        hit.cnpj && companyByNameKinds.has(hit.kind)
+          ? `company-root:${hit.cnpj.slice(0, 8)}`
+          : hit.cnpj
+            ? `${hit.kind}:${hit.cnpj}`
+            : hit.codigoIbge
+              ? `${hit.kind}:ibge:${hit.codigoIbge}`
+              : `${hit.kind}:name:${norm(hit.name)}`;
+
+      // Score do representante: prioriza a MATRIZ (0001), depois a raiz mais
+      // frequente, e por fim a melhor correspondência de nome com a busca.
+      const isMatriz = hit.cnpj ? hit.cnpj.slice(8, 12) === "0001" : false;
+      const nameHit = norm(hit.name).includes(qn) ? 1 : 0;
+      const freq = hit.cnpj && companyByNameKinds.has(hit.kind)
+        ? rootCount.get(hit.cnpj.slice(0, 8)) ?? 0
+        : 0;
+      const score = (isMatriz ? 1000 : 0) + freq * 4 + nameHit * 2;
+
+      const prev = chosen.get(dedupe);
+      if (!prev || score > prev.score) {
+        // Ao escolher a matriz como representante de uma empresa-por-nome, normaliza
+        // o kind para `company` (centro rico expansível por CNPJ).
+        const repr: SearchHit =
+          hit.cnpj && companyByNameKinds.has(hit.kind)
+            ? { ...hit, kind: "company" }
+            : hit;
+        chosen.set(dedupe, { hit: repr, score });
+      }
+    }
+  }
+
+  const hits = [...chosen.values()].map((c) => c.hit);
+
+  // Empresas/órgãos com CNPJ primeiro (são os centros mais ricos); dentro de cada
+  // grupo, correspondência exata de nome antes de parcial, depois alfabético.
   hits.sort((a, b) => {
     const aw = a.cnpj ? 0 : 1;
     const bw = b.cnpj ? 0 : 1;
     if (aw !== bw) return aw - bw;
+    const ae = norm(a.name) === qn ? 0 : 1;
+    const be = norm(b.name) === qn ? 0 : 1;
+    if (ae !== be) return ae - be;
     return a.name.localeCompare(b.name, "pt-BR");
   });
   return hits.slice(0, 40);
@@ -1396,8 +1586,15 @@ export async function expandCnpj(
   const relForKind = (kind: GraphKind): EdgeKind =>
     kind === "parliamentary_expense" ? "fornecedor" : "cnpj";
 
+  // Contratos públicos são o kind dominante de empresas grandes — damos a ele um
+  // teto maior para o grafo não parecer "pobre" (ex.: BB tem 68 contratos no CNPJ).
+  const capForKind = (kind: GraphKind): number =>
+    kind === "public_contract" ? MAX_PER_PRIMARY_KIND : MAX_PER_KIND;
+
   const cnpjResults = await Promise.allSettled(
-    CNPJ_KINDS.map((kind) => fetchKindByCnpj(kind, cnpj, fetcher, relForKind(kind))),
+    CNPJ_KINDS.map((kind) =>
+      fetchKindByCnpj(kind, cnpj, fetcher, relForKind(kind), capForKind(kind)),
+    ),
   );
 
   const leaves: RawLeaf[] = [];
@@ -1496,6 +1693,27 @@ export async function expandCnpj(
     }
   } catch (error) {
     errors.push(`person(QSA): ${toErrorMessage(error)}`);
+  }
+
+  // Estabelecimentos relacionados (matriz/filiais por raiz de CNPJ). Cada CNPJ
+  // irmão vira um nó-empresa expansível ligado ao CENTRO por `cnpj` (vínculo mais
+  // forte). Sem cadastro `company` na base, este é o principal enriquecedor do
+  // grafo de grandes empresas — e é 100% factual (mesma raiz = mesma PJ). O fio
+  // centro→empresa é criado pelo linking padrão de `mergeExpansion` (rel `cnpj`),
+  // por isso NÃO adicionamos crossEdge redundante aqui.
+  try {
+    if (centerLabel !== "" && centerLabel !== formatCnpj(cnpj)) {
+      const related = await fetchRelatedEstablishments(cnpj, centerLabel, fetcher);
+      // Evita duplicar um irmão que já apareceu como nó (ex.: via outro kind).
+      const existingIds = new Set(leaves.map((l) => l.id));
+      const fresh = related.filter((r) => !existingIds.has(r.id));
+      if (fresh.length > 0) {
+        counts["company"] = (counts["company"] ?? 0) + fresh.length;
+        leaves.push(...fresh);
+      }
+    }
+  } catch (error) {
+    errors.push(`company(relacionadas): ${toErrorMessage(error)}`);
   }
 
   // Ponta empresa→político do "siga o dinheiro": deputados pagadores das despesas.
