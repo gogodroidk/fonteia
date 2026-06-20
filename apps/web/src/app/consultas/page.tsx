@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowUp,
   Building2,
   CheckCircle2,
   ChevronDown,
@@ -307,14 +308,25 @@ interface KindCardProps {
   catalogKind: CatalogKind;
   cnpjDigits: string;
   cnpjValid: boolean;
+  onNeedCnpj: () => void;
 }
 
-function KindCard({ catalogKind, cnpjDigits, cnpjValid }: KindCardProps) {
+function KindCard({ catalogKind, cnpjDigits, cnpjValid, onNeedCnpj }: KindCardProps) {
   const [kindState, setKindState] = useState<KindResultState>({ state: "idle" });
+  const [needCnpjHint, setNeedCnpjHint] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
 
   async function handleConsultar() {
-    if (!cnpjValid || kindState.state === "loading") return;
+    if (kindState.state === "loading") return;
+    if (!cnpjValid) {
+      // Sem CNPJ válido: em vez de botão morto, dá feedback — rola/foca o campo
+      // (via onNeedCnpj) e mostra um aviso no próprio card.
+      onNeedCnpj();
+      setNeedCnpjHint(true);
+      window.setTimeout(() => setNeedCnpjHint(false), 4000);
+      return;
+    }
+    setNeedCnpjHint(false);
     setKindState({ state: "loading" });
     const result = await consultarCertidao(catalogKind.kind, cnpjDigits);
     setKindState({ state: "done", result });
@@ -372,7 +384,7 @@ function KindCard({ catalogKind, cnpjDigits, cnpjValid }: KindCardProps) {
       <button
         type="button"
         className="btn btn--primary btn--sm"
-        disabled={!cnpjValid || isLoading}
+        disabled={isLoading}
         onClick={handleConsultar}
         aria-busy={isLoading}
         style={{ alignSelf: "flex-start", display: "inline-flex", gap: 6, alignItems: "center" }}
@@ -389,6 +401,17 @@ function KindCard({ catalogKind, cnpjDigits, cnpjValid }: KindCardProps) {
           </>
         )}
       </button>
+
+      {needCnpjHint && (
+        <p
+          role="alert"
+          className="tiny"
+          style={{ margin: "8px 0 0", color: "var(--warn)", display: "flex", gap: 5, alignItems: "center" }}
+        >
+          <AlertTriangle size={12} />
+          Informe um CNPJ válido acima para consultar.
+        </p>
+      )}
 
       {/* Resultado */}
       <div
@@ -420,9 +443,10 @@ interface CategorySectionProps {
   kinds: CatalogKind[];
   cnpjDigits: string;
   cnpjValid: boolean;
+  onNeedCnpj: () => void;
 }
 
-function CategorySection({ categoria, kinds, cnpjDigits, cnpjValid }: CategorySectionProps) {
+function CategorySection({ categoria, kinds, cnpjDigits, cnpjValid, onNeedCnpj }: CategorySectionProps) {
   const [open, setOpen] = useState(false);
   const sectionId = `section-${categoria.replace(/\s+/g, "-").toLowerCase()}`;
 
@@ -464,6 +488,7 @@ function CategorySection({ categoria, kinds, cnpjDigits, cnpjValid }: CategorySe
               catalogKind={k}
               cnpjDigits={cnpjDigits}
               cnpjValid={cnpjValid}
+              onNeedCnpj={onNeedCnpj}
             />
           ))}
         </div>
@@ -534,10 +559,20 @@ export function ConsultasPage() {
   const [pageState, setPageState] = useState<PageState>("idle");
   const [cnpjDisplay, setCnpjDisplay] = useState("");
   const [catalogError, setCatalogError] = useState("");
+  const [cnpjFlash, setCnpjFlash] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const cnpjDigits = onlyDigits(cnpjDisplay);
   const cnpjValid = isValidCnpj(cnpjDigits);
+
+  // Chamado quando o usuário tenta consultar sem CNPJ válido: leva o foco ao campo
+  // (que é sticky) e dá um flash visual para que entenda o que fazer.
+  function requestCnpj() {
+    inputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    inputRef.current?.focus();
+    setCnpjFlash(true);
+    window.setTimeout(() => setCnpjFlash(false), 1200);
+  }
 
   function runCatalogFetch() {
     setPageState("loading-catalog");
@@ -599,8 +634,20 @@ export function ConsultasPage() {
         </p>
       </div>
 
-      {/* Campo CNPJ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 480 }}>
+      {/* Campo CNPJ (fixo no topo ao rolar o catálogo) */}
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: "var(--bg)",
+          paddingTop: 8,
+          paddingBottom: 12,
+          marginTop: -8,
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 480 }}>
         <label htmlFor="cnpj-input" style={{ fontWeight: 600, fontSize: 13, color: "var(--t-hi)" }}>
           CNPJ
         </label>
@@ -629,6 +676,9 @@ export function ConsultasPage() {
               width: "100%",
               paddingLeft: 36,
               paddingRight: cnpjDisplay ? 40 : 12,
+              ...(cnpjFlash
+                ? { outline: "2px solid var(--brand)", outlineOffset: 2, borderColor: "var(--brand)" }
+                : {}),
             }}
           />
           {cnpjDisplay && (
@@ -663,6 +713,7 @@ export function ConsultasPage() {
             CNPJ válido
           </span>
         )}
+        </div>
       </div>
 
       {/* Aviso de custo */}
@@ -716,17 +767,46 @@ export function ConsultasPage() {
           />
         </div>
       ) : catalogData !== null ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-          {Array.from(catalogData.grouped.entries()).map(([categoria, kinds]) => (
-            <CategorySection
-              key={categoria}
-              categoria={categoria}
-              kinds={kinds}
-              cnpjDigits={cnpjDigits}
-              cnpjValid={cnpjValid}
-            />
-          ))}
-        </div>
+        <>
+          {!cnpjValid && (
+            <div
+              className="inset"
+              role="status"
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                maxWidth: 560,
+                borderColor: "var(--brand)",
+              }}
+            >
+              <ArrowUp size={16} style={{ color: "var(--brand)", flexShrink: 0 }} />
+              <span className="small" style={{ color: "var(--t-hi)", fontWeight: 600 }}>
+                Informe um CNPJ válido acima para liberar as consultas.
+              </span>
+            </div>
+          )}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 28,
+              opacity: cnpjValid ? 1 : 0.55,
+              transition: "opacity .2s ease",
+            }}
+          >
+            {Array.from(catalogData.grouped.entries()).map(([categoria, kinds]) => (
+              <CategorySection
+                key={categoria}
+                categoria={categoria}
+                kinds={kinds}
+                cnpjDigits={cnpjDigits}
+                cnpjValid={cnpjValid}
+                onNeedCnpj={requestCnpj}
+              />
+            ))}
+          </div>
+        </>
       ) : null}
     </div>
   );
