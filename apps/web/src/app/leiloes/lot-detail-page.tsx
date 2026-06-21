@@ -405,6 +405,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
             src={current}
             alt={alt}
             loading="lazy"
+            decoding="async"
             onLoad={() => {
               setLoaded((prev) => ({ ...prev, [active]: true }));
             }}
@@ -484,6 +485,7 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
                     src={url}
                     alt={`Foto ${i + 1} do lote`}
                     loading="lazy"
+                    decoding="async"
                     onError={() => {
                       setBroken((prev) => ({ ...prev, [i]: true }));
                     }}

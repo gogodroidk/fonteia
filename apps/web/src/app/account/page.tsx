@@ -305,6 +305,10 @@ function TabPerfil({
               src={avatarUrl}
               alt={name}
               className="avatar"
+              width={60}
+              height={60}
+              loading="lazy"
+              decoding="async"
               style={{ width: 60, height: 60 }}
             />
           ) : (

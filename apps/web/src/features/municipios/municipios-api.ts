@@ -1,5 +1,5 @@
 import type { IbgeMunicipio } from "@fonteia/sources";
-import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
+import { fetchAllD1Entities, fetchAllD1EntitiesStatic, firstUpdatedAt } from "../../lib/d1-client";
 
 export type MunicipiosDataSource = "supabase" | "empty";
 
@@ -54,7 +54,9 @@ async function fetchSupabaseMunicipios(
   fetcher: typeof fetch,
 ): Promise<{ municipios: MunicipioWithStats[]; lastSyncedAt?: string | undefined }> {
   // kind = municipality é a entidade de município (IBGE Localidades).
-  const { rows } = await fetchAllD1Entities<IbgeMunicipio>(
+  // Usa a variante static (TTL=5min) pois os ~5570 municípios só mudam em
+  // ingestões diárias do IBGE — evita refetch a cada navegação SPA.
+  const { rows } = await fetchAllD1EntitiesStatic<IbgeMunicipio>(
     { kind: "municipality" },
     { maxPages: MAX_MUNICIPIOS_PAGES, fetcher },
   );

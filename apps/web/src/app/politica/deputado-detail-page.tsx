@@ -803,6 +803,10 @@ export function DeputadoDetailPage({ deputado, onBack }: DeputadoDetailPageProps
             <img
               src={deputado.foto}
               alt=""
+              width={80}
+              height={80}
+              loading="lazy"
+              decoding="async"
               onError={() => setImgError(true)}
               style={{
                 width: 80,

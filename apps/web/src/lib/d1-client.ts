@@ -94,11 +94,22 @@ const D1_TIMEOUT_MS = 12_000;
 const D1_BRIDGE_PATH = "/functions/v1/d1-bridge/query";
 
 /**
- * TTL do cache cliente de páginas D1/Supabase.
- * 60 s é suficiente para que navegações frequentes sejam instantâneas, sem
- * exibir dados muito desatualizados para datasets públicos que mudam em horas.
+ * TTL do cache cliente de páginas D1/Supabase — dados dinâmicos (leilões,
+ * licitações recentes). 60 s é suficiente para navegações frequentes.
  */
 const CACHE_TTL_MS = 60_000;
+
+/**
+ * TTL estendido para dados de catálogo/referência que mudam raramente:
+ * municípios (IBGE), deputados (mandato vigente), organizações (PNCP).
+ * 5 minutos mantém dados frescos sem re-buscar a cada navegação SPA.
+ *
+ * Use ao chamar `fetchD1Entities` / `fetchAllD1Entities` nesses contextos:
+ * passe `{ ttlMs: CACHE_TTL_STATIC_MS }` (quando a API oferecer override) ou
+ * prefixe a chave de cache com um namespace que não conflite com CACHE_TTL_MS.
+ * Por ora, o override é feito pelos callers via `fetchD1EntitiesStatic`.
+ */
+export const CACHE_TTL_STATIC_MS = 5 * 60_000; // 5 minutos
 
 /**
  * Monta uma chave de cache estável e determinística para uma página de query.
@@ -330,6 +341,39 @@ export async function fetchD1Entities<A = Record<string, unknown>>(
 }
 
 /**
+ * Variante de `fetchD1Entities` com TTL de 5 minutos para dados de referência
+ * estáveis (municípios, deputados, organizações). Usa a mesma chave de cache,
+ * mas com TTL estendido — ideal para evitar refetch entre navegações SPA quando
+ * o conteúdo é atualizado diariamente (não a cada minuto).
+ */
+export async function fetchD1EntitiesStatic<A = Record<string, unknown>>(
+  params: FetchD1Params,
+  fetcher: typeof fetch = fetch,
+): Promise<FetchD1Result<A>> {
+  const load = async (): Promise<FetchD1Result<A>> => {
+    try {
+      const rows = await fetchD1Page<A>(params, fetcher);
+      return { rows, source: "d1" };
+    } catch (d1Error) {
+      console.warn(
+        `[d1-client] D1 falhou para kind=${params.kind} (static), usando Supabase. Motivo:`,
+        d1Error instanceof Error ? d1Error.message : String(d1Error),
+      );
+      const rows = await fetchSupabasePage<A>(params, fetcher);
+      return { rows, source: "supabase" };
+    }
+  };
+
+  if (fetcher !== fetch) {
+    return load();
+  }
+
+  // Prefixo "s:" distingue as entradas static das entradas de 60s para a mesma
+  // chave — evita que um fetch dinâmico sirva dados do cache estático (ou vice-versa).
+  return cachedFetch<FetchD1Result<A>>(`s:${makeCacheKey(params)}`, CACHE_TTL_STATIC_MS, load);
+}
+
+/**
  * Puxa TODAS as páginas de um kind (até `maxPages`), paginando como os módulos
  * faziam. A escolha D1↔Supabase é feita por página, mas com "sticky source":
  * se a 1ª página veio do Supabase (D1 fora), as próximas já vão direto ao
@@ -378,6 +422,59 @@ export async function fetchAllD1Entities<A = Record<string, unknown>>(
     if (page === maxPages - 1) {
       console.warn(
         `[d1-client] Limite de ${maxPages} páginas atingido para kind=${params.kind} (${rows.length} linhas). Pode haver mais dados.`,
+      );
+    }
+  }
+
+  return { rows, source: source ?? "d1" };
+}
+
+/**
+ * Variante de `fetchAllD1Entities` com TTL de 5 minutos para dados de
+ * referência estáveis (municípios, deputados, organizações). Usa a mesma
+ * estratégia de paginação sticky-source que `fetchAllD1Entities`, mas cada
+ * página é cacheada por `CACHE_TTL_STATIC_MS` em vez de `CACHE_TTL_MS`.
+ *
+ * Use para kinds atualizados diariamente pelo ingestor — elimina refetch
+ * redundante entre navegações SPA sem stale data acima de 5 minutos.
+ */
+export async function fetchAllD1EntitiesStatic<A = Record<string, unknown>>(
+  params: Omit<FetchD1Params, "offset">,
+  options?: { maxPages?: number | undefined; fetcher?: typeof fetch | undefined },
+): Promise<FetchD1Result<A>> {
+  const fetcher = options?.fetcher ?? fetch;
+  const limit = params.limit ?? DEFAULT_LIMIT;
+  const maxPages = options?.maxPages ?? 10;
+
+  const rows: Array<D1EntityRow<A>> = [];
+  let source: D1Source | undefined;
+  let stickyToSupabase = false;
+
+  let offset = 0;
+  for (let page = 0; page < maxPages; page++) {
+    const pageParams: FetchD1Params = { ...params, limit, offset };
+
+    let batch: Array<D1EntityRow<A>>;
+    if (stickyToSupabase) {
+      // Fallback path — Supabase direto quando D1 já falhou nesta iteração.
+      // Não passamos pelo cache estático aqui pois usamos fetcher customizado
+      // ou o D1 está fora; o Supabase não tem o mesmo TTL de 5 min.
+      batch = await fetchSupabasePage<A>(pageParams, fetcher);
+      source ??= "supabase";
+    } else {
+      const result = await fetchD1EntitiesStatic<A>(pageParams, fetcher);
+      batch = result.rows;
+      source ??= result.source;
+      if (result.source === "supabase") stickyToSupabase = true;
+    }
+
+    rows.push(...batch);
+    if (batch.length === 0) break;
+    offset += batch.length;
+
+    if (page === maxPages - 1) {
+      console.warn(
+        `[d1-client] Limite de ${maxPages} páginas atingido para kind=${params.kind} (static, ${rows.length} linhas). Pode haver mais dados.`,
       );
     }
   }
