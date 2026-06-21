@@ -41,3 +41,46 @@ Passos sugeridos (fazer em **Stripe test mode** primeiro):
 
 Enquanto isso não acontece, **não apague** a função atual: ela é a única cópia do
 que está processando pagamentos.
+
+## 🔗 Correlação por `user_id` — o que o webhook precisa passar a ler
+
+> Adicionado junto da Edge Function **`stripe-checkout`** (checkout amarrado ao
+> usuário). Aplica-se ao webhook de produção (não-versionado) E à lógica de
+> referência em `services/stripe-webhook/src/worker.ts`.
+
+**Problema atual:** o webhook correlaciona assinatura↔usuário **só por e-mail**
+(`subscriptions.email`) e **nunca grava `subscriptions.user_id`** — porque o Payment
+Link cru não carregava a identidade Supabase. E-mail divergente/compartilhado/caixa
+diferente ⇒ o pagante pode não receber o plano. (Detalhes e o fix da RPC em
+`infra/migrations/0026_subscriptions_correlate_by_user_id.sql`.)
+
+**O que mudou na origem:** a função `stripe-checkout` cria a Checkout Session com a
+identidade Supabase embutida. O webhook agora **pode e deve** lê-la:
+
+No evento **`checkout.session.completed`** (objeto = Checkout Session):
+
+| Campo do Stripe                         | Uso no webhook                                  |
+|-----------------------------------------|-------------------------------------------------|
+| `session.client_reference_id`           | **uuid do usuário Supabase** → grava `user_id`  |
+| `session.metadata.supabase_user_id`     | redundância do `client_reference_id`            |
+| `session.metadata.email` / `.plan_id`   | rastreabilidade                                 |
+
+Nos eventos **`customer.subscription.created` / `.updated`** (objeto = Subscription),
+a `stripe-checkout` propaga a identidade via `subscription_data[metadata]`:
+
+| Campo do Stripe                          | Uso no webhook                                 |
+|------------------------------------------|------------------------------------------------|
+| `subscription.metadata.supabase_user_id` | **uuid do usuário Supabase** → grava `user_id` |
+
+Isto é defesa em profundidade: como o Stripe não garante ordem nem entrega única,
+o `user_id` chega tanto pela sessão quanto pela subscription.
+
+**Regras (mantêm o padrão não-regressivo já existente no `worker.ts`):**
+- A escrita de `user_id` deve ser **não-regressiva**: só preenche/atualiza, **nunca
+  apaga** um `user_id` já gravado por outro evento (igual ao tratamento de plan/status).
+- O `UNIQUE` continua sendo `stripe_subscription_id`: o upsert casa por ele.
+- Manter a gravação de `email` (fallback para compras legadas via Payment Link).
+
+Depois que o webhook estiver gravando `user_id`, aplicar a migration `0026` para que
+`my_plan()` passe a **preferir `user_id`** (e-mail vira fallback). Backfill das linhas
+antigas é opcional (correlacionar `subscriptions.email` ↔ `auth.users.email`).

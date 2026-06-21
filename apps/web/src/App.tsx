@@ -45,6 +45,7 @@ import { LandingPage } from "./app/landing/page";
 import type { LegalKind } from "./app/legal/page";
 import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
+import { isCheckoutSuccess } from "./config/stripe";
 import { PwaInstallPrompt } from "./components/pwa-install-prompt";
 
 // --- ErrorBoundary: captura erros de chunks lazy e renderiza fallback amigável ---
@@ -439,7 +440,7 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [topbarQuery, setTopbarQuery] = useState("");
   const topbarInputRef = useRef<HTMLInputElement | null>(null);
   const [checkoutOk, setCheckoutOk] = useState<boolean>(
-    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("checkout") === "sucesso",
+    () => typeof window !== "undefined" && isCheckoutSuccess(window.location.search),
   );
 
   // Limpa o ?checkout=sucesso da URL após exibir o banner — evita que um link

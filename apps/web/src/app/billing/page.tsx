@@ -1,37 +1,102 @@
 import { useEffect, useState } from "react";
 import { Check, Mail, ShieldCheck, X, Zap } from "lucide-react";
 import { PLANOS, formatBRL } from "../../data/leiloes-seed";
-import { stripeLinkFor } from "../../config/stripe";
+import {
+  hasDirectCheckout,
+  isCheckoutCanceled,
+  isCheckoutSuccess,
+  stripeLinkFor,
+} from "../../config/stripe";
+import { requestStripeCheckoutUrl } from "../../lib/stripe-checkout-client";
 import { CouponRedeem } from "../../components/coupon-redeem";
 import { useAuth } from "../../auth/auth-context";
+
+const SUPPORT_EMAIL = "contato@olli.com.br";
 
 function precoLabel(preco: number, periodo: string): string {
   if (preco === 0) return "R$ 0";
   return `${formatBRL(preco)}${periodo}`;
 }
 
+/**
+ * Redireciona para o Payment Link cru (fallback) com o e-mail pré-preenchido.
+ * É a rede de segurança: se a Edge Function "stripe-checkout" estiver indisponível,
+ * a venda ainda acontece — só perde a amarração por user_id (cai no e-mail).
+ */
+function goToPaymentLink(link: string, email: string | undefined): void {
+  window.location.href = email
+    ? `${link}?prefilled_email=${encodeURIComponent(email)}`
+    : link;
+}
+
 export function BillingPage() {
   const { user } = useAuth();
   const [chosen, setChosen] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
+  const [canceled, setCanceled] = useState(false);
+  // Plano em processamento (id) — trava o botão clicado enquanto cria a sessão.
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("checkout") === "sucesso") setPaid(true);
+    // Lê o retorno do Stripe pelos helpers compartilhados (mesma fonte da verdade
+    // do success_url da Edge Function): ?checkout=sucesso e ?checkout=cancelado.
+    const search = window.location.search;
+    if (isCheckoutSuccess(search)) setPaid(true);
+    else if (isCheckoutCanceled(search)) setCanceled(true);
   }, []);
 
-  function handleChoose(id: string, nome: string) {
+  // Inicia a assinatura: tenta a Checkout Session amarrada ao usuário (mata o bug de
+  // correlação por e-mail). Cai no Payment Link se a função estiver indisponível, e
+  // no painel de contato quando o plano não tem checkout direto (ex.: Corporativo).
+  async function handleChoose(id: string, nome: string) {
+    setCheckoutError(null);
+    setCanceled(false);
     const link = stripeLinkFor(id);
-    if (link) {
-      // Pré-preenche o e-mail do login no checkout: garante que a assinatura do
-      // Stripe use o MESMO e-mail que o app usa em my_plan() para liberar o Pro.
-      const email = user?.email;
-      window.location.href = email
-        ? `${link}?prefilled_email=${encodeURIComponent(email)}`
-        : link;
+
+    // Plano sem checkout direto (Corporativo "Falar com vendas"): painel de contato.
+    if (!hasDirectCheckout(id) && !link) {
+      setChosen(nome);
       return;
     }
-    setChosen(nome);
+
+    setPendingPlan(id);
+    try {
+      if (hasDirectCheckout(id)) {
+        const result = await requestStripeCheckoutUrl(id);
+        if (result.ok) {
+          window.location.href = result.url; // navegação em curso; mantém o loading
+          return;
+        }
+        // Falha recuperável → fallback no Payment Link (a venda não pode travar).
+        if (result.reason === "indisponivel" && link) {
+          goToPaymentLink(link, user?.email);
+          return;
+        }
+        if (result.reason === "nao_autenticado") {
+          setCheckoutError("Sua sessão expirou. Entre novamente para assinar.");
+          return;
+        }
+        if (result.reason === "plano_invalido") {
+          setChosen(nome);
+          return;
+        }
+        // Sem Payment Link de fallback: mensagem honesta com o contato.
+        setCheckoutError(
+          `Não foi possível iniciar o checkout agora. Tente de novo ou fale com ${SUPPORT_EMAIL}.`,
+        );
+        return;
+      }
+
+      // Sem checkout direto mas com Payment Link configurado: usa o link.
+      if (link) {
+        goToPaymentLink(link, user?.email);
+        return;
+      }
+      setChosen(nome);
+    } finally {
+      setPendingPlan(null);
+    }
   }
 
   return (
@@ -55,6 +120,37 @@ export function BillingPage() {
           </button>
         </div>
       )}
+      {canceled && (
+        <div
+          className="panel elevated"
+          role="status"
+          style={{ padding: 18, marginBottom: 20, display: "flex", gap: 12, alignItems: "center" }}
+        >
+          <ShieldCheck size={20} style={{ color: "var(--t-mid)", flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1 }}>
+            <strong>Checkout não concluído.</strong>{" "}
+            <span className="muted small">
+              Tudo certo — você não foi cobrado. Quando quiser, é só escolher um plano de novo.
+            </span>
+          </div>
+          <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setCanceled(false)} aria-label="Fechar">
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+      {checkoutError && (
+        <div
+          className="panel elevated"
+          role="alert"
+          style={{ padding: 18, marginBottom: 20, display: "flex", gap: 12, alignItems: "center", borderColor: "color-mix(in srgb,var(--danger) 30%,var(--border))" }}
+        >
+          <X size={20} style={{ color: "var(--danger,#b42318)", flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ flex: 1 }} className="small">{checkoutError}</div>
+          <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setCheckoutError(null)} aria-label="Fechar">
+            <X size={15} aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {chosen && (
         <div
           className="panel elevated"
@@ -65,8 +161,9 @@ export function BillingPage() {
           <div style={{ flex: 1 }}>
             <strong>Plano {chosen} selecionado.</strong>{" "}
             <span className="muted small">
-              Para concluir, fale com <a className="link" href="mailto:contato@olli.com.br">contato@olli.com.br</a> — o
-              checkout automático entra no ar assim que o link do Stripe for conectado.
+              Para times e escritórios, fale com{" "}
+              <a className="link" href={`mailto:${SUPPORT_EMAIL}?subject=Plano%20Corporativo`}>{SUPPORT_EMAIL}</a> — nossa
+              equipe ajuda no onboarding e na cobrança do Corporativo.
             </span>
           </div>
           <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setChosen(null)} aria-label="Fechar">
@@ -123,19 +220,27 @@ export function BillingPage() {
                   </li>
                 ))}
               </ul>
-              <button
-                className={isFeatured ? "btn btn--accent btn--block" : "btn btn--ghost btn--block"}
-                type="button"
-                onClick={() => handleChoose(plano.id, plano.nome)}
-              >
-                {/* Ícone reflete a ação real: Zap = checkout imediato; Mail = contato comercial */}
-                {stripeLinkFor(plano.id) !== null ? (
-                  <Zap size={15} fill="currentColor" aria-hidden="true" />
-                ) : plano.id !== "free" ? (
-                  <Mail size={15} aria-hidden="true" />
-                ) : null}
-                {plano.cta}
-              </button>
+              {(() => {
+                const direct = hasDirectCheckout(plano.id) || stripeLinkFor(plano.id) !== null;
+                const isPending = pendingPlan === plano.id;
+                return (
+                  <button
+                    className={isFeatured ? "btn btn--accent btn--block" : "btn btn--ghost btn--block"}
+                    type="button"
+                    onClick={() => void handleChoose(plano.id, plano.nome)}
+                    disabled={isPending}
+                    aria-busy={isPending}
+                  >
+                    {/* Ícone reflete a ação real: Zap = checkout direto; Mail = contato comercial */}
+                    {direct ? (
+                      <Zap size={15} fill="currentColor" aria-hidden="true" />
+                    ) : plano.id !== "free" ? (
+                      <Mail size={15} aria-hidden="true" />
+                    ) : null}
+                    {isPending ? "Abrindo checkout…" : plano.cta}
+                  </button>
+                );
+              })()}
             </article>
           );
         })}
