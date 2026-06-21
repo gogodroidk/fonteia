@@ -1,13 +1,30 @@
-// Painel Admin — exclusivo do dono. Protegido pelo papel em public.profiles e
-// pela edge function `admin-api` (que revalida is_admin no servidor com a service role).
+// Painel Admin — exclusivo do dono. Protegido em camadas.
 //
-// Gate em camadas:
+// Gate em camadas (a UI NUNCA é fonte de verdade):
 //   1) useIsAdmin() lê o papel do usuário logado; se não for admin → "acesso restrito".
-//   2) Toda chamada de dados vai à admin-api com o token de sessão; o servidor
-//      rejeita (403) qualquer não-admin, então a UI nunca é fonte de verdade.
+//   2) Os dados de gestão (overview/usuários/auditoria) vão à edge function
+//      `admin-api` com o token de sessão; o servidor rejeita (403) não-admin.
+//   3) As métricas agregadas (receita, assinaturas, uso, cupons) vêm de RPCs
+//      SECURITY DEFINER (infra/migrations/0033_admin_metrics.sql) que revalidam
+//      is_admin(auth.uid()) no BANCO. Mesmo padrão de source_health() em /sources.
+//
+// Honestidade de dados: enquanto a migration 0033 não estiver aplicada, as RPCs
+// 404 e a UI mostra "backend pendente" — nenhum número é inventado.
 
 import { useCallback, useEffect, useState } from "react";
-import { BarChart3, ClipboardList, Database, Layers, RefreshCw, ShieldAlert, ShieldCheck, Users } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardList,
+  CreditCard,
+  Database,
+  Gift,
+  Layers,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { useIsAdmin } from "../../components/admin/use-is-admin";
 import {
@@ -20,18 +37,41 @@ import {
   type AuditFilters,
 } from "../../components/admin/admin-api";
 import {
+  fetchCouponsOverview,
+  fetchPlatformMetrics,
+  fetchRecentSubscriptions,
+  fetchSubscriptionsSummary,
+  fetchUsageSummary,
+  AdminRpcMissingError,
+  type CouponOverviewRow,
+  type PlatformMetrics,
+  type RecentSubscription,
+  type SubscriptionSummaryRow,
+  type UsageSummary,
+} from "../../components/admin/admin-metrics-api";
+import {
   DataSection,
   OverviewSection,
   SourcesModulesSection,
   UsersSection,
 } from "../../components/admin/admin-sections";
+import {
+  BackendPendingNote,
+  CouponsSection,
+  MetricsOverviewSection,
+  SubscriptionsSection,
+  UsageSection,
+} from "../../components/admin/metrics-sections";
 import { AuditSection } from "../../components/admin/audit-section";
 
-type AdminTab = "overview" | "users" | "data" | "sources" | "audit";
+type AdminTab = "overview" | "revenue" | "users" | "usage" | "coupons" | "data" | "sources" | "audit";
 
 const TABS: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Visão geral", icon: BarChart3 },
+  { id: "revenue", label: "Receita & Assinaturas", icon: CreditCard },
+  { id: "usage", label: "Uso", icon: TrendingUp },
   { id: "users", label: "Usuários", icon: Users },
+  { id: "coupons", label: "Cupons", icon: Gift },
   { id: "data", label: "Dados", icon: Database },
   { id: "sources", label: "Fontes & Módulos", icon: Layers },
   { id: "audit", label: "Auditoria", icon: ClipboardList },
@@ -67,6 +107,22 @@ function LoadingState({ label }: { label: string }) {
   );
 }
 
+// ─── Estado das métricas (RPCs 0033) ──────────────────────────────────────────────
+// "pending" = RPC ainda não existe no banco (migration não aplicada) → placeholder honesto.
+
+type MetricsState<T> =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ready"; data: T }
+  | { kind: "pending" }
+  | { kind: "error"; message: string };
+
+interface RevenueData {
+  metrics: PlatformMetrics;
+  summary: SubscriptionSummaryRow[];
+  recent: RecentSubscription[];
+}
+
 // ─── Página ──────────────────────────────────────────────────────────────────────
 
 export function AdminPage() {
@@ -80,6 +136,11 @@ export function AdminPage() {
   const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Estados das abas de métricas (independentes; cada uma degrada sozinha).
+  const [revenue, setRevenue] = useState<MetricsState<RevenueData>>({ kind: "idle" });
+  const [usage, setUsage] = useState<MetricsState<UsageSummary>>({ kind: "idle" });
+  const [coupons, setCoupons] = useState<MetricsState<CouponOverviewRow[]>>({ kind: "idle" });
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
@@ -118,19 +179,55 @@ export function AdminPage() {
     }
   }, []);
 
+  const loadRevenue = useCallback(async () => {
+    setRevenue({ kind: "loading" });
+    try {
+      const [metrics, summary, recent] = await Promise.all([
+        fetchPlatformMetrics(),
+        fetchSubscriptionsSummary(),
+        fetchRecentSubscriptions(20),
+      ]);
+      setRevenue({ kind: "ready", data: { metrics, summary, recent } });
+    } catch (e) {
+      if (e instanceof AdminRpcMissingError) setRevenue({ kind: "pending" });
+      else setRevenue({ kind: "error", message: e instanceof Error ? e.message : "Falha ao carregar métricas." });
+    }
+  }, []);
+
+  const loadUsage = useCallback(async () => {
+    setUsage({ kind: "loading" });
+    try {
+      setUsage({ kind: "ready", data: await fetchUsageSummary(30) });
+    } catch (e) {
+      if (e instanceof AdminRpcMissingError) setUsage({ kind: "pending" });
+      else setUsage({ kind: "error", message: e instanceof Error ? e.message : "Falha ao carregar uso." });
+    }
+  }, []);
+
+  const loadCoupons = useCallback(async () => {
+    setCoupons({ kind: "loading" });
+    try {
+      setCoupons({ kind: "ready", data: await fetchCouponsOverview() });
+    } catch (e) {
+      if (e instanceof AdminRpcMissingError) setCoupons({ kind: "pending" });
+      else setCoupons({ kind: "error", message: e instanceof Error ? e.message : "Falha ao carregar cupons." });
+    }
+  }, []);
+
   // Carrega os dados da aba ativa quando admin é confirmado.
   useEffect(() => {
     if (gateLoading || !isAdmin) return;
-    if ((tab === "overview" || tab === "data" || tab === "sources") && !overview) {
-      void loadOverview();
-    }
-    if (tab === "users" && !users) {
-      void loadUsers();
-    }
-    if (tab === "audit" && !auditData) {
-      void loadAudit({});
-    }
-  }, [gateLoading, isAdmin, tab, overview, users, auditData, loadOverview, loadUsers, loadAudit]);
+    if ((tab === "overview" || tab === "data" || tab === "sources") && !overview) void loadOverview();
+    if (tab === "users" && !users) void loadUsers();
+    if (tab === "audit" && !auditData) void loadAudit({});
+    if (tab === "revenue" && revenue.kind === "idle") void loadRevenue();
+    if (tab === "usage" && usage.kind === "idle") void loadUsage();
+    if (tab === "coupons" && coupons.kind === "idle") void loadCoupons();
+  }, [
+    gateLoading, isAdmin, tab, overview, users, auditData,
+    revenue.kind, usage.kind, coupons.kind,
+    loadOverview, loadUsers, loadAudit, loadRevenue, loadUsage, loadCoupons,
+  ]);
 
   if (gateLoading) {
     return <LoadingState label="Verificando acesso…" />;
@@ -143,6 +240,9 @@ export function AdminPage() {
   const refresh = () => {
     if (tab === "users") void loadUsers();
     else if (tab === "audit") void loadAudit(auditFilters);
+    else if (tab === "revenue") void loadRevenue();
+    else if (tab === "usage") void loadUsage();
+    else if (tab === "coupons") void loadCoupons();
     else void loadOverview();
   };
 
@@ -169,7 +269,7 @@ export function AdminPage() {
       </div>
 
       {/* Abas */}
-      <div className="panel" style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
+      <div className="panel" style={{ padding: 6, display: "flex", gap: 4, flexWrap: "wrap", overflowX: "auto" }}>
         {TABS.map(({ id, label, icon: Icon }) => {
           const active = tab === id;
           return (
@@ -189,6 +289,7 @@ export function AdminPage() {
                 font: "inherit",
                 fontSize: 13.5,
                 fontWeight: active ? 700 : 500,
+                whiteSpace: "nowrap",
                 background: active ? "color-mix(in srgb,var(--brand) 10%,transparent)" : "transparent",
                 color: active ? "var(--brand-ink)" : "var(--t-mid)",
                 transition: "background .15s,color .15s",
@@ -201,7 +302,7 @@ export function AdminPage() {
         })}
       </div>
 
-      {/* Conteúdo */}
+      {/* Erro global (somente abas servidas pela admin-api) */}
       {error ? (
         <div className="panel" role="alert" style={{ padding: "14px 18px", display: "flex", gap: 10, alignItems: "center", borderColor: "color-mix(in srgb,var(--danger) 35%,var(--border))" }}>
           <ShieldAlert size={16} style={{ color: "var(--danger)", flexShrink: 0 }} aria-hidden="true" />
@@ -215,12 +316,48 @@ export function AdminPage() {
       {tab === "overview" &&
         (overview ? <OverviewSection data={overview} /> : loading ? <LoadingState label="Carregando visão geral…" /> : null)}
 
+      {tab === "revenue" && (
+        revenue.kind === "ready" ? (
+          <SubscriptionsSectionWithMetrics data={revenue.data} />
+        ) : revenue.kind === "pending" ? (
+          <BackendPendingNote what="Receita & Assinaturas" />
+        ) : revenue.kind === "error" ? (
+          <InlineError message={revenue.message} onRetry={loadRevenue} />
+        ) : (
+          <LoadingState label="Carregando receita…" />
+        )
+      )}
+
+      {tab === "usage" && (
+        usage.kind === "ready" ? (
+          <UsageSection data={usage.data} />
+        ) : usage.kind === "pending" ? (
+          <BackendPendingNote what="Uso da plataforma" />
+        ) : usage.kind === "error" ? (
+          <InlineError message={usage.message} onRetry={loadUsage} />
+        ) : (
+          <LoadingState label="Carregando uso…" />
+        )
+      )}
+
       {tab === "users" &&
         (users ? (
           <UsersSection data={users} currentUserId={user?.id ?? null} onChanged={() => void loadUsers()} />
         ) : loading ? (
           <LoadingState label="Carregando usuários…" />
         ) : null)}
+
+      {tab === "coupons" && (
+        coupons.kind === "ready" ? (
+          <CouponsSection coupons={coupons.data} />
+        ) : coupons.kind === "pending" ? (
+          <BackendPendingNote what="Cupons" />
+        ) : coupons.kind === "error" ? (
+          <InlineError message={coupons.message} onRetry={loadCoupons} />
+        ) : (
+          <LoadingState label="Carregando cupons…" />
+        )
+      )}
 
       {tab === "data" &&
         (overview ? <DataSection data={overview} /> : loading ? <LoadingState label="Carregando dados…" /> : null)}
@@ -247,5 +384,28 @@ export function AdminPage() {
 
       <style>{`@keyframes adminspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </section>
+  );
+}
+
+// ─── Helpers locais ────────────────────────────────────────────────────────────
+
+function SubscriptionsSectionWithMetrics({ data }: { data: RevenueData }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <MetricsOverviewSection data={data.metrics} />
+      <SubscriptionsSection summary={data.summary} recent={data.recent} />
+    </div>
+  );
+}
+
+function InlineError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="panel" role="alert" style={{ padding: "14px 18px", display: "flex", gap: 10, alignItems: "center", borderColor: "color-mix(in srgb,var(--danger) 35%,var(--border))" }}>
+      <ShieldAlert size={16} style={{ color: "var(--danger)", flexShrink: 0 }} aria-hidden="true" />
+      <span className="small" style={{ color: "var(--t-hi)" }}>{message}</span>
+      <button className="btn btn--ghost btn--sm" type="button" onClick={onRetry} style={{ marginLeft: "auto" }}>
+        Tentar de novo
+      </button>
+    </div>
   );
 }
