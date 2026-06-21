@@ -438,6 +438,7 @@ interface TurnstileAPI {
     },
   ) => string;
   reset: (widgetId: string) => void;
+  remove: (widgetId: string) => void;
 }
 
 declare global {
@@ -510,6 +511,13 @@ function TurnstileWidget({ onToken, onError, onExpire, widgetIdRef }: TurnstileW
 
     return () => {
       cancelled = true;
+      // Remove the rendered widget so remounting (login ↔ signup ↔ reset) doesn't
+      // leave orphaned iframes/timers from the Turnstile script.
+      const id = widgetIdRef.current;
+      if (id && window.turnstile) {
+        try { window.turnstile.remove(id); } catch { /* widget already gone */ }
+      }
+      widgetIdRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -529,7 +537,7 @@ function TurnstileWidget({ onToken, onError, onExpire, widgetIdRef }: TurnstileW
             lineHeight: 1.4,
           }}
         >
-          Verificação anti-bot indisponível neste ambiente — cadastro liberado.
+          Verificação anti-bot indisponível neste ambiente — você pode continuar.
         </p>
       )}
     </div>
@@ -552,7 +560,13 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Separate loading flags so one in-flight action disables the others without
+  // hijacking the form's primary spinner.
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const anyBusy = submitting || googleLoading || forgotLoading;
 
   // ── Turnstile state ──────────────────────────────────────────────────────────
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -583,80 +597,118 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     setCaptchaToken(null);
   }
 
+  // Captcha gate, shared by all flows. Only blocks when the widget actually
+  // loaded (captchaReady) but no token is held yet. If the widget failed to load
+  // (captchaReady=false), we degrade gracefully and proceed without a token —
+  // and the server still enforces it if CAPTCHA protection is on in Supabase.
+  function captchaMissing(): boolean {
+    return captchaReady && !captchaToken;
+  }
+
   // ── Auth handlers ────────────────────────────────────────────────────────────
 
   async function handleGoogle() {
+    if (anyBusy) return;
     setError(null);
-    await signInWithGoogle();
+    setSuccessMsg(null);
+    setGoogleLoading(true);
+    try {
+      // On success this redirects the browser away; on failure we surface a
+      // translated error instead of leaving the button stuck.
+      const result = await signInWithGoogle();
+      if (result.error) setError(result.error);
+    } finally {
+      setGoogleLoading(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (anyBusy) return;
     setError(null);
     setSuccessMsg(null);
     setNameError(null);
 
-    // Signup-specific validation
+    // Signup-specific field validation
     if (mode === "signup") {
       const trimmedName = fullName.trim();
       if (trimmedName.length === 0) {
         setNameError("Nome completo é obrigatório.");
         return;
       }
+    }
 
-      // Captcha gate: only block when the widget successfully loaded (captchaReady)
-      // AND we still don't have a token. If the widget failed/errored (captchaReady=false),
-      // we degrade gracefully and allow signup without a token.
-      if (captchaReady && !captchaToken) {
-        setError("Por favor, complete a verificação anti-bot antes de continuar.");
-        return;
-      }
+    // Captcha gate applies to BOTH login and signup: Supabase CAPTCHA protection,
+    // once enabled, guards sign-in, sign-up and password reset alike.
+    if (captchaMissing()) {
+      setError("Por favor, complete a verificação anti-bot antes de continuar.");
+      return;
     }
 
     setSubmitting(true);
 
     let result: { error: string | null };
 
-    if (mode === "login") {
-      result = await signInWithEmail(email, password);
-    } else {
-      const trimmedName = fullName.trim();
-      const trimmedPhone = phone.trim();
-      // Only pass captchaToken when we actually have one (exactOptionalPropertyTypes safe).
-      result = await signUpWithEmail(
-        email,
-        password,
-        {
-          full_name: trimmedName,
-          ...(trimmedPhone ? { phone: trimmedPhone } : {}),
-        },
-        captchaToken ?? undefined,
-      );
+    try {
+      if (mode === "login") {
+        result = await signInWithEmail(email, password, captchaToken ?? undefined);
+      } else {
+        const trimmedName = fullName.trim();
+        const trimmedPhone = phone.trim();
+        // Only pass captchaToken when we actually have one (exactOptionalPropertyTypes safe).
+        result = await signUpWithEmail(
+          email,
+          password,
+          {
+            full_name: trimmedName,
+            ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+          },
+          captchaToken ?? undefined,
+        );
+      }
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
 
     if (result.error) {
       setError(result.error);
-      // Token is single-use — reset the widget so the user can get a fresh one.
-      if (mode === "signup") resetTurnstile();
+      // Token is single-use — refresh the widget so the user gets a fresh one.
+      resetTurnstile();
     } else if (mode === "signup") {
-      setSuccessMsg("Verifique seu e-mail para confirmar o cadastro.");
+      setSuccessMsg("Conta criada! Verifique seu e-mail para confirmar o cadastro.");
     }
+    // mode === "login" success: onAuthStateChange swaps the screen, nothing to do.
   }
 
   async function handleForgot() {
+    if (anyBusy) return;
     setError(null);
     setSuccessMsg(null);
     if (!email.trim()) {
       setError("Digite seu e-mail no campo acima para receber o link de redefinição.");
       return;
     }
-    const result = await resetPassword(email.trim());
+    // Password reset is also covered by Supabase CAPTCHA protection.
+    if (captchaMissing()) {
+      setError("Complete a verificação anti-bot antes de pedir a redefinição.");
+      return;
+    }
+
+    setForgotLoading(true);
+    let result: { error: string | null };
+    try {
+      result = await resetPassword(email.trim(), captchaToken ?? undefined);
+    } finally {
+      setForgotLoading(false);
+    }
+
     if (result.error) {
       setError(result.error);
+      resetTurnstile();
     } else {
+      // Neutral message regardless of whether the account exists (anti-enumeration).
       setSuccessMsg("Se existir uma conta com esse e-mail, enviamos um link para você redefinir a senha.");
+      resetTurnstile();
     }
   }
 
@@ -665,7 +717,8 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
     setError(null);
     setSuccessMsg(null);
     setNameError(null);
-    // Reset captcha state when leaving/entering signup mode.
+    // Drop any held captcha token when switching modes — the widget remounts via
+    // key={mode} and will issue a fresh token for the new flow.
     setCaptchaToken(null);
     setCaptchaReady(false);
   }
@@ -832,11 +885,35 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
           <button
             type="button"
             onClick={() => void handleGoogle()}
+            disabled={anyBusy}
+            aria-busy={googleLoading}
             className="btn btn--ghost btn--block btn--lg"
             style={{ justifyContent: "center", gap: 10, fontWeight: 600, fontSize: 14.5 }}
           >
-            <GoogleIcon />
-            Continuar com Google
+            {googleLoading ? (
+              <>
+                <span
+                  role="status"
+                  aria-label="Conectando…"
+                  style={{
+                    display: "inline-block",
+                    width: 16,
+                    height: 16,
+                    border: "2.5px solid color-mix(in srgb, var(--t-low) 40%, transparent)",
+                    borderTopColor: "var(--t-hi)",
+                    borderRadius: "50%",
+                    animation: "spin 0.7s linear infinite",
+                    flexShrink: 0,
+                  }}
+                />
+                Conectando…
+              </>
+            ) : (
+              <>
+                <GoogleIcon />
+                Continuar com Google
+              </>
+            )}
           </button>
 
           {/* Divider */}
@@ -963,32 +1040,45 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
                     <button
                       type="button"
                       className="link"
-                      style={{ fontSize: 12.5, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                      disabled={anyBusy}
+                      aria-busy={forgotLoading}
+                      style={{
+                        fontSize: 12.5,
+                        background: "none",
+                        border: "none",
+                        cursor: anyBusy ? "default" : "pointer",
+                        padding: 0,
+                        opacity: anyBusy ? 0.6 : 1,
+                      }}
                       onClick={() => void handleForgot()}
                     >
-                      Esqueceu?
+                      {forgotLoading ? "Enviando…" : "Esqueceu?"}
                     </button>
                   ) : undefined
                 }
               />
             </div>
 
-            {/* Turnstile anti-bot widget — signup only */}
-            {isSignup && (
-              <TurnstileWidget
-                onToken={handleCaptchaToken}
-                onError={handleCaptchaError}
-                onExpire={handleCaptchaExpire}
-                widgetIdRef={turnstileWidgetId}
-              />
-            )}
+            {/* Turnstile anti-bot widget — rendered for BOTH login and signup.
+                Supabase CAPTCHA protection, once enabled in the dashboard, guards
+                sign-in, sign-up and password reset; the same token covers the
+                "Esqueceu?" reset flow which lives on the login screen.
+                key={mode} forces a fresh widget (and fresh token) on mode switch. */}
+            <TurnstileWidget
+              key={mode}
+              onToken={handleCaptchaToken}
+              onError={handleCaptchaError}
+              onExpire={handleCaptchaExpire}
+              widgetIdRef={turnstileWidgetId}
+            />
 
             {/* Submit */}
             {isSignup ? (
               <button
                 type="submit"
                 className="btn btn--primary btn--block btn--lg"
-                disabled={submitting}
+                disabled={anyBusy}
+                aria-busy={submitting}
                 style={{
                   justifyContent: "center",
                   gap: 8,
@@ -1004,7 +1094,8 @@ export function LoginPage({ onGoToLanding }: LoginPageProps) {
               <button
                 type="submit"
                 className="btn btn--primary btn--block btn--lg"
-                disabled={submitting}
+                disabled={anyBusy}
+                aria-busy={submitting}
                 style={{ justifyContent: "center", gap: 8, letterSpacing: "-0.01em" }}
               >
                 {submitting ? <Spinner /> : "Entrar"}

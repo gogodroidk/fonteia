@@ -19,19 +19,133 @@ export interface AuthContextValue {
   loading: boolean;
   /** true quando rodando sem Supabase: login/cadastro são simulados localmente. */
   demoMode: boolean;
-  signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  signInWithEmail: (
+    email: string,
+    password: string,
+    captchaToken?: string,
+  ) => Promise<{ error: string | null }>;
   signUpWithEmail: (
     email: string,
     password: string,
     userData?: SignUpUserData,
     captchaToken?: string,
   ) => Promise<{ error: string | null }>;
-  resetPassword: (email: string) => Promise<{ error: string | null }>;
+  resetPassword: (email: string, captchaToken?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+/**
+ * Traduz erros do Supabase Auth para mensagens claras em PT-BR.
+ *
+ * Princípios:
+ * - NUNCA vazar detalhe interno (stack, nome de tabela, SQL, etc.) ao usuário.
+ * - Mensagens acionáveis: o usuário entende o que fazer a seguir.
+ * - Login com credencial errada usa mensagem genérica (não revela se o e-mail
+ *   existe) para não facilitar enumeração de contas.
+ *
+ * `fallback` ajusta a mensagem padrão por contexto (login × cadastro × reset).
+ *
+ * Exportada para teste unitário (garante que nenhuma mensagem crua vaza).
+ */
+export function mapAuthError(raw: string | null | undefined, fallback: string): string {
+  if (!raw) return fallback;
+  const msg = raw.toLowerCase();
+
+  // ── Captcha (Turnstile/hCaptcha) ──
+  if (msg.includes("captcha")) {
+    return "A verificação anti-bot falhou ou expirou. Recarregue a página e tente novamente.";
+  }
+
+  // ── Credenciais inválidas (login) — mensagem genérica anti-enumeração ──
+  if (
+    msg.includes("invalid login credentials") ||
+    msg.includes("invalid credentials") ||
+    msg.includes("invalid email or password")
+  ) {
+    return "E-mail ou senha incorretos. Verifique os dados e tente novamente.";
+  }
+
+  // ── E-mail já cadastrado (signup) ──
+  if (
+    msg.includes("already registered") ||
+    msg.includes("already been registered") ||
+    msg.includes("user already exists") ||
+    msg.includes("email address is already") ||
+    msg.includes("already in use")
+  ) {
+    return "Este e-mail já está cadastrado. Tente entrar ou redefinir sua senha.";
+  }
+
+  // ── Senha fraca / curta ──
+  if (
+    msg.includes("password should be at least") ||
+    msg.includes("password is too short") ||
+    msg.includes("password should contain") ||
+    msg.includes("weak password") ||
+    (msg.includes("password") && msg.includes("at least"))
+  ) {
+    return "Senha muito fraca. Use ao menos 8 caracteres, combinando letras e números.";
+  }
+
+  // ── E-mail inválido / malformado ──
+  if (msg.includes("invalid email") || msg.includes("unable to validate email")) {
+    return "E-mail inválido. Confira o endereço digitado.";
+  }
+
+  // ── E-mail ainda não confirmado ──
+  if (msg.includes("email not confirmed") || msg.includes("not confirmed")) {
+    return "Confirme seu e-mail antes de entrar. Verifique sua caixa de entrada e o spam.";
+  }
+
+  // ── Rate limit (muitas tentativas) ──
+  if (
+    msg.includes("rate limit") ||
+    msg.includes("too many requests") ||
+    msg.includes("for security purposes") ||
+    (msg.includes("after") && msg.includes("seconds"))
+  ) {
+    return "Muitas tentativas em sequência. Aguarde alguns instantes e tente de novo.";
+  }
+
+  // ── Erro de rede / serviço indisponível ──
+  if (
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("network error") ||
+    msg.includes("load failed") ||
+    msg.includes("timeout")
+  ) {
+    return "Falha de conexão. Verifique sua internet e tente novamente.";
+  }
+
+  // ── Desconhecido: NÃO ecoar a mensagem crua do servidor (pode vazar interno) ──
+  return fallback;
+}
+
+/**
+ * Executa uma chamada de auth do Supabase capturando exceções de rede.
+ * O SDK pode *lançar* (ex.: TypeError "Failed to fetch") em vez de retornar
+ * `{ error }` quando o fetch falha — sem isto, a Promise rejeitaria e o botão
+ * de submit ficaria travado em "carregando". Normalizamos tudo para PT-BR.
+ */
+async function runAuth(
+  fn: () => Promise<{ error: { message: string } | null }>,
+  fallback: string,
+): Promise<{ error: string | null }> {
+  try {
+    const { error } = await fn();
+    if (error) return { error: mapAuthError(error.message, fallback) };
+    return { error: null };
+  } catch (e) {
+    const raw = e instanceof Error ? e.message : "";
+    return {
+      error: mapAuthError(raw, "Falha de conexão. Verifique sua internet e tente novamente."),
+    };
+  }
+}
 
 const DEMO_STORAGE_KEY = "fonteia.demo.user";
 
@@ -119,18 +233,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function signInWithGoogle() {
+  async function signInWithGoogle(): Promise<{ error: string | null }> {
     if (!isSupabaseConfigured || !supabase) {
       const demo = buildDemoUser("visitante@fonteia.app", "Visitante Demo");
       saveDemoUser(demo);
       setUser(demo);
-      return;
+      return { error: null };
     }
     const redirectTo = `${window.location.origin}/`;
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
+    const sb = supabase;
+    // OAuth redireciona o navegador; em caso de falha de rede antes do redirect,
+    // devolvemos um erro traduzido em vez de deixar a Promise rejeitar.
+    return runAuth(
+      () => sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo } }),
+      "Não foi possível conectar com o Google. Tente novamente.",
+    );
   }
 
-  async function signInWithEmail(email: string, password: string) {
+  async function signInWithEmail(email: string, password: string, captchaToken?: string) {
     if (!isSupabaseConfigured || !supabase) {
       if (password.length < 8) {
         return { error: "A senha precisa ter ao menos 8 caracteres." };
@@ -140,8 +260,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(demo);
       return { error: null };
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+
+    const sb = supabase;
+    // captchaToken vai em options apenas quando presente (exactOptionalPropertyTypes).
+    type SignInArgs = Parameters<typeof sb.auth.signInWithPassword>[0];
+    const args: SignInArgs = {
+      email,
+      password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
+    };
+    return runAuth(
+      () => sb.auth.signInWithPassword(args),
+      "Não foi possível entrar. Tente novamente em instantes.",
+    );
   }
 
   async function signUpWithEmail(
@@ -174,24 +305,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options.captchaToken = captchaToken;
     }
 
-    const signUpArgs: Parameters<typeof supabase.auth.signUp>[0] = {
+    const sb = supabase;
+    const signUpArgs: Parameters<typeof sb.auth.signUp>[0] = {
       email,
       password,
       ...(Object.keys(options).length > 0 ? { options } : {}),
     };
 
-    const { error } = await supabase.auth.signUp(signUpArgs);
-    return { error: error?.message ?? null };
+    return runAuth(
+      () => sb.auth.signUp(signUpArgs),
+      "Não foi possível criar sua conta. Tente novamente em instantes.",
+    );
   }
 
-  async function resetPassword(email: string): Promise<{ error: string | null }> {
+  async function resetPassword(email: string, captchaToken?: string): Promise<{ error: string | null }> {
     if (!isSupabaseConfigured || !supabase) {
       // Modo demo: não há backend de e-mail; respondemos como sucesso silencioso.
       return { error: null };
     }
     const redirectTo = `${window.location.origin}/entrar`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    return { error: error?.message ?? null };
+    const sb = supabase;
+    // captchaToken só entra quando presente (exactOptionalPropertyTypes).
+    type ResetOptions = NonNullable<Parameters<typeof sb.auth.resetPasswordForEmail>[1]>;
+    const options: ResetOptions = {
+      redirectTo,
+      ...(captchaToken ? { captchaToken } : {}),
+    };
+    return runAuth(
+      () => sb.auth.resetPasswordForEmail(email, options),
+      "Não foi possível enviar o e-mail de redefinição. Tente novamente.",
+    );
   }
 
   async function signOut() {
