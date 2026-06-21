@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { PublicSource } from "@fonteia/domain";
-import { deriveHealth, humanizeAge } from "./source-health";
+import { deriveHealth, humanizeAge, shortDate } from "./source-health";
 
 const NOW = Date.parse("2026-06-20T12:00:00Z");
 
@@ -139,5 +139,30 @@ describe("humanizeAge", () => {
   it("returns em-dash for undefined/invalid", () => {
     expect(humanizeAge(undefined, NOW)).toBe("—");
     expect(humanizeAge("not-a-date", NOW)).toBe("—");
+  });
+  it("handles months (1 month and multiple months)", () => {
+    expect(humanizeAge(daysAgo(30), NOW)).toBe("há 1 mês");
+    expect(humanizeAge(daysAgo(62), NOW)).toBe("há 2 meses");
+  });
+  it("handles years (1 year and multiple years)", () => {
+    expect(humanizeAge(daysAgo(365), NOW)).toBe("há 1 ano");
+    expect(humanizeAge(daysAgo(730), NOW)).toBe("há 2 anos");
+  });
+});
+
+describe("shortDate", () => {
+  it("formats a known date as dd/mm/yyyy", () => {
+    // 2026-06-20
+    const iso = new Date(NOW).toISOString();
+    const result = shortDate(iso);
+    expect(result).toBe("20/06/2026");
+  });
+
+  it("returns em-dash for undefined", () => {
+    expect(shortDate(undefined)).toBe("—");
+  });
+
+  it("returns em-dash for invalid date string", () => {
+    expect(shortDate("not-a-date")).toBe("—");
   });
 });

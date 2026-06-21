@@ -251,10 +251,16 @@ p { margin: 0; }
 .sidebar-close {
   color: var(--n-400);
   font-size: 1.1rem;
+  /* a11y: min 40×40px touch target (WCAG 2.5.5) */
+  min-width: 40px;
+  min-height: 40px;
   padding: var(--s-2);
   border-radius: var(--r-sm);
   transition: color var(--fast), background var(--fast);
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .sidebar-close:hover { color: var(--n-900); background: var(--n-50); }
 
@@ -354,10 +360,16 @@ p { margin: 0; }
 .user-info span { display: block; font-size: 0.72rem; color: var(--n-400); }
 .signout-btn {
   color: var(--n-400);
+  /* a11y: min 40×40px touch target (WCAG 2.5.5) */
+  min-width: 40px;
+  min-height: 40px;
   padding: var(--s-2);
   border-radius: var(--r-sm);
   transition: color var(--fast), background var(--fast);
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .signout-btn:hover { color: var(--color-error); background: var(--color-error-bg); }
 

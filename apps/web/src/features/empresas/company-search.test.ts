@@ -178,4 +178,86 @@ describe("requestCompanyEnrichment", () => {
     const ok = await requestCompanyEnrichment("11222333000181", fetcher);
     expect(ok).toBe(false);
   });
+
+  it("retorna false (sem chamar) para CNPJ vazio (string vazia)", async () => {
+    const fetcher = vi.fn();
+    const ok = await requestCompanyEnrichment("", fetcher as unknown as typeof fetch);
+    expect(ok).toBe(false);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+// ─── searchCompaniesByName — edge cases adicionais ────────────────────────────
+
+describe("searchCompaniesByName — edge cases extras", () => {
+  it("limpa rótulos CEAP com em-dash ('CATEGORIA — FORNECEDOR') no nome exibido", async () => {
+    const fetcher = makeFetcher({
+      public_contract: [
+        {
+          id: "1",
+          kind: "public_contract",
+          name: "ALIMENTAÇÃO — RESTAURANTE BELO LTDA",
+          cnpj: "11222333000181",
+          attributes: {},
+        },
+      ],
+    });
+    const hits = await searchCompaniesByName("restaurante", fetcher);
+    expect(hits).toHaveLength(1);
+    // O cleaner deve extrair a parte após o em-dash.
+    expect(hits[0]?.name).toBe("RESTAURANTE BELO LTDA");
+  });
+
+  it("retorna vazio quando nenhum resultado tem CNPJ válido", async () => {
+    const fetcher = makeFetcher({
+      company: [
+        { id: "1", kind: "company", name: "Empresa Sem CNPJ", cnpj: null, attributes: {} },
+      ],
+    });
+    const hits = await searchCompaniesByName("empresa", fetcher);
+    expect(hits).toHaveLength(0);
+  });
+
+  it("respeita limite MAX_HITS (25) mesmo com muitos resultados", async () => {
+    // Cria 30 empresas distintas (CNPJs com raiz distintos)
+    const rows: FakeRow[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `${i}`,
+      kind: "company",
+      name: `Empresa ${String(i).padStart(2, "0")} LTDA`,
+      cnpj: `1${String(i).padStart(7, "0")}0001${String(i % 100).padStart(2, "0")}`,
+    }));
+    const fetcher = makeFetcher({ company: rows });
+    const hits = await searchCompaniesByName("empresa", fetcher);
+    expect(hits.length).toBeLessThanOrEqual(25);
+  });
+
+  it("prefere fonte 'company' sobre 'public_contract' na dedupe", async () => {
+    // Mesma raiz, mas um é da fonte company (mais confiável), outro de public_contract
+    const ROOT = "22333444";
+    const fetcher = makeFetcher({
+      company: [
+        {
+          id: "1",
+          kind: "company",
+          name: "Razão Social Oficial LTDA",
+          cnpj: `${ROOT}000181`,
+          attributes: { uf: "SP" },
+        },
+      ],
+      public_contract: [
+        {
+          id: "2",
+          kind: "public_contract",
+          name: "Nome Sujo do Contrato",
+          cnpj: `${ROOT}028851`,
+          attributes: { fornecedorNome: "Nome Sujo do Contrato" },
+        },
+      ],
+    });
+    const hits = await searchCompaniesByName("razão social", fetcher);
+    // Deve aparecer apenas UMA empresa (mesma raiz de 8 dígitos)
+    expect(hits).toHaveLength(1);
+    // E o representante deve ser o da fonte 'company' (maior kindRank)
+    expect(hits[0]?.name).toBe("Razão Social Oficial LTDA");
+  });
 });

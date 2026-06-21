@@ -125,7 +125,8 @@ img,svg,video,canvas{max-width:100%}
 .btn--soft:hover{background:var(--bg-2)}
 .btn--lg{padding:14px 24px;font-size:15.5px;border-radius:14px}
 .btn--sm{padding:7px 12px;font-size:12.5px;border-radius:9px}
-.btn--icon{padding:0;width:38px;height:38px;border-radius:11px}
+/* a11y: 40px meets WCAG 2.5.5 minimum touch target size on mobile */
+.btn--icon{padding:0;width:40px;height:40px;border-radius:11px}
 .btn--block{width:100%}
 
 /* ---------- BADGES / CHIPS ---------- */

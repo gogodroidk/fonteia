@@ -15,8 +15,12 @@ function scoreColor(v: number): string {
 }
 
 /**
- * Score ring: 0–100, color by range (>=80 green, >=65 amber, else red),
+ * Score ring: 0–100, color by range (>=75 green, >=50 amber, else red),
  * large number in the center, optional "score" label below.
+ *
+ * a11y: the wrapper carries role="img" + aria-label so screen readers
+ * announce the numeric value and label instead of reading the decorative SVG
+ * and numeric characters in isolation. The inner content is aria-hidden.
  */
 export function ScoreRing({ value, size = 64, label }: ScoreRingProps) {
   const color = scoreColor(value);
@@ -26,26 +30,28 @@ export function ScoreRing({ value, size = 64, label }: ScoreRingProps) {
   const resolvedLabel = label ?? "score";
 
   return (
-    <Ring
-      value={value / 100}
-      size={size}
-      stroke={strokeWidth}
-      color={color}
-      track="var(--surface-2)"
-    >
-      <div style={{ textAlign: "center", lineHeight: 1 }}>
-        <div
-          className="num"
-          style={{ fontWeight: 800, fontSize, color }}
-        >
-          {value}
-        </div>
-        {showLabel && (
-          <div className="tiny muted" style={{ marginTop: 2 }}>
-            {resolvedLabel}
+    <div role="img" aria-label={`${resolvedLabel}: ${value} de 100`}>
+      <Ring
+        value={value / 100}
+        size={size}
+        stroke={strokeWidth}
+        color={color}
+        track="var(--surface-2)"
+      >
+        <div style={{ textAlign: "center", lineHeight: 1 }} aria-hidden="true">
+          <div
+            className="num"
+            style={{ fontWeight: 800, fontSize, color }}
+          >
+            {value}
           </div>
-        )}
-      </div>
-    </Ring>
+          {showLabel && (
+            <div className="tiny muted" style={{ marginTop: 2 }}>
+              {resolvedLabel}
+            </div>
+          )}
+        </div>
+      </Ring>
+    </div>
   );
 }
