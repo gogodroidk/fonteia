@@ -15,6 +15,9 @@
  * Estratégia de compilação: usamos a API JS do Vite para fazer um build SSR
  * isolado de `scripts/prerender-entry.tsx` (reaproveita o esbuild/JSX do Vite,
  * sem loader extra). Nada disso toca o build SPA já gerado em `dist/`.
+ *
+ * Adicionalmente, gera `dist/sitemap.xml` e copia `public/robots.txt` para
+ * `dist/robots.txt` (Cloudflare Pages serve do dist/).
  */
 import { build } from "vite";
 import { pathToFileURL } from "node:url";
@@ -24,6 +27,8 @@ import {
   mkdirSync,
   readFileSync,
   writeFileSync,
+  copyFileSync,
+  existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -35,6 +40,7 @@ const distDir = join(webRoot, "dist");
 const entryFile = join(__dirname, "prerender-entry.tsx");
 
 const SITE_URL = "https://fontebrasil.online";
+const OG_IMAGE_DEFAULT = `${SITE_URL}/og-image.png`;
 
 /** Escapa texto para uso seguro como conteúdo de atributo HTML. */
 function escapeAttr(value) {
@@ -113,6 +119,75 @@ function injectRoot(html, markup) {
   return html.replace(re, (_m, open, _inner, close) => `${open}${markup}${close}`);
 }
 
+/**
+ * Prioridades de sitemap por padrão de path.
+ * Permite que cada rota defina sua própria prioridade e changefreq.
+ */
+function sitemapMeta(path) {
+  if (path === "/" || path === "") return { priority: "1.0", changefreq: "weekly" };
+  if (path.startsWith("/guias/") || path === "/como-participar-leilao-receita-federal" || path === "/leiloes-receita-federal") {
+    return { priority: "0.9", changefreq: "monthly" };
+  }
+  if (path === "/guias" || path === "/ferramentas/calculadora-lance") {
+    return { priority: "0.9", changefreq: "monthly" };
+  }
+  if (path.startsWith("/blog/") || path === "/faq" || path === "/glossario-leiloes") {
+    return { priority: "0.7", changefreq: "monthly" };
+  }
+  if (path === "/blog") {
+    return { priority: "0.8", changefreq: "weekly" };
+  }
+  if (path === "/sobre" || path === "/para-quem") {
+    return { priority: "0.7", changefreq: "monthly" };
+  }
+  if (path === "/analise-de-edital-com-ia" || path === "/riscos-leiloes-publicos") {
+    return { priority: "0.7", changefreq: "monthly" };
+  }
+  if (path === "/fonteia-vs-planilha" || path === "/fonteia-vs-analise-manual" || path === "/melhores-ferramentas-analisar-leiloes") {
+    return { priority: "0.6", changefreq: "monthly" };
+  }
+  if (path === "/seguranca" || path === "/enterprise") {
+    return { priority: "0.6", changefreq: "monthly" };
+  }
+  if (path === "/contato") {
+    return { priority: "0.5", changefreq: "yearly" };
+  }
+  if (path === "/privacidade" || path === "/termos" || path === "/cookies" || path === "/central-privacidade") {
+    return { priority: "0.3", changefreq: "yearly" };
+  }
+  return { priority: "0.6", changefreq: "monthly" };
+}
+
+/** Gera sitemap.xml a partir das rotas pré-renderizadas mais a home (/). */
+function generateSitemap(routes, today) {
+  const homeEntry = `  <url>
+    <loc>${SITE_URL}/</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>`;
+
+  const routeEntries = routes.map((route) => {
+    const { priority, changefreq } = sitemapMeta(route.path);
+    return `  <url>
+    <loc>${SITE_URL}${route.path}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`;
+  });
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+${homeEntry}
+
+${routeEntries.join("\n\n")}
+
+</urlset>
+`;
+}
+
 async function main() {
   // 1) Confirma que o build SPA já rodou (precisamos do index.html base).
   const baseIndexPath = join(distDir, "index.html");
@@ -160,10 +235,16 @@ async function main() {
       );
     }
 
+    // Data ISO de hoje para lastmod do sitemap.
+    const today = new Date().toISOString().slice(0, 10);
+
     // 4) Para cada rota: renderiza, injeta, ajusta metadados, grava.
     let written = 0;
     for (const route of PRERENDER_ROUTES) {
       const canonical = `${SITE_URL}${route.path}`;
+      const ogImage = route.ogImage ?? OG_IMAGE_DEFAULT;
+      const ogType = route.ogType ?? "website";
+      const descShort = route.description.slice(0, 80);
       let markup;
       try {
         markup = renderRoute(route);
@@ -177,12 +258,21 @@ async function main() {
       html = setTitle(html, route.title);
       html = setMeta(html, "name", "description", route.description);
       html = setCanonical(html, canonical);
-      // Open Graph + Twitter (espelham title/description/url da rota).
+      // Open Graph
       html = setMeta(html, "property", "og:title", route.title);
       html = setMeta(html, "property", "og:description", route.description);
       html = setMeta(html, "property", "og:url", canonical);
+      html = setMeta(html, "property", "og:type", ogType);
+      html = setMeta(html, "property", "og:locale", "pt_BR");
+      html = setMeta(html, "property", "og:image", ogImage);
+      html = setMeta(html, "property", "og:image:width", "1200");
+      html = setMeta(html, "property", "og:image:height", "630");
+      html = setMeta(html, "property", "og:image:alt", `Fonte.ia — ${descShort}`);
+      // Twitter Card
+      html = setMeta(html, "name", "twitter:card", "summary_large_image");
       html = setMeta(html, "name", "twitter:title", route.title);
       html = setMeta(html, "name", "twitter:description", route.description);
+      html = setMeta(html, "name", "twitter:image", ogImage);
 
       // dist/<rota>/index.html
       const outDir = join(distDir, route.path.replace(/^\//, ""));
@@ -191,8 +281,22 @@ async function main() {
       writeFileSync(outFile, html, "utf8");
       written += 1;
       console.log(
-        `[prerender] ${route.path.padEnd(36)} → ${outFile.replace(webRoot + "/", "")} (${markup.length} bytes de markup)`,
+        `[prerender] ${route.path.padEnd(44)} → ${outFile.replace(webRoot + "/", "")} (${markup.length} bytes)`,
       );
+    }
+
+    // 5) Gera sitemap.xml em dist/ (sobrepõe o estático copiado pelo Vite do public/).
+    const sitemapXml = generateSitemap(PRERENDER_ROUTES, today);
+    const sitemapPath = join(distDir, "sitemap.xml");
+    writeFileSync(sitemapPath, sitemapXml, "utf8");
+    console.log(`[prerender] sitemap.xml gerado → ${PRERENDER_ROUTES.length + 1} URLs (inclui /)`);
+
+    // 6) Copia robots.txt se não estiver no dist (Vite copia do public/ mas confirma).
+    const robotsSrc = join(webRoot, "public", "robots.txt");
+    const robotsDst = join(distDir, "robots.txt");
+    if (existsSync(robotsSrc) && !existsSync(robotsDst)) {
+      copyFileSync(robotsSrc, robotsDst);
+      console.log("[prerender] robots.txt copiado para dist/");
     }
 
     console.log(`[prerender] OK — ${written} rota(s) pré-renderizada(s).`);
