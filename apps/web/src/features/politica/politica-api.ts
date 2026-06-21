@@ -1,5 +1,5 @@
 import type { CamaraDeputado } from "@fonteia/sources";
-import { fetchAllD1Entities, firstUpdatedAt } from "../../lib/d1-client";
+import { fetchAllD1Entities, fetchAllD1EntitiesStatic, firstUpdatedAt } from "../../lib/d1-client";
 
 export type PoliticaDataSource = "supabase" | "empty";
 
@@ -132,7 +132,9 @@ async function fetchAllParlamentares(
 ): Promise<{ parlamentares: Parlamentar[]; lastSyncedAt?: string | undefined }> {
   // kind = politician abrange deputados (camara-dados-abertos) e senadores
   // (senado-dados-abertos). Nenhum filtro de sourceId — aceitamos tudo.
-  const { rows } = await fetchAllD1Entities<Record<string, unknown>>(
+  // Usa a variante static (TTL=5min) pois ~594 parlamentares mudam apenas em
+  // ingestões periódicas — evita refetch a cada navegação SPA.
+  const { rows } = await fetchAllD1EntitiesStatic<Record<string, unknown>>(
     { kind: "politician" },
     { maxPages: MAX_SUPABASE_PAGES, fetcher },
   );

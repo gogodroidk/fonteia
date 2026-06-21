@@ -794,7 +794,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               </HelpHint>
               <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
-                {avatarUrl ? <img src={avatarUrl} alt={displayName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
+                {avatarUrl ? <img src={avatarUrl} alt={displayName} width={40} height={40} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
               </button>
             </div>
           </header>

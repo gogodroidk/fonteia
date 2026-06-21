@@ -282,6 +282,7 @@ export function PwaInstallPrompt() {
           className="pwa-banner__icon"
           width={44}
           height={44}
+          decoding="async"
         />
 
         <div className="pwa-banner__body">

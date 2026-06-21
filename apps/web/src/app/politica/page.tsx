@@ -194,7 +194,10 @@ function ParlamentarCard({ parlamentar: p, onSelect }: ParlamentarCardProps) {
             <img
               src={p.foto}
               alt=""
+              width={52}
+              height={52}
               loading="lazy"
+              decoding="async"
               onError={() => setImgError(true)}
               style={{
                 width: 52,
