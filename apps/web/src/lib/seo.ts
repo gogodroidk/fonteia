@@ -15,6 +15,8 @@ import { useEffect } from "react";
 
 export const SITE_URL = "https://fontebrasil.online" as const;
 export const SITE_NAME = "Fonte.ia" as const;
+/** URL absoluta da imagem padrão Open Graph (1200×630 px). */
+export const OG_IMAGE_DEFAULT = `${SITE_URL}/og-image.png` as const;
 
 // ---------------------------------------------------------------------------
 // JSON-LD builders
@@ -114,6 +116,7 @@ export function articleJsonLd(input: {
   description: string;
   url: string;
   datePublished?: string;
+  image?: string;
 }): Record<string, unknown> {
   const base: Record<string, unknown> = {
     "@context": "https://schema.org",
@@ -122,6 +125,7 @@ export function articleJsonLd(input: {
     description: input.description,
     url: input.url,
     inLanguage: "pt-BR",
+    image: input.image ?? OG_IMAGE_DEFAULT,
     author: {
       "@type": "Organization",
       name: SITE_NAME,
@@ -172,9 +176,15 @@ export interface UseSeoInput {
   canonicalPath?: string;
   /**
    * URL da imagem de pré-visualização (og:image / twitter:image).
+   * Se omitido, usa OG_IMAGE_DEFAULT (/og-image.png).
    * Use caminho absoluto (https://…) ou relativo ao SITE_URL.
    */
   image?: string;
+  /**
+   * Tipo de conteúdo Open Graph. Padrão: "website".
+   * Use "article" para guias, posts e páginas de conteúdo editorial.
+   */
+  ogType?: "website" | "article";
   /**
    * Blocos JSON-LD (schema.org) a injetar.
    *
@@ -195,12 +205,12 @@ export interface UseSeoInput {
  *   • document.title
  *   • <meta name="description">
  *   • <link rel="canonical">
- *   • og:title, og:description, og:url, og:image
- *   • twitter:card, twitter:image
+ *   • og:title, og:description, og:url, og:image, og:locale, og:type
+ *   • twitter:card, twitter:title, twitter:description, twitter:image
  *   • Remove scripts data-seo="1" antigos e injeta os novos JSON-LD
  */
 export function useSeo(input: UseSeoInput): void {
-  const { title, description, canonicalPath, image, jsonLd } = input;
+  const { title, description, canonicalPath, image, ogType, jsonLd } = input;
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -223,15 +233,24 @@ export function useSeo(input: UseSeoInput): void {
     upsertMeta(head, "property", "og:description", description);
     upsertMeta(head, "property", "og:url", canonicalHref);
     upsertMeta(head, "property", "og:site_name", SITE_NAME);
-    upsertMeta(head, "property", "og:type", "website");
+    upsertMeta(head, "property", "og:type", ogType ?? "website");
+    upsertMeta(head, "property", "og:locale", "pt_BR");
 
-    // --- og:image / twitter ---
-    if (image !== undefined && image.trim() !== "") {
-      const imageHref = image.startsWith("http") ? image : `${SITE_URL}${image}`;
-      upsertMeta(head, "property", "og:image", imageHref);
-      upsertMeta(head, "name", "twitter:card", "summary_large_image");
-      upsertMeta(head, "name", "twitter:image", imageHref);
-    }
+    // --- og:image (always set — default if omitted) ---
+    const imageHref =
+      image !== undefined && image.trim() !== ""
+        ? image.startsWith("http") ? image : `${SITE_URL}${image}`
+        : OG_IMAGE_DEFAULT;
+    upsertMeta(head, "property", "og:image", imageHref);
+    upsertMeta(head, "property", "og:image:width", "1200");
+    upsertMeta(head, "property", "og:image:height", "630");
+    upsertMeta(head, "property", "og:image:alt", `${SITE_NAME} — ${description.slice(0, 80)}`);
+
+    // --- Twitter Card ---
+    upsertMeta(head, "name", "twitter:card", "summary_large_image");
+    upsertMeta(head, "name", "twitter:title", title);
+    upsertMeta(head, "name", "twitter:description", description);
+    upsertMeta(head, "name", "twitter:image", imageHref);
 
     // --- JSON-LD: remove anteriores e injeta os novos ---
     head
@@ -247,7 +266,7 @@ export function useSeo(input: UseSeoInput): void {
         head.appendChild(script);
       }
     }
-  }, [title, description, canonicalPath, image, jsonLd]);
+  }, [title, description, canonicalPath, image, ogType, jsonLd]);
 }
 
 // ---------------------------------------------------------------------------

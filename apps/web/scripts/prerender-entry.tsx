@@ -52,13 +52,23 @@ export interface PrerenderRoute {
   title: string;
   /** <meta name="description">. */
   description: string;
+  /**
+   * Tipo Open Graph. "article" para guias, posts e páginas de conteúdo editorial.
+   * Omitir usa "website" (padrão).
+   */
+  ogType?: "website" | "article";
+  /**
+   * URL absoluta da imagem OG. Se omitir, usa /og-image.png (default).
+   */
+  ogImage?: string;
   /** Componente standalone (sem auth) renderizado para HTML estático. */
   Component: ComponentType;
 }
 
 /**
- * As 11 rotas públicas indexáveis. Title/description copiados das constantes
- * de cada página (useSeo/useEffect) — são o que o app define no cliente.
+ * Todas as rotas públicas indexáveis.
+ * Title/description devem estar em sincronia com useSeo() em cada componente.
+ * Páginas de conteúdo editorial usam ogType: "article".
  */
 export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
   {
@@ -82,6 +92,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Como comprar em leilão da Receita Federal: passo a passo (2026) | Fonte.ia",
     description:
       "Guia completo para iniciantes: o que é o leilão da Receita Federal (SLE), quem pode participar, como habilitar conta gov.br, dar o lance, pagar o DARF e retirar o bem. Com FAQ.",
+    ogType: "article",
     Component: GuiaComoComprarPage,
   },
   {
@@ -90,6 +101,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Leilão da Receita Federal vs leilão judicial vs leilão de banco | Fonte.ia",
     description:
       "Tabela comparativa: diferenças entre leilão da Receita Federal, leilão judicial e leilão de banco — o que é vendido, quem organiza, como participar, riscos e onde achar cada um.",
+    ogType: "article",
     Component: GuiaComparacaoPage,
   },
   {
@@ -98,6 +110,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Leilões da Receita Federal: o que são, como funcionam e como participar (2026) | Fonte.ia",
     description:
       "Guia completo sobre leilões de mercadorias apreendidas e abandonadas da Receita Federal (SLE): tipos de bens, quem pode participar, como funciona o processo do edital ao arremate, e por que usar a Fonte.ia para analisar os lotes com IA.",
+    ogType: "article",
     Component: LeiloesReceitaFederalPage,
   },
   {
@@ -106,6 +119,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Análise de Edital com IA: entenda as letras miúdas do leilão em linguagem simples | Fonte.ia",
     description:
       "A Fonte.ia lê o PDF do edital de leilão da Receita Federal com IA e resume em linguagem de leigo: quem pode participar, datas, como pagar, riscos e o que conferir antes do lance. Apoio à leitura — confirme sempre no edital oficial.",
+    ogType: "article",
     Component: AnaliseEditalIAPage,
   },
   {
@@ -114,6 +128,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Glossário de leilões da Receita Federal: termos explicados para leigos (2026) | Fonte.ia",
     description:
       "Edital, EDLE, SLE, DARF, habilitação, lance mínimo, arrematação — todos os termos que assustam em leilão da Receita Federal explicados em linguagem simples. Glossário completo atualizado.",
+    ogType: "article",
     Component: GlossarioLeiloesPage,
   },
   {
@@ -122,6 +137,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Perguntas frequentes sobre leilões da Receita Federal e Fonte.ia (2026) | FAQ",
     description:
       "Tire suas dúvidas sobre leilões da Receita Federal: precisa de CNPJ? Dá para parcelar? Posso ver o bem antes? Quanto custa a Fonte.ia? Respostas diretas e honestas.",
+    ogType: "article",
     Component: FaqPage,
   },
   {
@@ -129,6 +145,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Riscos dos leilões públicos e como se proteger | Fonte.ia",
     description:
       "Guia honesto dos principais riscos de leilões da Receita Federal: bem sem garantia, custos além do lance, restrições legais, prazos curtos e golpes. Saiba como se proteger em cada caso.",
+    ogType: "article",
     Component: RiscosLeiloesPage,
   },
   {
@@ -136,6 +153,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Fonte.ia vs planilha manual: comparação honesta | Fonte.ia",
     description:
       "Comparação direta entre usar a Fonte.ia e controlar leilões da Receita Federal em planilha: tempo, custo, rastreabilidade e erro humano. Honesto sobre o que cada um faz melhor.",
+    ogType: "article",
     Component: FonteiaVsPlanilhaPage,
   },
   {
@@ -144,6 +162,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
       "Fonte.ia vs análise manual no site da Receita Federal | Fonte.ia",
     description:
       "Comparação direta entre usar a Fonte.ia e fazer tudo manualmente no site da Receita Federal: tempo gasto, rastreabilidade, alertas de prazo e custo. Honesto sobre o que cada abordagem faz melhor.",
+    ogType: "article",
     Component: FonteiaVsManualPage,
   },
   {
@@ -151,6 +170,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Como participar de leilão da Receita Federal: passo a passo (2026) | Fonte.ia",
     description:
       "Passo a passo para participar de um leilão da Receita Federal: conta gov.br, habilitação no Sistema de Leilões Eletrônicos (SLE), lance, pagamento via DARF e retirada do bem, com cuidados em cada etapa.",
+    ogType: "article",
     Component: ComoParticiparPage,
   },
   {
@@ -158,6 +178,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Melhores ferramentas para analisar leilões da Receita Federal (2026) | Fonte.ia",
     description:
       "Comparativo honesto das formas de analisar leilões da Receita Federal: site oficial, planilha e a Fonte.ia. Critérios: achar lotes, ler edital, calcular custo total, alertas e rastreabilidade.",
+    ogType: "article",
     Component: MelhoresFerramentasPage,
   },
   {
@@ -172,6 +193,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Leilão da Receita Federal vale a pena? O que ninguém te conta | Fonte.ia",
     description:
       "Prós, contras e custos reais de comprar em leilão da Receita Federal. Para quem faz sentido e quando não vale a pena — com honestidade, sem promessa de lucro.",
+    ogType: "article",
     Component: PostValeAPenaPage,
   },
   {
@@ -179,6 +201,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "5 erros de iniciante em leilão da Receita (e como evitar) | Fonte.ia",
     description:
       "Os erros mais comuns de quem começa em leilões da Receita Federal: não ler o edital, esquecer custos, lance emocional, não conferir o bem e perder o prazo. Como evitar cada um.",
+    ogType: "article",
     Component: PostErrosIniciantesPage,
   },
   {
@@ -186,6 +209,7 @@ export const PRERENDER_ROUTES: ReadonlyArray<PrerenderRoute> = [
     title: "Como ler um edital de leilão sem ser advogado | Fonte.ia",
     description:
       "O que procurar num edital de leilão da Receita Federal: datas, forma de pagamento, condição do bem e restrições. Em linguagem simples, com a IA da Fonte.ia ajudando.",
+    ogType: "article",
     Component: PostComoLerEditalPage,
   },
   {
