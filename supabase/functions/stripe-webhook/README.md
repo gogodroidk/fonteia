@@ -52,7 +52,7 @@ que está processando pagamentos.
 (`subscriptions.email`) e **nunca grava `subscriptions.user_id`** — porque o Payment
 Link cru não carregava a identidade Supabase. E-mail divergente/compartilhado/caixa
 diferente ⇒ o pagante pode não receber o plano. (Detalhes e o fix da RPC em
-`infra/migrations/0026_subscriptions_correlate_by_user_id.sql`.)
+`infra/migrations/0027_subscriptions_correlate_by_user_id.sql`.)
 
 **O que mudou na origem:** a função `stripe-checkout` cria a Checkout Session com a
 identidade Supabase embutida. O webhook agora **pode e deve** lê-la:
@@ -81,6 +81,6 @@ o `user_id` chega tanto pela sessão quanto pela subscription.
 - O `UNIQUE` continua sendo `stripe_subscription_id`: o upsert casa por ele.
 - Manter a gravação de `email` (fallback para compras legadas via Payment Link).
 
-Depois que o webhook estiver gravando `user_id`, aplicar a migration `0026` para que
+Depois que o webhook estiver gravando `user_id`, aplicar a migration `0027` para que
 `my_plan()` passe a **preferir `user_id`** (e-mail vira fallback). Backfill das linhas
 antigas é opcional (correlacionar `subscriptions.email` ↔ `auth.users.email`).
