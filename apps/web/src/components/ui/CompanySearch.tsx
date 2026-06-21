@@ -264,7 +264,7 @@ export function CompanySearch({
             <button
               type="button"
               className="btn btn--icon btn--ghost btn--sm"
-              style={{ width: 28, height: 28, flexShrink: 0 }}
+              style={{ width: 40, height: 40, flexShrink: 0 }}
               onClick={clear}
               aria-label="Limpar busca"
             >

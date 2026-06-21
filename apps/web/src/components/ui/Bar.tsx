@@ -29,8 +29,10 @@ const DEFAULT_LABELS = ["Alto", "Médio", "Baixo"] as const;
  * Labeled horizontal progress bar. `value` is 0–100.
  * Uses `.bar` / `.track` CSS classes from the design system.
  *
- * a11y: shows a textual level badge ("Alto"/"Médio"/"Baixo" by default) next
- * to the percentage so the severity is never conveyed by color alone.
+ * a11y: carries role="progressbar" + aria-valuenow/min/max/label so AT
+ * announces the value and label correctly. Shows a textual level badge
+ * ("Alto"/"Médio"/"Baixo" by default) so severity is never color-only.
+ * The track fill uses a <span> (not <i>) to avoid semantic confusion.
  */
 export function Bar({ label, value, color, levelLabels }: BarProps) {
   const clampedValue = Math.min(100, Math.max(0, value));
@@ -66,13 +68,24 @@ export function Bar({ label, value, color, levelLabels }: BarProps) {
           </span>
         </span>
       </div>
-      <div className="track">
-        <i
+      <div
+        className="track"
+        role="progressbar"
+        aria-valuenow={clampedValue}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label}: ${clampedValue}% — ${levelText}`}
+      >
+        <span
           style={{
+            display: "block",
+            height: "100%",
             width: `${clampedValue}%`,
+            borderRadius: "999px",
             background: fillColor,
             transition: "width 1s cubic-bezier(.2,.7,.3,1)",
           }}
+          aria-hidden="true"
         />
       </div>
     </div>
