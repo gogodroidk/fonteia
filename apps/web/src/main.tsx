@@ -6,6 +6,11 @@ import { ThemeProvider } from "./theme/theme-context";
 import { App } from "./App";
 import "./styles.css";
 import "./styles/design-system.css";
+import { installGlobalErrorHandlers } from "./lib/telemetry";
+
+// Instala handlers globais de erro o mais cedo possível (antes do React montar).
+// Captura: window.onerror (erros de JS síncronos) e unhandledrejection (Promises).
+installGlobalErrorHandlers();
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>

@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   BadgeCheck,
   Bell,
@@ -47,49 +47,8 @@ import { CookieBanner } from "./components/cookie-banner";
 import { getLeilaoLotById } from "./data/fonteia-client";
 import { isCheckoutSuccess } from "./config/stripe";
 import { PwaInstallPrompt } from "./components/pwa-install-prompt";
-
-// --- ErrorBoundary: captura erros de chunks lazy e renderiza fallback amigável ---
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
-
-class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  override componentDidCatch(error: unknown, info: unknown) {
-    console.error("[Fonte.ia] Erro ao carregar página:", error, info);
-  }
-
-  override render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24, background: "var(--bg)", color: "var(--t-hi)", textAlign: "center" }}>
-          <span style={{ fontSize: 40 }}>⚠️</span>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Algo deu errado ao carregar esta página</h2>
-          <p style={{ margin: 0, color: "var(--t-mid)", maxWidth: 380 }}>
-            Isso pode ter sido causado por uma atualização recente. Recarregue a página para tentar novamente.
-          </p>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={() => window.location.reload()}
-            style={{ marginTop: 8 }}
-          >
-            Recarregar página
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { ErrorBoundary } from "./lib/error-boundary";
+import { setTelemetryAuthed } from "./lib/telemetry";
 
 // --- Lazy-loaded internal pages (code-split per route) ---
 // LoginPage / OnboardingPage: só renderizam atrás de auth (/entrar, /app sem
@@ -817,7 +776,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               </div>
             )}
-            <ErrorBoundary key={route}>
+            <ErrorBoundary key={route} route={path}>
               <Suspense fallback={
                 <div className="fade-in" aria-busy="true" aria-label="Carregando" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div className="skeleton skeleton-text" style={{ width: 220, height: 26 }} />
@@ -1222,6 +1181,11 @@ export function App() {
   const { user, loading } = useAuth();
   const { path, navigate } = usePathname();
   const [onboarded, setOnboarded] = useState<boolean>(() => hasOnboarded());
+
+  // Informa ao módulo de telemetria se há sessão ativa — sem expor o id do usuário.
+  useEffect(() => {
+    setTelemetryAuthed(!!user);
+  }, [user]);
 
   useEffect(() => {
     if (!loading && user && (path === "/" || path === "/entrar")) {
