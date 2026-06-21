@@ -137,7 +137,16 @@ interface GqlResponse<T> {
   errors?: Array<{ message?: string }>;
 }
 
-async function gql<T>(query: string, variables: Record<string, unknown>, token: string | null): Promise<T> {
+async function gql<T>(
+  query: string,
+  variables: Record<string, unknown>,
+  token: string | null,
+  // redactBody=true OMITE o corpo bruto do upstream da mensagem de erro. Usado no
+  // signIn (cujas variables carregam email/senha): alguns servidores GraphQL ecoam
+  // as variables/query em erros de validação, e essa mensagem volta na resposta e é
+  // persistida em source_runs.error_message — nunca pode conter a credencial.
+  redactBody = false,
+): Promise<T> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "application/json",
@@ -151,8 +160,9 @@ async function gql<T>(query: string, variables: Record<string, unknown>, token: 
     init: { method: "POST", headers, body: JSON.stringify({ query, variables }) },
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new UpstreamError(`MapBiomas GraphQL respondeu ${res.status}: ${body.slice(0, 200)}`, res.status);
+    const body = redactBody ? "" : await res.text().catch(() => "");
+    const suffix = redactBody ? " (corpo omitido para não vazar credencial)" : `: ${body.slice(0, 200)}`;
+    throw new UpstreamError(`MapBiomas GraphQL respondeu ${res.status}${suffix}`, res.status);
   }
   const json = (await res.json()) as GqlResponse<T>;
   if (json.errors && json.errors.length > 0) {
@@ -175,7 +185,12 @@ async function obtainToken(supabase: SupabaseClient): Promise<string> {
         "MAPBIOMAS_EMAIL + MAPBIOMAS_PASSWORD. Cadastro: https://plataforma.alerta.mapbiomas.org/",
     );
   }
-  const data = await gql<{ signIn?: { token?: string } }>(SIGNIN_MUTATION, { email, password }, null);
+  const data = await gql<{ signIn?: { token?: string } }>(
+    SIGNIN_MUTATION,
+    { email, password },
+    null,
+    true, // redactBody: o corpo de erro do signIn pode ecoar a credencial
+  );
   const token = data.signIn?.token;
   if (!token) throw new UpstreamError("signIn não retornou token (credencial inválida?)", 401);
   return token;

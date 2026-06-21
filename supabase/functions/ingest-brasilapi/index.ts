@@ -289,7 +289,14 @@ async function fetchCnpj(cnpj14: string): Promise<{ item: Record<string, unknown
     if (!retry.ok) {
       return { item: null, error: `429 após retry: status ${retry.status}` };
     }
-    const raw = (await retry.json()) as RawCnpj;
+    let raw: RawCnpj;
+    try {
+      raw = (await retry.json()) as RawCnpj;
+    } catch (e) {
+      // 200 com corpo não-JSON (página de erro de proxy/CDN, resposta truncada):
+      // erro POR-CNPJ, nunca derruba a invocação inteira (preserva os já coletados).
+      return { item: null, error: `JSON inválido após 429 para CNPJ ${cnpj14}: ${String(e)}` };
+    }
     return { item: normalize(cnpj14, raw), error: null };
   }
 
@@ -297,7 +304,14 @@ async function fetchCnpj(cnpj14: string): Promise<{ item: Record<string, unknown
     return { item: null, error: `status ${res.status} para CNPJ ${cnpj14}` };
   }
 
-  const raw = (await res.json()) as RawCnpj;
+  let raw: RawCnpj;
+  try {
+    raw = (await res.json()) as RawCnpj;
+  } catch (e) {
+    // 200 com corpo não-JSON: erro POR-CNPJ (degradação elegante), não exceção
+    // que escaparia para o handler e descartaria todo o lote já coletado.
+    return { item: null, error: `JSON inválido para CNPJ ${cnpj14}: ${String(e)}` };
+  }
   return { item: normalize(cnpj14, raw), error: null };
 }
 
