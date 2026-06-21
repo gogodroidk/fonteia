@@ -1,10 +1,10 @@
 -- =============================================================================
--- 0026_subscriptions_correlate_by_user_id.sql
+-- 0027_subscriptions_correlate_by_user_id.sql
 --   Correlação assinatura ↔ usuário por user_id (uuid), com e-mail como FALLBACK.
 -- =============================================================================
 -- ⚠️  NÃO APLICADA AUTOMATICAMENTE. Versionada para revisão e decisão do dono.
 --     Aplicar via Supabase MCP `apply_migration` (name:
---     0026_subscriptions_correlate_by_user_id) ou `supabase db push`.
+--     0027_subscriptions_correlate_by_user_id) ou `supabase db push`.
 --
 --     PRÉ-REQUISITO de produto: só aplique DEPOIS que o webhook em produção passar
 --     a gravar `subscriptions.user_id` a partir do client_reference_id da Checkout
@@ -33,9 +33,11 @@
 --     (b) e-mail compartilhado/herdado ⇒ ambiguidade de quem é o dono da assinatura;
 --     (c) o Stripe não normaliza a caixa do e-mail ⇒ casamento sensível à caixa.
 --
---   A coluna subscriptions.user_id JÁ EXISTE (0002_stripe_subscriptions.sql) e tem
---   índice (idx_subscriptions_user_id), mas nunca foi populada — porque a identidade
---   nunca chegava ao webhook. A nova Edge Function "stripe-checkout"
+--   ATENÇÃO (corrigido na renumeração 0026→0027): a coluna subscriptions.user_id
+--   NÃO existe no banco de produção (o schema real divergiu da 0002, que a declara).
+--   Por isso ESTA migration ADICIONA a coluna + índice (ADD COLUMN IF NOT EXISTS,
+--   logo abaixo) ANTES de recriar my_plan(). A identidade nunca chegava ao webhook;
+--   a nova Edge Function "stripe-checkout"
 --   (supabase/functions/stripe-checkout) resolve a origem do problema: cria uma
 --   Checkout Session com `client_reference_id` = id do usuário Supabase (uuid) +
 --   metadata (supabase_user_id / email / plan_id). A partir daí o webhook CONSEGUE
@@ -81,6 +83,12 @@
 --     (b) ajustar my_plan() é a mudança de menor risco que coloca o user_id no caminho
 --         de decisão de acesso assim que o webhook começar a gravá-lo, sem regressão.
 -- =============================================================================
+
+-- Garante a coluna de correlação. O schema de PRODUÇÃO não tinha `user_id`
+-- (divergiu da 0002), então criamos aqui de forma idempotente — sem isto, o
+-- my_plan() abaixo quebra ao referenciar a coluna inexistente.
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS user_id uuid;
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON public.subscriptions (user_id);
 
 CREATE OR REPLACE FUNCTION public.my_plan()
  RETURNS jsonb
