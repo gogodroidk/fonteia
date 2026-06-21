@@ -12,6 +12,13 @@ verify_jwt = true
 [functions.stripe-portal]
 verify_jwt = true
 
+# Checkout amarrado ao usuário (client_reference_id + metadata). verify_jwt=false:
+# a autorização é feita DENTRO da função (apikey publishable + sessão verificada),
+# igual a "fonteia"/"infosimples-proxy" — o gateway não deve rejeitar o token de
+# sessão como apikey inválida. A Secret Key (sk_live_…) vive só em Edge Secret.
+[functions.stripe-checkout]
+verify_jwt = false
+
 [functions.fonteia]
 verify_jwt = false
 
