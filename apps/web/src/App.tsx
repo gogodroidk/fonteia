@@ -36,6 +36,7 @@ import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { ThemeToggle } from "./components/ui";
 import { HelpModeProvider, HelpHint, useHelpMode } from "./components/help-mode";
+import { FeedbackButton } from "./components/feedback/FeedbackButton";
 // LandingPage permanece import ESTÁTICO: é o LCP do visitante anônimo (a rota "/"
 // é pré-renderizada/SSG). Carregá-la sob demanda só piscaria um fallback por cima
 // do HTML já visível. LoginPage/OnboardingPage e os widgets de IA (Omnibox/Chat)
@@ -618,6 +619,17 @@ function AppShell({ path, navigate }: AppShellProps) {
 
       <nav aria-label="Conta" style={{ padding: collapsed && !inDrawer ? "0 10px" : "0 12px" }}>
         {navItem({ path: "/app/conta", route: "conta", label: "Conta", icon: User }, inDrawer)}
+        {/* Botão de feedback: visível apenas quando a sidebar está expandida */}
+        {(!collapsed || inDrawer) && (
+          <div style={{ padding: "8px 2px 2px" }}>
+            <FeedbackButton
+              currentPath={path}
+              {...(user?.email ? { userEmail: user.email } : {})}
+              variant="pill"
+              className="btn-feedback-sidebar"
+            />
+          </div>
+        )}
       </nav>
 
       <div style={{ padding: collapsed && !inDrawer ? "12px 10px" : "12px 14px" }}>
@@ -741,6 +753,12 @@ function AppShell({ path, navigate }: AppShellProps) {
                 >
                   <HelpCircle size={18} aria-hidden="true" />
                 </button>
+              </HelpHint>
+              <HelpHint id="topbar.feedback">
+                <FeedbackButton
+                  currentPath={path}
+                  {...(user?.email ? { userEmail: user.email } : {})}
+                />
               </HelpHint>
               <HelpHint id="topbar.alerts">
                 <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
