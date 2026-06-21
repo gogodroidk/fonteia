@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Check,
   Database,
+  Gift,
   Layers,
   RefreshCw,
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
   type AdminUser,
   type AdminUsersResponse,
 } from "./admin-api";
+import { AdminRpcForbiddenError, AdminRpcMissingError, grantTrial } from "./admin-metrics-api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -311,11 +313,38 @@ export function UsersSection({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   // Estado otimista local sobreposto aos dados do servidor.
   const [roleOverride, setRoleOverride] = useState<Record<string, "user" | "admin">>({});
   const [accessOverride, setAccessOverride] = useState<Record<string, boolean>>({});
 
   const moduleList = data.modules;
+
+  // Ação sensível: concede 7 dias de trial. O gate is_admin é SERVER-SIDE
+  // (RPC admin_grant_trial, SECURITY DEFINER) — o front só dispara o pedido.
+  async function handleGrantTrial(user: AdminUser) {
+    setError(null);
+    setNotice(null);
+    setBusy(`trial:${user.id}`);
+    try {
+      const res = await grantTrial(user.id, 7);
+      if (res.ok) {
+        setNotice(res.message ?? "Trial de 7 dias concedido.");
+      } else {
+        setError(res.message ?? "Não foi possível conceder o trial.");
+      }
+    } catch (e) {
+      if (e instanceof AdminRpcMissingError) {
+        setError("Conceder trial exige a migration 0033 aplicada no banco (admin_grant_trial).");
+      } else if (e instanceof AdminRpcForbiddenError) {
+        setError("Apenas o administrador pode conceder trials.");
+      } else {
+        setError(e instanceof Error ? e.message : "Falha ao conceder o trial.");
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function handleRole(user: AdminUser, role: "user" | "admin") {
     setError(null);
@@ -386,6 +415,26 @@ export function UsersSection({
         </div>
       ) : null}
 
+      {notice ? (
+        <div
+          className="panel"
+          role="status"
+          style={{
+            padding: "12px 16px",
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+            borderColor: "color-mix(in srgb,var(--ok) 40%,var(--border))",
+          }}
+        >
+          <Check size={16} style={{ color: "var(--ok)", flexShrink: 0 }} aria-hidden="true" />
+          <span className="small" style={{ color: "var(--t-hi)" }}>{notice}</span>
+          <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setNotice(null)} aria-label="Fechar" style={{ marginLeft: "auto" }}>
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+      ) : null}
+
       <div className="panel" style={{ overflow: "hidden" }}>
         <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
           <div className="h3">Usuários</div>
@@ -432,11 +481,23 @@ export function UsersSection({
                     </div>
                   </div>
 
-                  <RoleToggle
-                    role={role}
-                    disabled={busy === `role:${user.id}` || (isSelf && role === "admin")}
-                    onChange={(r) => void handleRole(user, r)}
-                  />
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      disabled={busy === `trial:${user.id}`}
+                      onClick={() => void handleGrantTrial(user)}
+                      title="Conceder 7 dias de teste (Pro) a este usuário"
+                    >
+                      <Gift size={13} aria-hidden="true" />
+                      {busy === `trial:${user.id}` ? "Concedendo…" : "Trial 7d"}
+                    </button>
+                    <RoleToggle
+                      role={role}
+                      disabled={busy === `role:${user.id}` || (isSelf && role === "admin")}
+                      onChange={(r) => void handleRole(user, r)}
+                    />
+                  </div>
                 </div>
 
                 {/* acessos por módulo */}
