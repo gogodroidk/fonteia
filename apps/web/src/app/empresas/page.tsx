@@ -152,6 +152,19 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
   const [enrichment, setEnrichment] = useState<CompanyEnrichItem | null>(null);
   const [isLoadingEnrich, setIsLoadingEnrich] = useState(false);
 
+  // Token da busca corrente: descarta respostas (cadastro E enriquecimento) de
+  // buscas anteriores. Como o enriquecimento resolve DEPOIS de o cadastro liberar
+  // o botão, sem isto uma busca nova podia ter seu enriquecimento sobrescrito pela
+  // resposta tardia da busca antiga. Também serve de trava de unmount.
+  const reqToken = useRef(0);
+  useEffect(() => {
+    // No unmount, invalida o token corrente para que callbacks em voo não
+    // chamem setState num componente já desmontado.
+    return () => {
+      reqToken.current += 1;
+    };
+  }, []);
+
   async function handleSearch(rawCnpj: string) {
     const cnpj = sanitizeCnpj(rawCnpj);
     if (cnpj === "") {
@@ -159,6 +172,9 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
       setEmpresa(null);
       return;
     }
+
+    const token = ++reqToken.current;
+    const isStale = () => token !== reqToken.current;
 
     // Enriquecimento LAZY do cadastro/QSA no D1 (best-effort; não bloqueia a tela).
     void requestCompanyEnrichment(cnpj);
@@ -174,22 +190,26 @@ function CnpjLookup({ sancoesPorCnpj }: { sancoesPorCnpj: Map<string, SancaoItem
 
     try {
       const result = await lookupCnpj(cnpj);
+      if (isStale()) return;
       setEmpresa(result);
     } catch (err) {
+      if (isStale()) return;
       setError(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
       cancelled = true;
       setIsLoadingEnrich(false);
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
 
     if (!cancelled) {
       fetchCompanyEnrichment(cnpj)
         .then((result) => {
+          if (isStale()) return;
           setEnrichment(result.company);
           setIsLoadingEnrich(false);
         })
         .catch(() => {
+          if (isStale()) return;
           setIsLoadingEnrich(false);
         });
     }
