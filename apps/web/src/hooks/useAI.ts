@@ -31,14 +31,27 @@ export interface UseAIChat extends AiCallState {
   messages: AiChatMessage[];
   /** Envia uma mensagem do usuário; anexa a resposta da IA ao histórico. */
   send: (text: string) => Promise<void>;
+  /**
+   * Reenvia a ÚLTIMA mensagem do usuário (após erro/indisponível) SEM duplicá-la
+   * no histórico. No-op se não há o que reenviar ou se já está carregando.
+   */
+  retry: () => Promise<void>;
+  /** true quando há uma última mensagem do usuário passível de reenvio. */
+  canRetry: boolean;
   /** Limpa o histórico e o estado. */
   reset: () => void;
 }
 
 /**
  * Estado de um chat contextual. `context` (rota/entidade) é capturado por ref
- * para não recriar `send` a cada render; passe um valor estável ou atualize via
- * a prop do componente.
+ * para não recriar `send`/`retry` a cada render; passe um valor estável ou
+ * atualize via a prop do componente.
+ *
+ * Robustez (o "chatzinho" não pode travar):
+ *  - guarda contra envio concorrente (uma chamada por vez);
+ *  - em erro, a mensagem do usuário PERMANECE no histórico e fica disponível para
+ *    `retry()` — o reenvio reaproveita o histórico, sem duplicar o turno;
+ *  - `unavailable` (503) e `error` são estados distintos para a UI tratar.
  */
 export function useAIChat(options?: { context?: string; accessToken?: string }): UseAIChat {
   const [messages, setMessages] = useState<AiChatMessage[]>([]);
@@ -47,17 +60,20 @@ export function useAIChat(options?: { context?: string; accessToken?: string }):
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const send = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  // Refs de controle: trava de concorrência e snapshot do histórico atual (para o
+  // retry reaproveitar exatamente os turnos já renderizados, inclusive o último
+  // turno do usuário que falhou).
+  const inFlightRef = useRef(false);
+  const messagesRef = useRef<AiChatMessage[]>([]);
+  messagesRef.current = messages;
 
-    const userMessage: AiChatMessage = { role: "user", content: trimmed };
-    // Histórico que será enviado (inclui a mensagem nova).
-    let outgoing: AiChatMessage[] = [];
-    setMessages((prev) => {
-      outgoing = [...prev, userMessage];
-      return outgoing;
-    });
+  // Núcleo compartilhado por send/retry: dispara a chamada para um histórico já
+  // montado (que TERMINA num turno do usuário). Anexa a resposta ou seta o erro.
+  const run = useCallback(async (outgoing: AiChatMessage[]) => {
+    if (inFlightRef.current) return; // já há uma chamada em andamento
+    const last = outgoing[outgoing.length - 1];
+    if (!last || last.role !== "user") return; // nada a responder
+    inFlightRef.current = true;
     setState({ loading: true, error: null, unavailable: false });
 
     try {
@@ -74,15 +90,37 @@ export function useAIChat(options?: { context?: string; accessToken?: string }):
       } else {
         setState({ loading: false, error: (error as Error).message, unavailable: false });
       }
+    } finally {
+      inFlightRef.current = false;
     }
   }, []);
+
+  const send = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || inFlightRef.current) return;
+    const outgoing = [...messagesRef.current, { role: "user" as const, content: trimmed }];
+    setMessages(outgoing);
+    await run(outgoing);
+  }, [run]);
+
+  const retry = useCallback(async () => {
+    if (inFlightRef.current) return;
+    const current = messagesRef.current;
+    // Só reenviamos se o histórico termina num turno do usuário (resposta faltou).
+    const last = current[current.length - 1];
+    if (!last || last.role !== "user") return;
+    await run(current);
+  }, [run]);
 
   const reset = useCallback(() => {
     setMessages([]);
     setState(IDLE);
   }, []);
 
-  return { messages, send, reset, ...state };
+  const lastMessage = messages[messages.length - 1];
+  const canRetry = !state.loading && lastMessage?.role === "user";
+
+  return { messages, send, retry, canRetry, reset, ...state };
 }
 
 /* ─── Omnibox (intenção) ───────────────────────────────────────────────── */
