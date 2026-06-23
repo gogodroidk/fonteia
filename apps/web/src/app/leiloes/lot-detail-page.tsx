@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckSquare,
   ExternalLink,
+  Gavel,
   ImageOff,
   Layers,
   Loader2,
@@ -33,6 +34,11 @@ import {
   type LotesParecidosResult,
   type FaixaValor,
 } from "../../features/leiloes/lotes-parecidos-api";
+import {
+  fetchPrecoHistorico,
+  type PrecoHistoricoResult,
+  type PrecoFaixa,
+} from "../../features/leiloes/precos-historicos-api";
 import { ComoDarLance } from "../../components/como-dar-lance";
 import { estimarCustoTotal } from "../../lib/custo-total";
 import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../features/leiloes/fipe-api";
@@ -98,6 +104,12 @@ function formatBRL(value: number): string {
 function formatFaixa(faixa: FaixaValor): string {
   if (faixa.minCents === faixa.maxCents) return formatBRL(faixa.minCents / 100);
   return `${formatBRL(faixa.minCents / 100)} – ${formatBRL(faixa.maxCents / 100)}`;
+}
+
+/** Formata a faixa intermediária p25–p75 (em centavos) em BRL; valor único quando iguais. */
+function formatFaixaCents(lowCents: number, highCents: number): string {
+  if (lowCents === highCents) return formatBRL(lowCents / 100);
+  return `${formatBRL(lowCents / 100)} – ${formatBRL(highCents / 100)}`;
 }
 
 function formatDeadline(value: string): string {
@@ -646,6 +658,281 @@ function PrintReport({ lot, scoring, economia }: PrintReportProps) {
   );
 }
 
+// ─── Referência de preço — lotes encerrados parecidos ─────────────────────────
+//
+// Renderiza, com DADO OFICIAL agregado, por quanto lotes da mesma categoria que
+// já encerraram realmente saíram. Quando há arremate publicado (nWithFinal>0)
+// destacamos o ARREMATE MEDIANO real e o comparamos com a avaliação; sem
+// arremate publicado, mostramos só lance mínimo e avaliação medianos. Cada
+// número aponta para a fonte (lista auditável + citação). Nada é estimado.
+
+/** Linha "rótulo + faixa p25–p75 + mediana" reutilizada para mínimo e avaliação. */
+function FaixaLinha({ label, faixa }: { label: string; faixa: PrecoFaixa }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: "var(--s-3)",
+        flexWrap: "wrap",
+      }}
+    >
+      <span style={{ fontSize: "0.8rem", color: "var(--t-mid)" }}>{label}</span>
+      <span style={{ textAlign: "right" }}>
+        <strong
+          style={{
+            fontSize: "0.95rem",
+            fontWeight: 800,
+            color: "var(--t-hi)",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {formatBRL(faixa.medianCents / 100)}
+        </strong>
+        <span style={{ display: "block", fontSize: "0.72rem", color: "var(--t-low)", fontVariantNumeric: "tabular-nums" }}>
+          típico {formatFaixaCents(faixa.p25Cents, faixa.p75Cents)}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function PrecoHistoricoSection({ result }: { result: PrecoHistoricoResult }) {
+  const { stats, sample, citation } = result;
+  const final = stats.finalValue;
+  // Comparação honesta: arremate mediano vs avaliação mediana (quando ambos existem).
+  const descontoArremate =
+    final && stats.appraisal && stats.appraisal.medianCents > 0
+      ? Math.round((1 - final.medianCents / stats.appraisal.medianCents) * 100)
+      : null;
+
+  const headingId = "preco-historico-heading";
+
+  return (
+    <section
+      className="panel"
+      aria-labelledby={headingId}
+      style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)", padding: "var(--s-5)" }}
+    >
+      <div>
+        <span className="eyebrow">Referência de preço</span>
+        <h3
+          id={headingId}
+          style={{ marginTop: "var(--s-1)", display: "flex", alignItems: "center", gap: "var(--s-2)" }}
+        >
+          <Gavel aria-hidden="true" size={16} />
+          Lotes encerrados parecidos
+          {stats.category ? <span style={{ color: "var(--t-mid)", fontWeight: 600 }}>· {stats.category}</span> : null}
+        </h3>
+      </div>
+
+      {/* Destaque principal: arremate real (se houver) OU lance mínimo mediano. */}
+      {final ? (
+        <div
+          style={{
+            background: "color-mix(in srgb, var(--ok) 8%, var(--surface-2))",
+            border: "1px solid var(--border)",
+            borderLeft: "3px solid var(--ok)",
+            borderRadius: "0 var(--r-md) var(--r-md) 0",
+            padding: "var(--s-3) var(--s-4)",
+          }}
+        >
+          <span className="eyebrow" style={{ color: "var(--ok)" }}>
+            Arremate mediano (valor real de venda)
+          </span>
+          <strong
+            style={{
+              display: "block",
+              marginTop: "var(--s-1)",
+              fontSize: "1.35rem",
+              fontWeight: 800,
+              color: "var(--t-hi)",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1.15,
+            }}
+          >
+            {formatBRL(final.medianCents / 100)}
+          </strong>
+          <span style={{ fontSize: "0.78rem", color: "var(--t-mid)" }}>
+            {final.n} lote{final.n > 1 ? "s" : ""} vendido{final.n > 1 ? "s" : ""} · faixa{" "}
+            {formatFaixaCents(final.minCents, final.maxCents)}
+            {descontoArremate !== null && descontoArremate > 0
+              ? ` · saiu ${descontoArremate}% abaixo da avaliação mediana`
+              : ""}
+          </span>
+        </div>
+      ) : stats.minimumBid ? (
+        <div
+          style={{
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderLeft: "3px solid var(--brand)",
+            borderRadius: "0 var(--r-md) var(--r-md) 0",
+            padding: "var(--s-3) var(--s-4)",
+          }}
+        >
+          <span className="eyebrow">Lance mínimo mediano</span>
+          <strong
+            style={{
+              display: "block",
+              marginTop: "var(--s-1)",
+              fontSize: "1.35rem",
+              fontWeight: 800,
+              color: "var(--brand-ink)",
+              fontVariantNumeric: "tabular-nums",
+              lineHeight: 1.15,
+            }}
+          >
+            {formatBRL(stats.minimumBid.medianCents / 100)}
+          </strong>
+          <span style={{ fontSize: "0.78rem", color: "var(--t-mid)" }}>
+            Nenhum arremate publicado nesta categoria — referência apenas por edital.
+          </span>
+        </div>
+      ) : null}
+
+      {/* Faixas típicas (p25–p75) de mínimo e avaliação. */}
+      {stats.minimumBid || stats.appraisal ? (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--s-3)",
+            padding: "var(--s-3) var(--s-4)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--r-md)",
+          }}
+        >
+          {stats.minimumBid ? <FaixaLinha label="Lance mínimo" faixa={stats.minimumBid} /> : null}
+          {stats.appraisal ? <FaixaLinha label="Avaliação oficial" faixa={stats.appraisal} /> : null}
+        </div>
+      ) : null}
+
+      {/* Transparência da amostra: quantos lotes, quantos com arremate. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s-2)" }}>
+        <span className="badge badge--neutral">
+          {stats.n} lote{stats.n > 1 ? "s" : ""} encerrado{stats.n > 1 ? "s" : ""}
+        </span>
+        <span className={stats.nWithFinal > 0 ? "badge badge--ok" : "badge badge--neutral"}>
+          {stats.nWithFinal > 0
+            ? `${stats.nWithFinal} com arremate publicado`
+            : "sem arremate publicado"}
+        </span>
+        {stats.months > 0 ? (
+          <span className="badge badge--neutral">últimos {stats.months} meses</span>
+        ) : null}
+      </div>
+
+      {/* Lista auditável — lotes encerrados reais, cada um com link à fonte. */}
+      {sample.length > 0 ? (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+          {sample.map((s) => {
+            const cidade = displayCity(s.city);
+            return (
+              <li
+                key={s.receitaLotId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "var(--s-3)",
+                  padding: "var(--s-3)",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--r-md)",
+                }}
+              >
+                <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span
+                    style={{
+                      fontSize: "0.875rem",
+                      fontWeight: 700,
+                      color: "var(--t-hi)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {s.title}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--t-low)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "var(--s-1)",
+                    }}
+                  >
+                    {cidade !== "—" ? (
+                      <>
+                        <MapPin aria-hidden="true" size={11} />
+                        {cidade}
+                      </>
+                    ) : null}
+                    {s.closedAt ? <span>{cidade !== "—" ? "· " : ""}encerrado {formatDateShort(s.closedAt)}</span> : null}
+                  </span>
+                </span>
+                <span style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: "var(--s-3)" }}>
+                  <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                    {typeof s.finalValueCents === "number" ? (
+                      <span
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: 800,
+                          color: "var(--ok)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {formatBRL(s.finalValueCents / 100)}
+                      </span>
+                    ) : typeof s.minimumBidCents === "number" ? (
+                      <span
+                        style={{
+                          fontSize: "0.875rem",
+                          fontWeight: 800,
+                          color: "var(--brand-ink)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {formatBRL(s.minimumBidCents / 100)}
+                      </span>
+                    ) : null}
+                    <span style={{ fontSize: "0.68rem", color: "var(--t-low)" }}>
+                      {typeof s.finalValueCents === "number" ? "arremate" : "lance mín."}
+                    </span>
+                  </span>
+                  {s.sourceUrl ? (
+                    <a
+                      href={s.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="btn btn--ghost"
+                      aria-label={`Abrir fonte oficial do lote ${s.title}`}
+                      style={{ flexShrink: 0, padding: "var(--s-2)", minHeight: 36 }}
+                    >
+                      <ExternalLink aria-hidden="true" size={13} />
+                    </a>
+                  ) : null}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {/* Rodapé com a citação — rastreabilidade obrigatória. */}
+      <p style={{ fontSize: "0.75rem", color: "var(--t-low)", margin: 0 }}>
+        Fonte: {citation.sourceName}
+        {citation.note ? ` — ${citation.note}` : ""} Valores reais de lotes já encerrados, usados apenas
+        como referência — cada bem tem estado e condições próprios.
+      </p>
+    </section>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function LotDetailPage({
@@ -738,6 +1025,29 @@ export function LotDetailPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lot.id, session?.access_token]);
+
+  // Referência de preço — lotes ENCERRADOS da mesma categoria (RPC auction_price_intelligence).
+  // Mostra por quanto lotes parecidos realmente saíram (arremate real quando publicado).
+  // Gracioso: null enquanto carrega e some por completo quando vem null (sem categoria,
+  // sem lotes encerrados, ok=false, rede/404). Nunca inventa número.
+  const [precoHist, setPrecoHist] = useState<PrecoHistoricoResult | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setPrecoHist(null);
+    const categoria = lot.category?.trim();
+    if (!categoria) return;
+    void fetchPrecoHistorico(categoria, {
+      months: 36,
+      sample: 6,
+      accessToken: session?.access_token,
+    }).then((r) => {
+      if (!cancelled) setPrecoHist(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lot.id, lot.category, session?.access_token]);
 
   // SHA-256 hash do conteúdo factual exibido (prova de integridade do que está na tela).
   // Computado async via Web Crypto a partir de campos estáveis do lote (sem inferências).
@@ -2101,6 +2411,14 @@ export function LotDetailPage({
               orientação inicial, não como avaliação definitiva.
             </p>
           </section>
+
+          {/* ── Referência de preço — lotes ENCERRADOS parecidos ──────────────
+              Dado oficial agregado (RPC auction_price_intelligence): por quanto
+              lotes da mesma categoria realmente saíram. Arremate real só quando
+              publicado (nWithFinal>0). Some por completo quando vem null. */}
+          {precoHist ? (
+            <PrecoHistoricoSection result={precoHist} />
+          ) : null}
 
           {/* ── Lotes parecidos (referência de valor) ─────────────────────────
               Reusa o embedding salvo do próprio lote — sem gastar embedding por
