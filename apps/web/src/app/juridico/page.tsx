@@ -205,25 +205,45 @@ function ProposicaoCard({ proposicao, onSelect }: ProposicaoCardProps) {
 
 // ─── Processo judicial card ───────────────────────────────────────────────────
 
+/**
+ * Coerção defensiva final: garante que NENHUM valor renderizado no JSX seja um
+ * objeto. A camada de dados (`normalizeProcessoAttributes`) já entrega strings,
+ * mas o CNJ DataJud é uma fonte volátil — se um campo escapar como objeto, isto
+ * evita o crash "Objects are not valid as a React child" e mostra "" no lugar.
+ */
+function asText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  if (value != null && typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const c = o["nome"] ?? o["descricao"] ?? o["titulo"];
+    return typeof c === "string" ? c : "";
+  }
+  return "";
+}
+
 function ProcessoCard({ processo }: { processo: ProcessoJudicialItem }) {
   const { attributes, numeroProcesso } = processo;
   const assunto = assuntoPrincipal(attributes);
+  const classeText = asText(attributes.classe);
+  const grauText = asText(attributes.grau);
+  const tribunalText = asText(attributes.tribunal);
 
   return (
     <article
       className="card card--hover"
       style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}
-      aria-label={`Processo — ${numeroProcesso || attributes.classe || "Sem número"}`}
+      aria-label={`Processo — ${numeroProcesso || classeText || "Sem número"}`}
     >
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
         {/* Top: classe + grau */}
         <div className="row between" style={{ gap: 8, alignItems: "center" }}>
           <span className="badge badge--neutral" style={{ flexShrink: 0 }}>
-            {attributes.classe || "—"}
+            {classeText || "—"}
           </span>
-          {attributes.grau && (
+          {grauText !== "" && (
             <span className="tiny muted" style={{ flexShrink: 0 }}>
-              {attributes.grau}
+              {grauText}
             </span>
           )}
         </div>
@@ -244,7 +264,7 @@ function ProcessoCard({ processo }: { processo: ProcessoJudicialItem }) {
         </div>
 
         {/* Tribunal */}
-        {attributes.tribunal && (
+        {tribunalText !== "" && (
           <div
             className="tiny muted"
             style={{ display: "flex", alignItems: "center", gap: 5 }}
@@ -257,7 +277,7 @@ function ProcessoCard({ processo }: { processo: ProcessoJudicialItem }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {attributes.tribunal}
+              {tribunalText}
             </span>
           </div>
         )}
@@ -301,6 +321,9 @@ function ProcessoCard({ processo }: { processo: ProcessoJudicialItem }) {
     </article>
   );
 }
+
+/** Alias só para testes de renderização do card de processo. Não usar em produção. */
+export const ProcessoCardForTest = ProcessoCard;
 
 // ─── Select control (mobile-friendly native select styled como chip) ──────────
 
