@@ -30,6 +30,7 @@ import { CouponRedeem } from "../../components/coupon-redeem";
 import { usePlan } from "../../lib/use-plan";
 import type { PlanId } from "../../lib/use-plan";
 import { requestStripePortalUrl } from "../../lib/stripe-portal-client";
+import { useIsAdmin } from "../../components/admin/use-is-admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1099,6 +1100,9 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
   const [activeTab, setActiveTab] = useState<TabId>("perfil");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { plan, isPro, trial, until, loading: planLoading } = usePlan();
+  // Acesso ao painel de administração: aparece SÓ para quem tem role=admin
+  // (gate server-side em profiles via RLS). Para os demais, nem renderiza.
+  const { isAdmin } = useIsAdmin();
 
   function renderPanel() {
     switch (activeTab) {
@@ -1146,6 +1150,56 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
 
   return (
     <section className="account-page" style={{ display: "flex", flexDirection: "column" }}>
+      {/* ── Acesso ao painel de administração (só admin) ── */}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => navigate("/app/admin")}
+          aria-label="Abrir o painel de administração"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+            width: "100%",
+            padding: 18,
+            marginBottom: 20,
+            borderRadius: 14,
+            border: "none",
+            cursor: "pointer",
+            textAlign: "left",
+            font: "inherit",
+            color: "#fff",
+            background: "linear-gradient(135deg,var(--brand),#13294d)",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(255,255,255,0.14)",
+              flexShrink: 0,
+            }}
+          >
+            <ShieldCheck size={22} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontWeight: 800, fontSize: 15 }}>
+              Painel de Administração
+            </span>
+            <span style={{ display: "block", fontSize: 12.5, opacity: 0.85, marginTop: 2, lineHeight: 1.45 }}>
+              Receita, usuários, uso, cupons e dados da plataforma — acesso exclusivo do administrador.
+            </span>
+          </span>
+          <ArrowRight size={18} aria-hidden="true" style={{ flexShrink: 0 }} />
+        </button>
+      )}
+
       {/* ── Desktop: two-column layout ── */}
       <div
         className="account-tabs-layout"

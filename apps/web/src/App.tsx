@@ -771,6 +771,18 @@ function AppShell({ path, navigate }: AppShellProps) {
                   <span className="shell-upgrade-label">Upgrade</span>
                 </button>
               </HelpHint>
+              {isAdmin && (
+                <button
+                  className="btn btn--icon btn--ghost shell-admin"
+                  type="button"
+                  onClick={() => go("/app/admin")}
+                  title="Painel de administração"
+                  aria-label="Painel de administração"
+                  style={{ color: "var(--brand-ink)" }}
+                >
+                  <ShieldCheck size={18} aria-hidden="true" />
+                </button>
+              )}
               <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
                 {avatarUrl ? <img src={avatarUrl} alt={displayName} width={40} height={40} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
               </button>
