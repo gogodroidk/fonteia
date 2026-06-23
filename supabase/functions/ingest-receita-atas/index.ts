@@ -18,8 +18,8 @@
 //   service_role-only. Guard opcional INGEST_CRON_SECRET. verify_jwt=false.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { extractText, getDocumentProxy } from "npm:unpdf";
-import { parseExtrato } from "./parse-extrato.ts";
+import { getDocumentProxy } from "npm:unpdf";
+import { parseExtrato, parseTotalGeral } from "./parse-extrato.ts";
 
 const SLE = "https://www25.receita.fazenda.gov.br/sle-sociedade";
 const UA = "FonteiaBot/1.0 (+mailto:contato@fontebrasil.online)";
@@ -68,8 +68,32 @@ async function extratoText(edle: string): Promise<string | null> {
   if (!data?.data) return null;
   const bytes = b64ToBytes(data.data);
   const pdf = await getDocumentProxy(bytes);
-  const { text } = await extractText(pdf, { mergePages: true });
-  return typeof text === "string" ? text : Array.isArray(text) ? text.join("\n") : null;
+  // Reconstrução POSICIONAL (como pdftotext -layout): agrupa os fragmentos de
+  // texto por coordenada Y (linha) e ordena por X (coluna). O extractText liso do
+  // unpdf embaralha a ordem coluna×linha e gera off-by-one (valor no lote errado);
+  // reconstruir por posição preserva "Lote | doc | nome | valor" na ordem certa.
+  const lines: string[] = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const rowsByY = new Map<number, Array<{ x: number; s: string }>>();
+    for (const it of content.items as Array<{ str?: string; transform?: number[] }>) {
+      const s = typeof it.str === "string" ? it.str : "";
+      if (s.trim() === "") continue;
+      const tr = it.transform ?? [0, 0, 0, 0, 0, 0];
+      const y = Math.round(tr[5] ?? 0);
+      const x = tr[4] ?? 0;
+      const arr = rowsByY.get(y) ?? [];
+      arr.push({ x, s });
+      rowsByY.set(y, arr);
+    }
+    const ys = [...rowsByY.keys()].sort((a, b) => b - a); // topo→base (Y desc no PDF)
+    for (const y of ys) {
+      const parts = (rowsByY.get(y) ?? []).sort((a, b) => a.x - b.x).map((o) => o.s);
+      lines.push(parts.join(" "));
+    }
+  }
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -124,6 +148,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let processed = 0;
     let lotsUpdated = 0;
     let naoArrematados = 0;
+    let mismatchEditais = 0;
     const errors: string[] = [];
 
     for (const edle of editais) {
@@ -136,8 +161,18 @@ Deno.serve(async (req: Request): Promise<Response> => {
           continue;
         }
         const rows = parseExtrato(text);
-        naoArrematados += rows.filter((r) => !r.arrematado).length;
         const arrematados = rows.filter((r) => r.arrematado);
+        // Validação anti-lixo: a soma dos arremates DEVE bater com o "Total Geral"
+        // oficial do extrato. Se não bate, o PDF foi mal extraído → pula o edital
+        // (jamais grava arremate errado). Rastreável via errors[].
+        const parsedSum = arrematados.reduce((a, r) => a + (r.valorCents ?? 0), 0);
+        const totalGeral = parseTotalGeral(text);
+        if (totalGeral != null && parsedSum !== totalGeral) {
+          mismatchEditais += 1;
+          errors.push(`${edle}: soma ${parsedSum} != Total Geral ${totalGeral} — parsing divergente, pulado`);
+          continue;
+        }
+        naoArrematados += rows.filter((r) => !r.arrematado).length;
         if (arrematados.length > 0) {
           lotsUpdated += await applyResults(edle, arrematados);
         }
@@ -155,6 +190,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
       processedEditais: processed,
       lotsUpdated,
       naoArrematados,
+      mismatchEditais,
       offset,
       nextOffset,
       errors: errors.slice(0, 20),
