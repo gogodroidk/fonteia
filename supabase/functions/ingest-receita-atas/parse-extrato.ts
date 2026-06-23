@@ -51,7 +51,7 @@ const LOTE_NUM_RE = /(\d{1,5})(?![\d./-])/g;
 function nextLoteNumber(s: string, from: number): { lote: number; numEnd: number } | null {
   LOTE_NUM_RE.lastIndex = from;
   const m = LOTE_NUM_RE.exec(s);
-  if (!m || m.index == null) return null;
+  if (!m || m.index == null || m[1] === undefined) return null;
   return { lote: Number(m[1]), numEnd: m.index + m[1].length };
 }
 
