@@ -19,6 +19,7 @@ import {
   Database,
   Gift,
   Layers,
+  MessageSquare,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -63,14 +64,16 @@ import {
   UsageSection,
 } from "../../components/admin/metrics-sections";
 import { AuditSection } from "../../components/admin/audit-section";
+import { FeedbackSection } from "../../components/admin/feedback-section";
 
-type AdminTab = "overview" | "revenue" | "users" | "usage" | "coupons" | "data" | "sources" | "audit";
+type AdminTab = "overview" | "revenue" | "users" | "usage" | "coupons" | "data" | "sources" | "audit" | "feedback";
 
 const TABS: Array<{ id: AdminTab; label: string; icon: typeof BarChart3 }> = [
   { id: "overview", label: "Visão geral", icon: BarChart3 },
   { id: "revenue", label: "Receita & Assinaturas", icon: CreditCard },
   { id: "usage", label: "Uso", icon: TrendingUp },
   { id: "users", label: "Usuários", icon: Users },
+  { id: "feedback", label: "Suporte", icon: MessageSquare },
   { id: "coupons", label: "Cupons", icon: Gift },
   { id: "data", label: "Dados", icon: Database },
   { id: "sources", label: "Fontes & Módulos", icon: Layers },
@@ -381,6 +384,8 @@ export function AdminPage() {
         ) : loading ? (
           <LoadingState label="Carregando auditoria…" />
         ) : null)}
+
+      {tab === "feedback" && <FeedbackSection />}
 
       <style>{`@keyframes adminspin{from{transform:rotate(0)}to{transform:rotate(360deg)}}`}</style>
     </section>
