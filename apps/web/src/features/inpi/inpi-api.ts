@@ -314,28 +314,10 @@ async function fetchTrademarksByCnpj(
   return out;
 }
 
-/**
- * Busca marcas por NOME, titular ou classe NICE — a forma principal de busca.
- *
- * O servidor faz `name LIKE %q%` (busca textual no `d1-bridge`). Com `limit: 100`
- * pedimos uma página ampla; o retorno pode ser vazio se ainda não houver edições
- * da RPI ingeridas — a tela trata esse estado com mensagem honesta.
- *
- * @param termo - Nome da marca, nome do titular ou número de classe NICE.
- * @param fetcher - Implementação de fetch (padrão: global fetch).
- */
-export async function fetchTrademarksByQuery(
-  termo: string,
-  fetcher: typeof fetch = fetch,
-): Promise<InpiTrademark[]> {
-  const q = termo.trim();
-  if (q === "") return [];
-
-  const { rows } = await fetchD1Entities<TrademarkAttributes>(
-    { kind: "trademark", q, limit: 100 },
-    fetcher,
-  );
-
+/** Mapeia linhas D1 (kind='trademark') → InpiTrademark[], filtrando fonte/dups. */
+function rowsToTrademarks(
+  rows: Array<{ id: string; name: string; cnpj: string | null; attributes: TrademarkAttributes }>,
+): InpiTrademark[] {
   const out: InpiTrademark[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
@@ -350,6 +332,48 @@ export async function fetchTrademarksByQuery(
     out.push(rowToTrademark(row, ""));
   }
   return out;
+}
+
+/**
+ * Busca marcas por NOME, titular ou classe NICE — a forma principal de busca.
+ *
+ * O servidor faz `name LIKE %q%` (busca textual no `d1-bridge`). Com `limit: 100`
+ * pedimos uma página ampla; o retorno pode ser vazio se ainda não houver edições
+ * da RPI ingeridas — a tela trata esse estado com mensagem honesta.
+ *
+ * RASTREABILIDADE / HONESTIDADE: as marcas vivem SÓ no Cloudflare D1 (não no
+ * Supabase). Se o D1 falha, o cliente compartilhado cai no Supabase, que (a) não
+ * tem `trademark` e (b) nem aplica o filtro `q` — devolveria vazio ou ruído.
+ * Tratar isso como "nenhuma marca" mente para o usuário (existem ~29,5k). Por
+ * isso, quando a origem efetiva é o fallback Supabase, lançamos um erro claro
+ * — a tela já o mostra no banner vermelho, em vez de um "0 resultados" enganoso.
+ *
+ * @param termo - Nome da marca, nome do titular ou número de classe NICE.
+ * @param fetcher - Implementação de fetch (padrão: global fetch).
+ */
+export async function fetchTrademarksByQuery(
+  termo: string,
+  fetcher: typeof fetch = fetch,
+): Promise<InpiTrademark[]> {
+  const q = termo.trim();
+  if (q === "") return [];
+
+  const { rows, source } = await fetchD1Entities<TrademarkAttributes>(
+    { kind: "trademark", q, limit: 100 },
+    fetcher,
+  );
+
+  // Origem = Supabase ⇒ o D1 (única fonte das marcas) está indisponível. Não
+  // existe marca no Supabase e o `q` não foi aplicado lá: um resultado vazio aqui
+  // seria mentira. Erro honesto e rastreável em vez de "0 resultados".
+  if (source === "supabase" && rows.length === 0) {
+    throw new Error(
+      "A base de marcas do INPI (Cloudflare D1) está temporariamente indisponível. " +
+        "Tente novamente em instantes ou consulte a busca oficial do INPI (pePI).",
+    );
+  }
+
+  return rowsToTrademarks(rows);
 }
 
 // ─── Filtros client-side ─────────────────────────────────────────────────────
