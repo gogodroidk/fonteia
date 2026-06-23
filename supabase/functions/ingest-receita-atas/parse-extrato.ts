@@ -1,15 +1,14 @@
-// Parser do "Extrato do Leilão" da Receita Federal (SLE).
+// Parser do "Extrato do Leilão" da Receita Federal (SLE). Módulo PURO.
 //
-// CÓPIA SINCRONIZADA de packages/sources/src/connectors/receita-extrato.ts —
-// Edge Functions (Deno) não importam de packages/. O TESTE canônico vive lá
-// (receita-extrato.test.ts, 13 casos). Mantenha as duas idênticas.
+// LINHA A LINHA (robusto): só processa linhas que começam com o número do lote.
+// O preâmbulo do documento (MINISTÉRIO…, Data:, Edital Nº…, UA: 0517800…,
+// Processo…) e os cabeçalhos de página NÃO começam com um número de lote, então
+// são naturalmente ignorados — sem poluir a associação lote↔valor. O texto chega
+// já reconstruído por POSIÇÃO (uma linha visual por linha), então o valor de cada
+// lote está na mesma linha do seu número.
 //
-// O extrato é um PDF público (api/edital/{u}/{n}/{e}/extrato-leilao) com o
-// RESULTADO de cada lote: número, CNPJ/CPF do arrematante (CPF mascarado pela
-// Receita), nome e valor de arremate em Reais. É a única fonte do preço FINAL.
-//
-// Tabela esperada (texto extraído):  Lote | CNPJ/CPF | Arrematante | Valor Arrematação
-// Módulo PURO (sem rede, sem Deno/Node API): recebe texto e devolve uma linha por lote.
+// Tabela: Lote | CNPJ/CPF | Arrematante | Valor Arrematação.
+// CPF de pessoa física já vem MASCARADO da Receita; CNPJ é público.
 
 export interface ExtratoLote {
   lote: number;
@@ -19,10 +18,12 @@ export interface ExtratoLote {
   arrematado: boolean;
 }
 
-const MONEY_RE = /^\d{1,3}(?:\.\d{3})*,\d{2}$/;
+const MONEY_ANCHORED = /^\d{1,3}(?:\.\d{3})*,\d{2}$/;
+const MONEY_GLOBAL = /\d{1,3}(?:\.\d{3})*,\d{2}/g;
+
 export function ptBrMoneyToCents(raw: string): number | null {
   const s = raw.trim();
-  if (!MONEY_RE.test(s)) return null;
+  if (!MONEY_ANCHORED.test(s)) return null;
   const cents = Number(s.replace(/\./g, "").replace(",", ""));
   return Number.isInteger(cents) && cents >= 0 ? cents : null;
 }
@@ -31,68 +32,55 @@ const CNPJ_RE = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/;
 const CPF_MASKED_RE = /[\d*]{3}\.[\d*]{3}\.[\d*]{3}-[\d*]{2}/;
 const DOC_RE = new RegExp(`${CNPJ_RE.source}|${CPF_MASKED_RE.source}`);
 
-function findDoc(s: string): { doc: string; start: number; end: number } | null {
+function findDoc(s: string): { doc: string; end: number } | null {
   const m = s.match(DOC_RE);
   if (!m || m.index == null) return null;
-  return { doc: m[0], start: m.index, end: m.index + m[0].length };
+  return { doc: m[0], end: m.index + m[0].length };
 }
 
-const NAO_ARREMATADO_RE = /lote\s+n[aã]o\s+arrematad\w*/i;
+const NAO_ARREMATADO_RE = /n[aã]o\s+arrematad\w*/i;
 const TOTAL_GERAL_RE = /total\s+geral/i;
-const HEADER_RE = /lote\s+cnpj\/?cpf\s+arrematante\s+valor\s+arremata\w*/gi;
+const LOTE_LINE_RE = /^(\d{1,5})\s+(.+)$/;
 
-function squish(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
-}
-
-const TERMINATOR_RE = new RegExp(`${NAO_ARREMATADO_RE.source}|\\d{1,3}(?:\\.\\d{3})*,\\d{2}`, "gi");
-
-const LOTE_NUM_RE = /(\d{1,5})(?![\d./-])/g;
-function nextLoteNumber(s: string, from: number): { lote: number; numEnd: number } | null {
-  LOTE_NUM_RE.lastIndex = from;
-  const m = LOTE_NUM_RE.exec(s);
-  if (!m || m.index == null || m[1] === undefined) return null;
-  return { lote: Number(m[1]), numEnd: m.index + m[1].length };
+// "Total Geral .... 423.311,00" — somatório oficial, usado para VALIDAR o parsing
+// (a soma dos arremates deve bater com isto; senão o edital é pulado).
+const TOTAL_GERAL_VALUE_RE = /total\s+geral\D*(\d{1,3}(?:\.\d{3})*,\d{2})/i;
+export function parseTotalGeral(text: string): number | null {
+  if (!text) return null;
+  const m = text.replace(/\s+/g, " ").match(TOTAL_GERAL_VALUE_RE);
+  return m && m[1] ? ptBrMoneyToCents(m[1]) : null;
 }
 
 export function parseExtrato(text: string): ExtratoLote[] {
   if (!text) return [];
-
-  const flat = text.replace(/ /g, " ").replace(/\s+/g, " ");
-  const stream = flat.replace(HEADER_RE, " ");
-
   const out: ExtratoLote[] = [];
-  let cursor = 0;
 
-  TERMINATOR_RE.lastIndex = 0;
-  let term: RegExpExecArray | null;
-  while ((term = TERMINATOR_RE.exec(stream)) !== null) {
-    const termText = term[0];
-    const termEnd = TERMINATOR_RE.lastIndex;
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    if (!line || TOTAL_GERAL_RE.test(line)) continue;
 
-    const segment = stream.slice(cursor, termEnd);
-    cursor = termEnd;
-    const termStartInSegment = segment.length - termText.length;
+    const m = line.match(LOTE_LINE_RE);
+    if (!m || m[1] === undefined || m[2] === undefined) continue; // não é linha de lote
+    const lote = Number(m[1]);
+    const rest = m[2];
 
-    const head = nextLoteNumber(segment, 0);
-    if (!head) continue;
-
-    if (TOTAL_GERAL_RE.test(segment)) continue;
-
-    if (NAO_ARREMATADO_RE.test(termText)) {
-      out.push({ lote: head.lote, doc: null, nome: null, valorCents: null, arrematado: false });
+    if (NAO_ARREMATADO_RE.test(rest)) {
+      out.push({ lote, doc: null, nome: null, valorCents: null, arrematado: false });
       continue;
     }
 
-    const valorCents = ptBrMoneyToCents(termText);
-    const between = segment.slice(head.numEnd, termStartInSegment);
-    const doc = findDoc(between);
-    const nome = doc ? squish(between.slice(doc.end)) || null : squish(between) || null;
+    const monies = rest.match(MONEY_GLOBAL);
+    if (!monies || monies.length === 0) continue; // linha de lote sem valor → ignora
+    const valorCents = ptBrMoneyToCents(monies[monies.length - 1] ?? "");
+
+    const doc = findDoc(rest);
+    let nome = doc ? rest.slice(doc.end) : rest;
+    nome = nome.replace(MONEY_GLOBAL, "").replace(/\s+/g, " ").trim();
 
     out.push({
-      lote: head.lote,
+      lote,
       doc: doc ? doc.doc : null,
-      nome,
+      nome: nome || null,
       valorCents,
       arrematado: valorCents != null && valorCents > 0,
     });
