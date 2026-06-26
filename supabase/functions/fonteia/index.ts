@@ -236,9 +236,11 @@ function lotFactsForPrompt(lot: ReceitaLeilaoLot): string {
 }
 
 async function callGemini(model: string, apiKey: string, userText: string): Promise<Response> {
+  // O Raio-X gera mais (maxOutputTokens 4096) e usa modelo com raciocínio: damos
+  // 60s (igual ao /ia/edital) para não abortar análises legítimas que passam de 30s.
   return await callGeminiRaw(model, apiKey, FONTEIA_SYSTEM_PROMPT, [
     { role: "user", parts: [{ text: userText }] },
-  ], { temperature: 0.3, maxOutputTokens: 4096 });
+  ], { temperature: 0.3, maxOutputTokens: 4096 }, 60000);
 }
 
 interface GeminiContent {
@@ -254,6 +256,7 @@ async function callGeminiRaw(
   systemPrompt: string,
   contents: GeminiContent[],
   generationConfig: Record<string, unknown>,
+  timeoutMs = 30000,
 ): Promise<Response> {
   return await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
@@ -263,7 +266,7 @@ async function callGeminiRaw(
       contents,
       generationConfig,
     }),
-  }, 30000);
+  }, timeoutMs);
 }
 
 // Percorre a lista de modelos (DEFAULT_MODELS ou GEMINI_MODEL) e devolve o primeiro
