@@ -39,8 +39,8 @@ const goals = [
     id: "revender",
     icon: TrendingUp,
     title: "Revender com margem",
-    desc: "Compro pra revender e preciso enxergar o lucro estimado.",
-    hint: "Recomendamos começar por: Raio-X do lote — veja riscos e estimativa de valor antes do lance.",
+    desc: "Compro pra revender e quero ver o desconto de mercado antes do lance.",
+    hint: "Recomendamos começar por: Raio-X do lote — veja riscos e a diferença entre lance e avaliação oficial antes do lance.",
     hintRoute: "/lotes",
   },
   {
@@ -640,19 +640,21 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
             </span>
 
             <h1 className="onboarding-body-h1">
-              Como quer ser avisado?
+              Quer ser avisado quando surgir algo?
             </h1>
             <p className="onboarding-sub">
-              Quando aparecer um lote ou edital no seu perfil — ou o prazo estiver chegando — te avisamos por aqui.
+              Opcional. Se quiser, escolha por onde te avisamos quando aparecer um lote ou edital no
+              seu perfil — ou quando o prazo estiver chegando. Você controla e pode desligar quando
+              quiser.
             </p>
 
-            <div className="onboarding-options" role="group" aria-label="Selecione o canal de alerta">
+            <div className="onboarding-options" role="group" aria-label="Selecione o canal de alerta (opcional)">
               {channels.map(({ id, icon: Icon, title, desc }) => (
                 <button
                   key={id}
                   type="button"
                   className={`onboarding-option${channel === id ? " selected" : ""}`}
-                  onClick={() => setChannel(id)}
+                  onClick={() => setChannel((prev) => (prev === id ? null : id))}
                   aria-pressed={channel === id}
                 >
                   <div className="onboarding-option-icon" aria-hidden="true">
@@ -674,10 +676,9 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                 type="button"
                 className="onb-btn-primary"
                 style={{ flex: "1", maxWidth: "200px" }}
-                disabled={channel === null}
                 onClick={() => setStep(3)}
               >
-                Continuar
+                {channel === null ? "Decidir depois" : "Continuar"}
               </button>
             </div>
           </div>

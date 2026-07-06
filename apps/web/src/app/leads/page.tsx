@@ -757,7 +757,7 @@ function EmptyFilterState({ onClear }: { onClear: () => void }) {
       </div>
       <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lead com esses filtros</div>
       <p className="muted small" style={{ margin: 0, maxWidth: 340 }}>
-        Tente ampliar a busca, trocar a UF ou a faixa de valor.
+        Tente ampliar a busca, trocar a UF, o ramo ou a faixa de valor.
       </p>
       <button className="btn btn--ghost btn--sm" onClick={onClear} type="button">
         Limpar filtros
@@ -778,6 +778,7 @@ export function LeadsPage() {
   // ── Filters ──
   const [query, setQuery] = useState("");
   const [uf, setUf] = useState("todas");
+  const [ramo, setRamo] = useState("todos");
   const [valor, setValor] = useState<ValorFilter>("todos");
   const [recencia, setRecencia] = useState<RecenciaFilter>("todas");
   const [gatilho, setGatilho] = useState<GatilhoFilter>("todos");
@@ -786,6 +787,9 @@ export function LeadsPage() {
   // ── Pagination ──
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Retry: incrementar recarrega os dados sem F5 na página ──
+  const [reloadKey, setReloadKey] = useState(0);
 
   // ── Load ──
   useEffect(() => {
@@ -812,7 +816,7 @@ export function LeadsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   // ── UF options (derived) ──
   const ufOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
@@ -822,11 +826,31 @@ export function LeadsPage() {
     return [["todas", "Todas UF"], ...distinct.map((u) => [u, u] as const)];
   }, [leads]);
 
+  // ── Ramo options (derived do objeto do contrato via inferSetor) ──
+  // O ramo é inferido do OBJETO do contrato (não do CNAE da empresa) — por isso
+  // o rótulo é "Ramo do contrato". Só mostramos ramos presentes nos leads
+  // carregados, com contagem, para a descoberta ser guiada e honesta.
+  const ramoOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
+    const counts = new Map<string, number>();
+    for (const l of leads) {
+      const setor = inferSetor(l.objeto);
+      counts.set(setor, (counts.get(setor) ?? 0) + 1);
+    }
+    const distinct = Array.from(counts.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0], "pt-BR"),
+    );
+    return [
+      ["todos", "Todos os ramos"],
+      ...distinct.map(([setor, n]) => [setor, `${setor} (${n})`] as const),
+    ];
+  }, [leads]);
+
   // ── Filtered + sorted ──
   const filtered = useMemo<Lead[]>(() => {
     const base = leads.filter((l) => {
       if (!matchesSearch(l, query)) return false;
       if (uf !== "todas" && l.uf !== uf) return false;
+      if (ramo !== "todos" && inferSetor(l.objeto) !== ramo) return false;
       if (valor !== "todos" && l.valorGlobal < VALOR_MIN[valor]) return false;
       if (recencia !== "todas") {
         const days = recencia === "7d" ? 7 : recencia === "30d" ? 30 : 90;
@@ -862,12 +886,12 @@ export function LeadsPage() {
     }
 
     return sorted;
-  }, [leads, query, uf, valor, recencia, gatilho, sortOrder]);
+  }, [leads, query, uf, ramo, valor, recencia, gatilho, sortOrder]);
 
   // Reinicia paginação ao mudar filtros
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [query, uf, valor, recencia, gatilho, sortOrder]);
+  }, [query, uf, ramo, valor, recencia, gatilho, sortOrder]);
 
   // Infinite scroll
   useEffect(() => {
@@ -892,6 +916,7 @@ export function LeadsPage() {
   function clearFilters() {
     setQuery("");
     setUf("todas");
+    setRamo("todos");
     setValor("todos");
     setRecencia("todas");
     setGatilho("todos");
@@ -901,6 +926,7 @@ export function LeadsPage() {
   const hasActiveFilters =
     query !== "" ||
     uf !== "todas" ||
+    ramo !== "todos" ||
     valor !== "todos" ||
     recencia !== "todas" ||
     gatilho !== "todos" ||
@@ -939,11 +965,24 @@ export function LeadsPage() {
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
             color: "var(--danger)",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
             fontSize: 13.5,
             fontWeight: 600,
           }}
         >
-          Erro ao carregar dados: {errorMessage}
+          <span>Erro ao carregar dados: {errorMessage}</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            style={{ flexShrink: 0 }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 
@@ -1004,6 +1043,9 @@ export function LeadsPage() {
         >
           {ufOptions.length > 1 && (
             <FilterSelect label="UF" value={uf} options={ufOptions} onChange={setUf} />
+          )}
+          {ramoOptions.length > 1 && (
+            <FilterSelect label="Ramo do contrato" value={ramo} options={ramoOptions} onChange={setRamo} />
           )}
           <FilterSelect label="Valor" value={valor} options={VALOR_OPTIONS} onChange={setValor} />
           <FilterSelect label="Recência" value={recencia} options={RECENCIA_OPTIONS} onChange={setRecencia} />

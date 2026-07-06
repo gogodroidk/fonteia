@@ -35,6 +35,26 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 }
 
+/**
+ * Lê o valor de mercado sugerido a partir da URL (deep-link vindo do lote).
+ *
+ * Aceita `?vm=` ou `?avaliacao=` — ambos representam o valor de mercado/avaliação
+ * do bem. NÃO usamos `?lanceMinimo=` para pré-preencher este campo: o lance mínimo
+ * do edital não é o valor de mercado do bem, e confundi-los levaria a um cálculo
+ * enganoso. O número pode vir "cru" (414000) ou já formatado; parseBRL normaliza.
+ *
+ * SSG-safe: durante o prerender não há `window`, então retorna "" (campo vazio).
+ */
+function readValorMercadoFromUrl(): string {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("vm") ?? params.get("avaliacao") ?? "";
+  if (raw.trim() === "") return "";
+  // Só pré-preenche se resultar num número > 0; caso contrário deixa vazio para
+  // não plantar um "0" que confunde o usuário.
+  return parseBRL(raw) > 0 ? raw.trim() : "";
+}
+
 /* ─── Linha de detalhamento ─────────────────────────────────────────────── */
 function DetalheRow({
   label,
@@ -439,7 +459,10 @@ export function CalculadoraLancePage() {
   });
 
   /* ── State dos campos ── */
-  const [valorMercado, setValorMercado] = useState("");
+  // Pré-preenche o valor de mercado quando o usuário chega via deep-link do lote
+  // (ex.: /ferramentas/calculadora-lance?vm=414000). Inicializador lazy: roda uma
+  // vez, no mount, e é SSG-safe (readValorMercadoFromUrl guarda `window`).
+  const [valorMercado, setValorMercado] = useState(readValorMercadoFromUrl);
   const [comissaoPct, setComissaoPct] = useState("5");
   const [tributosPct, setTributosPct] = useState("0");
   const [retirada, setRetirada] = useState("");

@@ -1,6 +1,6 @@
 import "./page.css";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Landmark, SearchX } from "lucide-react";
+import { Info, Landmark, SearchX } from "lucide-react";
 import { navigateSpa } from "./_nav";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
@@ -822,16 +822,25 @@ export function DashboardPage(props: {
     [scoredLots],
   );
 
-  const kpiStrip = [
+  const kpiStrip: Array<{
+    key: string;
+    label: string;
+    value: number;
+    color: string;
+    money: boolean;
+    hint?: string;
+  }> = [
     { key: "lotes", label: "Lotes disponíveis", value: kpiLotesDisponiveis, color: KPI_COLORS[0], money: false },
     ...(totalEconomiaCents > 0
       ? [
           {
             key: "economia",
-            label: "Economia mapeada",
+            label: "Desconto de mercado mapeado",
             value: totalEconomiaCents / 100,
-            color: KPI_COLORS[1],
+            color: KPI_COLORS[1] as string,
             money: true,
+            hint:
+              "Soma da diferença entre a avaliação oficial e o lance mínimo de cada lote ativo. É desconto de mercado — não é garantia de lucro.",
           },
         ]
       : []),
@@ -873,7 +882,7 @@ export function DashboardPage(props: {
         </svg>
       ),
       title: "Ver leilões da Receita",
-      description: "Lotes com score de oportunidade e economia mapeada",
+      description: "Lotes com score de oportunidade e desconto de mercado",
       route: "/app/lotes",
     },
     {
@@ -1076,9 +1085,9 @@ export function DashboardPage(props: {
                 <div className="skeleton" style={{ height: 30, width: "45%" }} />
               </div>
             ))
-          : kpiStrip.map(({ key, label, value, color, money }) => (
+          : kpiStrip.map(({ key, label, value, color, money, hint }) => (
               <div className="card card--pad" key={key}>
-                <div className="row between" style={{ alignItems: "flex-start" }}>
+                <div className="row between" style={{ alignItems: "flex-start", gap: 6 }}>
                   <span
                     style={{
                       fontSize: 13,
@@ -1089,6 +1098,23 @@ export function DashboardPage(props: {
                   >
                     {label}
                   </span>
+                  {hint !== undefined && (
+                    <span
+                      role="note"
+                      tabIndex={0}
+                      title={hint}
+                      aria-label={`${label}: ${hint}`}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        color: "var(--t-low)",
+                        cursor: "help",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Info size={14} aria-hidden="true" />
+                    </span>
+                  )}
                 </div>
                 <div
                   className="row between"

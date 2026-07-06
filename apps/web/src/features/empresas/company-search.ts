@@ -234,7 +234,23 @@ export async function searchCompaniesByName(
     });
   }
 
-  const hits = [...chosen.values()].map((c) => c.hit);
+  let hits = [...chosen.values()].map((c) => c.hit);
+
+  // Filtro de relevância mínima (client-side, sobre o que o servidor já devolveu):
+  // o d1-bridge casa por LIKE em name/normalized_name, então uma linha pode ter
+  // vindo por um campo tangencial (ex.: descrição de contrato) sem o termo no NOME
+  // da empresa — o usuário lê isso como "busca instável". Descartamos candidatos
+  // cujo nome não contém NENHUM token do termo, MAS só quando sobra ao menos um
+  // candidato relevante (senão a lista ficaria vazia por engano). Nada é fabricado.
+  const tokens = qn.split(/\s+/).filter((t) => t.length >= 3);
+  if (tokens.length > 0) {
+    const relevant = hits.filter((h) => {
+      const hn = norm(h.name);
+      return tokens.some((t) => hn.includes(t));
+    });
+    if (relevant.length > 0) hits = relevant;
+  }
+
   // Ordena: correspondência exata de nome primeiro, depois alfabético pt-BR.
   hits.sort((a, b) => {
     const ae = norm(a.name) === qn ? 0 : 1;

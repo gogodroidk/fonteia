@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReceitaLeilaoLot } from "@fonteia/sources";
 import { lotEconomia, scoreReceitaLeilaoLot } from "@fonteia/scoring";
 import type { LeilaoOpportunityScore, LotEconomia } from "@fonteia/scoring";
-import { ChevronDown, ChevronUp, Heart, Layers, LayoutList, Loader2, Search, Tag, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Heart, ImageOff, Layers, LayoutList, Loader2, Search, Tag, X } from "lucide-react";
 import { listLeilaoLots } from "../../features/leiloes/leiloes-api";
 import { ScoreRing, FonteDots } from "../../components/ui";
 import { formatBRL, FONTES } from "../../data/leiloes-seed";
@@ -312,6 +312,20 @@ function LotCard({
   const isEncerrado = days < 0;
   const cardLabel = `Lote ${lot.displayNumber} — ${lot.agency}, ${displayCity(lot.city)}`;
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgBroken, setImgBroken] = useState(false);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Imagem em cache pode completar antes do React anexar o onLoad (o handler
+  // nunca dispara e o fade fica preso em opacity:0). No mount, se a imagem já
+  // está pronta, marcamos como carregada; se falhou, marcamos como quebrada.
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el) return;
+    if (el.complete) {
+      if (el.naturalWidth > 0) setImgLoaded(true);
+      else setImgBroken(true);
+    }
+  }, [lot.imageUrl]);
 
   return (
     <article
@@ -343,14 +357,18 @@ function LotCard({
           padding: "10px 12px",
         }}
       >
-        {/* Lazy-loaded cover image — fade in once loaded */}
-        {lot.imageUrl !== undefined && lot.imageUrl !== "" && (
+        {/* Lazy-loaded cover image — fade in once loaded. Se a foto falhar
+            (404 da fonte oficial, CORS, timeout) o onError marca imgBroken e o
+            card mostra só o fundo gradiente — nunca fica preso invisível. */}
+        {lot.imageUrl !== undefined && lot.imageUrl !== "" && !imgBroken && (
           <img
+            ref={imgRef}
             src={lot.imageUrl}
             alt={`Foto do lote ${lot.displayNumber} — ${lot.category ?? lot.agency}`}
             loading="lazy"
             decoding="async"
             onLoad={() => setImgLoaded(true)}
+            onError={() => setImgBroken(true)}
             style={{
               position: "absolute",
               inset: 0,
@@ -362,6 +380,24 @@ function LotCard({
               transition: "opacity 0.4s ease",
             }}
           />
+        )}
+
+        {/* Placeholder discreto quando a foto quebra — sem layout shift (altura
+            já reservada em 132px). Não anuncia erro em voz alta: o card segue
+            legível com o gradiente de fundo. */}
+        {lot.imageUrl !== undefined && lot.imageUrl !== "" && imgBroken && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 10,
+              color: "rgba(255,255,255,0.55)",
+              display: "inline-flex",
+            }}
+          >
+            <ImageOff size={16} />
+          </span>
         )}
 
         {/* "Encerrado" seal — top-right corner when encerrado (below the heart so heart stays clickable) */}

@@ -38,6 +38,7 @@ import {
   Maximize2,
   Minus,
   Plus,
+  RefreshCw,
   Search,
   ShieldAlert,
   ShieldQuestion,
@@ -283,6 +284,9 @@ export function CerebroPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  // Marca se o erro atual é "tentável de novo" (falha de rede/consulta) vs. um
+  // erro de validação (input vazio/CNPJ inválido, que retry não resolve).
+  const [canRetry, setCanRetry] = useState(false);
   // Plano do usuário: a verificação de idoneidade é premium (InfoSimples). Saber
   // isto antes do clique deixa sinalizar o cadeado sem depender só do tooltip.
   const { isPro, loading: planLoading } = usePlan();
@@ -337,6 +341,12 @@ export function CerebroPage() {
   // Trava de "auto-gerar a partir da URL" — garante que o deep-link (?cnpj/?nome)
   // dispare o grafo UMA única vez no mount (e não a cada re-render).
   const didInitFromUrlRef = useRef(false);
+  // Última ação de consulta que falhou por rede — usada pelo botão "Tentar
+  // novamente". Ref (não state) para não entrar em dep-array dos callbacks.
+  const retryActionRef = useRef<(() => void) | null>(null);
+  // Token de sequência para descartar buscas por nome obsoletas (mesmo padrão
+  // do CompanySearch): a última busca DISPARADA vence, não a última a resolver.
+  const searchTokenRef = useRef(0);
 
   // Estado de interação por ponteiro (drag de nó / pan).
   const dragRef = useRef<{
@@ -677,17 +687,23 @@ export function CerebroPage() {
       return;
     }
     let cancelled = false;
+    const token = ++searchTokenRef.current;
     setSearching(true);
     const handle = setTimeout(() => {
       void searchEntities(term)
         .then((found) => {
-          if (!cancelled) setHits(found);
+          // Descarta se esta não é mais a busca corrente (token superado) ou
+          // se o efeito foi limpo — evita resultado antigo sobrescrever novo.
+          if (cancelled || token !== searchTokenRef.current) return;
+          setHits(found);
         })
         .catch(() => {
-          if (!cancelled) setHits([]);
+          if (cancelled || token !== searchTokenRef.current) return;
+          setHits([]);
         })
         .finally(() => {
-          if (!cancelled) setSearching(false);
+          if (cancelled || token !== searchTokenRef.current) return;
+          setSearching(false);
         });
     }, 280);
     return () => {
@@ -702,10 +718,12 @@ export function CerebroPage() {
       const cnpj = sanitizeCnpj(rawCnpj);
       if (cnpj === "") {
         setError("CNPJ inválido: digite os 14 números (com ou sem máscara).");
+        setCanRetry(false);
         return;
       }
       setIsLoading(true);
       setError(null);
+      setCanRetry(false);
       setInfo(null);
       setHits([]);
       try {
@@ -739,6 +757,8 @@ export function CerebroPage() {
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao montar o grafo.");
+        retryActionRef.current = () => void runCnpj(rawCnpj, recenter);
+        setCanRetry(true);
       } finally {
         setIsLoading(false);
       }
@@ -760,6 +780,7 @@ export function CerebroPage() {
       // (despesas → fornecedores + votações → proposições); os demais por NOME.
       setIsLoading(true);
       setError(null);
+      setCanRetry(false);
       setInfo(null);
       setHits([]);
       try {
@@ -793,6 +814,8 @@ export function CerebroPage() {
         announceResult(result, setInfo);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Erro ao montar o grafo.");
+        retryActionRef.current = () => void runHit(hit);
+        setCanRetry(true);
       } finally {
         setIsLoading(false);
       }
@@ -812,6 +835,7 @@ export function CerebroPage() {
       return;
     }
     setError("Digite um CNPJ (14 dígitos) ou um nome para buscar.");
+    setCanRetry(false);
   }, [input, hits, runCnpj, runHit]);
 
   /**
@@ -834,9 +858,14 @@ export function CerebroPage() {
             void runHit(first);
           } else {
             setError(`Nada encontrado para "${query}". Tente outro nome ou um CNPJ.`);
+            setCanRetry(false);
           }
         })
-        .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : String(err));
+          retryActionRef.current = () => handleGuideExample(query);
+          setCanRetry(true);
+        })
         .finally(() => setSearching(false));
     },
     [runCnpj, runHit],
@@ -1450,12 +1479,30 @@ export function CerebroPage() {
             padding: "12px 16px",
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
-            color: "var(--danger)",
-            fontSize: 13.5,
-            fontWeight: 600,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
           }}
         >
-          {error}
+          <span style={{ color: "var(--danger)", fontSize: 13.5, fontWeight: 600 }}>
+            {error}
+          </span>
+          {canRetry && (
+            <div>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                disabled={isLoading}
+                onClick={() => {
+                  const action = retryActionRef.current;
+                  if (action) action();
+                }}
+              >
+                <RefreshCw size={13} aria-hidden="true" />
+                Tentar novamente
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1578,6 +1625,49 @@ export function CerebroPage() {
               >
                 <Loader2 size={28} className="spin" style={{ color: "var(--brand-ink)" }} aria-hidden="true" />
                 <span className="muted small">Consultando os módulos…</span>
+              </div>
+            )}
+
+            {/* Entidade localizada, porém isolada (sem conexões nas bases). Card
+                distinto do erro: o silêncio aqui é um RESULTADO honesto, não falha. */}
+            {hasGraph && !isLoading && center !== null && graph.nodes.length === 1 && (
+              <div
+                style={{
+                  position: "absolute",
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  display: "flex",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <div
+                  className="panel"
+                  role="status"
+                  style={{
+                    maxWidth: 440,
+                    padding: "14px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    pointerEvents: "auto",
+                    boxShadow: "var(--shadow-md, 0 8px 28px rgba(0,0,0,.18))",
+                  }}
+                >
+                  <div className="row" style={{ gap: 8, alignItems: "center" }}>
+                    <ShieldQuestion size={16} style={{ color: "var(--brand-ink)", flexShrink: 0 }} aria-hidden="true" />
+                    <strong style={{ fontSize: 13.5, color: "var(--t-hi)" }}>
+                      {center.label} — sem conexões nas bases coletadas
+                    </strong>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 12.5, color: "var(--t-mid)", lineHeight: 1.5 }}>
+                    Localizamos a entidade, mas ela ainda não aparece ligada a sanções, contratos,
+                    licitações, processos ou sócios nas bases já indexadas. Ausência de conexões{" "}
+                    <strong>não</strong> é sinal de problema — pode indicar uma empresa nova, de
+                    pequeno porte ou de baixa exposição pública.
+                  </p>
+                </div>
               </div>
             )}
 

@@ -272,6 +272,9 @@ function TabPerfil({
 }: Pick<AccountPageProps, "name" | "email" | "avatarUrl"> & TabPerfilPlanProps) {
   const watchCount = useWatchlistCount();
 
+  // Se a imagem do avatar (ex.: Google) falhar, cai para as iniciais.
+  const [avatarError, setAvatarError] = useState(false);
+
   // Rótulo do badge de plano (exibido sob o email)
   const badgeLabel = planLoading
     ? "Carregando…"
@@ -301,7 +304,7 @@ function TabPerfil({
       {/* Identidade */}
       <div className="panel" style={{ padding: 26 }}>
         <div className="row" style={{ gap: 16, marginBottom: 24 }}>
-          {avatarUrl ? (
+          {avatarUrl && !avatarError ? (
             <img
               src={avatarUrl}
               alt={name}
@@ -310,6 +313,7 @@ function TabPerfil({
               height={60}
               loading="lazy"
               decoding="async"
+              onError={() => setAvatarError(true)}
               style={{ width: 60, height: 60 }}
             />
           ) : (

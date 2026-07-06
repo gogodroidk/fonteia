@@ -364,6 +364,21 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
     setLoaded({});
   }, [images]);
 
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  // Imagem em cache pode completar ANTES do React anexar o onLoad (o evento
+  // nunca dispara e a foto fica presa em opacity:0 até um re-render — o sintoma
+  // de "some até abrir/fechar/recarregar"). No mount/troca de foto, se a imagem
+  // já está pronta, marcamos como carregada; se falhou, como quebrada.
+  useEffect(() => {
+    const el = imgRef.current;
+    if (!el) return;
+    if (el.complete) {
+      if (el.naturalWidth > 0) setLoaded((prev) => ({ ...prev, [active]: true }));
+      else setBroken((prev) => ({ ...prev, [active]: true }));
+    }
+  }, [active, images]);
+
   const current = images[active];
   const showImage = typeof current === "string" && broken[active] !== true;
   const isLoaded = loaded[active] === true;
@@ -415,6 +430,8 @@ function LotPhoto({ images, alt, overlay }: LotPhotoProps) {
 
         {showImage ? (
           <img
+            key={active}
+            ref={imgRef}
             src={current}
             alt={alt}
             loading="lazy"
@@ -959,7 +976,7 @@ export function LotDetailPage({
   // Detalhe rico do lote (descrição dos bens, quantidade, recinto, avisos, fotos):
   // o catálogo não traz isso, então buscamos sob demanda do SLE via Edge Function.
   const { session } = useAuth();
-  const { isPro } = usePlan();
+  const { isPro, trial, loading: planLoading } = usePlan();
   const [detalhe, setDetalhe] = useState<LoteDetalhe | null>(null);
 
   useEffect(() => {
@@ -1887,6 +1904,26 @@ export function LotDetailPage({
                   borderRadius: "var(--r-md)",
                 }}
               >
+                {/* Sinalização honesta do plano ANTES do clique: o Raio-X é um
+                    recurso do plano Profissional. Só mostramos depois que o
+                    plano carregou (planLoading) para não piscar o selo errado. */}
+                {!planLoading && !isPro ? (
+                  <span
+                    className="badge badge--neutral"
+                    style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 }}
+                  >
+                    <Lock aria-hidden="true" size={12} />
+                    Recurso do plano Profissional
+                  </span>
+                ) : !planLoading && trial ? (
+                  <span
+                    className="badge badge--accent"
+                    style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 }}
+                  >
+                    <Sparkles aria-hidden="true" size={12} />
+                    Liberado no seu teste
+                  </span>
+                ) : null}
                 <p style={{ margin: 0, fontSize: "0.88rem", color: "var(--t-mid)", lineHeight: 1.55 }}>
                   Gere uma leitura em linguagem simples deste lote — o que é, quem pode dar lance,
                   prazo, valor de partida e o que conferir no edital.
@@ -1897,11 +1934,26 @@ export function LotDetailPage({
                   type="button"
                   disabled={iaLoading}
                   aria-busy={iaLoading}
+                  title={
+                    planLoading || isPro
+                      ? "Gerar o Raio-X do lote com IA"
+                      : "Recurso do plano Profissional"
+                  }
+                  aria-label={
+                    planLoading || isPro
+                      ? "Gerar Raio-X com IA"
+                      : "Gerar Raio-X com IA — recurso do plano Profissional"
+                  }
                 >
                   {iaLoading ? (
                     <>
                       <Loader2 aria-hidden="true" size={18} className="spin" />
                       Gerando…
+                    </>
+                  ) : !planLoading && !isPro ? (
+                    <>
+                      <Lock aria-hidden="true" size={18} />
+                      Gerar Raio-X com IA
                     </>
                   ) : (
                     <>

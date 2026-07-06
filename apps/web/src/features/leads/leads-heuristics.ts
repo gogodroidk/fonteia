@@ -150,6 +150,38 @@ interface Regra {
 
 const REGRAS: Regra[] = [
   {
+    // Antes de "Obras & Engenharia": "pintura predial" deve virar Pintura, não Obras
+    // (o primeiro match vence em inferServicos/inferSetor).
+    setor: "Pintura & Acabamento",
+    // Sem acento (NFD stripped): "acabamento" já é sem acento.
+    keywords: ["pintura", "pintar", "pintor", "revestimento", "textura", "tinta", "tintas", "acabamento"],
+    servicos: [
+      { label: "Fornecimento de tintas e materiais de pintura", icon: "🎨" },
+      { label: "Locação de andaimes e equipamentos de acesso", icon: "🪜" },
+      { label: "Seguro de obra e riscos de execução", icon: "🛡️" },
+    ],
+  },
+  {
+    setor: "Energia & Elétrica",
+    // Sem acento: "eletrica", "iluminacao", "energia", "fotovoltaic" (prefixo p/ fotovoltaica/o).
+    keywords: ["eletrica", "iluminacao", "energia", "fotovoltaic", "subestacao", "eletrico"],
+    servicos: [
+      { label: "Instalação e manutenção elétrica", icon: "⚡" },
+      { label: "Fornecimento de materiais elétricos", icon: "🔌" },
+      { label: "Projetos de eficiência energética", icon: "💡" },
+    ],
+  },
+  {
+    setor: "Saneamento & Água",
+    // Sem acento: "agua", "hidraulic" (prefixo p/ hidráulica/o).
+    keywords: ["saneamento", "agua", "esgoto", "hidraulic", "abastecimento"],
+    servicos: [
+      { label: "Obras e manutenção de redes de água/esgoto", icon: "🚰" },
+      { label: "Fornecimento de tubos e conexões", icon: "🧰" },
+      { label: "Análise e tratamento de água", icon: "🧪" },
+    ],
+  },
+  {
     setor: "Obras & Engenharia",
     // Acentuadas removidas: "construção", "pavimentação", "edificação", "ampliação" → sem acento abaixo
     keywords: ["obra", "construcao", "reforma", "pavimentacao", "infraestrutura", "engenharia", "edificacao", "ampliacao"],

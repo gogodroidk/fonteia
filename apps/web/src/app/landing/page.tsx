@@ -571,6 +571,8 @@ export function LandingPage({
                 type="button"
                 className="btn btn--accent btn--sm lp-nav-cta"
                 onClick={onLogin}
+                title="7 dias grátis · sem cartão até o fim do teste"
+                aria-label="Começar agora — 7 dias grátis, sem cartão até o fim do teste"
               >
                 <Zap size={14} fill="currentColor" aria-hidden="true" />
                 <span className="lp-nav-cta-full">Começar agora</span>
@@ -715,11 +717,12 @@ export function LandingPage({
                   maxWidth: 520,
                 }}
               >
-                A Fonte.ia reúne ~217 mil registros oficiais de 9 áreas — leilões, licitações,
-                empresas, municípios, política, ambiental, sanções, jurídico e INPI — em uma
-                busca única, com{" "}
-                <strong style={{ color: "var(--t-hi)" }}>cada dado vinculado à fonte oficial (link + data) e IA que nunca inventa</strong>.{" "}
-                Comece pelos leilões da Receita Federal, nosso módulo mais maduro.
+                Nos leilões da Receita Federal, a Fonte.ia mostra o{" "}
+                <strong style={{ color: "var(--t-hi)" }}>desconto sobre a avaliação, lê o edital por você e aponta os riscos do lote</strong>{" "}
+                — para você arrematar com margem e sem cair em cilada. Cada número vem
+                vinculado à fonte oficial (link + data) e a IA nunca inventa: quando falta
+                dado, ela diz. É o nosso módulo mais maduro, dentro de uma base de ~217 mil
+                registros de 9 áreas públicas.
               </p>
             </Reveal>
 

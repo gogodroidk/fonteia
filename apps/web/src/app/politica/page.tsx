@@ -883,6 +883,10 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
   const [votacaoResultado, setVotacaoResultado] = useState<"todas" | "aprovadas" | "rejeitadas">("todas");
   const [votacaoOrgao, setVotacaoOrgao] = useState("todos");
 
+  // ── Retry: cada aba tem sua própria chave de recarga (sem reload da página) ──
+  const [reloadKeyParl, setReloadKeyParl] = useState(0);
+  const [reloadKeyVot, setReloadKeyVot] = useState(0);
+
   // ── Load parlamentares on mount ──
   useEffect(() => {
     let cancelled = false;
@@ -904,9 +908,9 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKeyParl]);
 
-  // ── Load votações lazily on first tab switch ──
+  // ── Load votações lazily on first tab switch (ou em nova tentativa) ──
   useEffect(() => {
     if (pageTab !== "votacoes") return;
     if (hasLoadedVotacoes.current) return;
@@ -931,7 +935,7 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [pageTab]);
+  }, [pageTab, reloadKeyVot]);
 
   // ── Counts per casa (from raw unfiltered list) ──
   const camaraCount = useMemo(
@@ -1181,12 +1185,25 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
               background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
               border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
               color: "var(--danger)",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
               fontSize: 13.5,
               fontWeight: 600,
             }}
             role="alert"
           >
-            Erro ao carregar dados: {errorMessage}
+            <span>Erro ao carregar dados: {errorMessage}</span>
+            <button
+              className="btn btn--ghost btn--sm"
+              type="button"
+              onClick={() => setReloadKeyParl((k) => k + 1)}
+              style={{ flexShrink: 0 }}
+            >
+              Tentar novamente
+            </button>
           </div>
         )}
 
@@ -1415,12 +1432,28 @@ export function PoliticaPage({ onSelectDeputado }: PoliticaPageProps = {}) {
               background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
               border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
               color: "var(--danger)",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
               fontSize: 13.5,
               fontWeight: 600,
             }}
             role="alert"
           >
-            Erro ao carregar votações: {errorVotacoes}
+            <span>Erro ao carregar votações: {errorVotacoes}</span>
+            <button
+              className="btn btn--ghost btn--sm"
+              type="button"
+              onClick={() => {
+                hasLoadedVotacoes.current = false;
+                setReloadKeyVot((k) => k + 1);
+              }}
+              style={{ flexShrink: 0 }}
+            >
+              Tentar novamente
+            </button>
           </div>
         )}
 
