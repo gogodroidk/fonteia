@@ -81,6 +81,10 @@ export function CompanySearch({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  // Mensagem de erro assertiva mostrada quando o clique em "Buscar" não resolve
+  // nada (nome sem correspondência / CNPJ incompleto). role="alert" — evita o
+  // no-op silencioso que o usuário lê como "produto quebrado".
+  const [notice, setNotice] = useState("");
 
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -121,6 +125,7 @@ export function CompanySearch({
         setActiveIndex(results.length > 0 ? 0 : -1);
         setOpen(true);
         setLoading(false);
+        if (results.length > 0) setNotice("");
       });
     }, DEBOUNCE_MS);
 
@@ -167,7 +172,26 @@ export function CompanySearch({
       return;
     }
     // 4) Vários resultados → garante a lista aberta para o usuário escolher.
-    if (hits.length > 1) setOpen(true);
+    if (hits.length > 1) {
+      setOpen(true);
+      return;
+    }
+    // 5) Nada casou → NUNCA deixe o clique sem resposta. Mensagem honesta e
+    //    específica (role="alert"), em vez de um no-op silencioso.
+    if (loading) {
+      setNotice("Buscando empresas… aguarde um instante e tente de novo.");
+    } else if (digits.length >= 1 && digits.length < 14) {
+      const faltam = 14 - digits.length;
+      setNotice(
+        `CNPJ incompleto: faltam ${faltam} dígito${faltam !== 1 ? "s" : ""}. ` +
+          "Cole os 14 dígitos ou digite o nome da empresa.",
+      );
+    } else {
+      setNotice(
+        "Nenhuma empresa encontrada com esse nome. Verifique a grafia ou cole o CNPJ (14 dígitos).",
+      );
+    }
+    inputRef.current?.focus();
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -197,6 +221,7 @@ export function CompanySearch({
     setHits([]);
     setOpen(false);
     setActiveIndex(-1);
+    setNotice("");
     inputRef.current?.focus();
   }
 
@@ -234,7 +259,10 @@ export function CompanySearch({
             id={`${id ?? autoId}-input`}
             type="text"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (notice !== "") setNotice("");
+            }}
             onKeyDown={onKeyDown}
             onFocus={() => {
               if (hits.length > 0) setOpen(true);
@@ -288,8 +316,19 @@ export function CompanySearch({
         </button>
       </div>
 
-      {/* Dica contextual sob o campo */}
-      {value.trim() !== "" && !showList && !loading && (
+      {/* Alerta assertivo do submit (nome sem match / CNPJ incompleto) */}
+      {notice !== "" && (
+        <p
+          role="alert"
+          className="tiny"
+          style={{ margin: "6px 2px 0", color: "var(--danger)", fontWeight: 600 }}
+        >
+          {notice}
+        </p>
+      )}
+
+      {/* Dica contextual sob o campo (passiva — só quando não há alerta) */}
+      {notice === "" && value.trim() !== "" && !showList && !loading && (
         <p className="tiny muted" style={{ margin: "6px 2px 0" }}>
           {isCnpjReady
             ? "CNPJ válido — pode buscar direto."

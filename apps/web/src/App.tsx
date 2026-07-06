@@ -32,6 +32,7 @@ import type { CamaraDeputado, IbamaInfracao, ReceitaLeilaoLot } from "@fonteia/s
 import type { MunicipioWithStats } from "./features/municipios/municipios-api";
 import { useAuth } from "./auth/auth-context";
 import { useIsAdmin } from "./components/admin/use-is-admin";
+import { usePlan } from "./lib/use-plan";
 import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { takePendingDestination } from "./lib/pending-intent";
@@ -389,6 +390,13 @@ interface AppShellProps {
 function AppShell({ path, navigate }: AppShellProps) {
   const { user, session, signOut } = useAuth();
   const { isAdmin } = useIsAdmin();
+  // Plano efetivo do usuário: define se a topbar/sidebar mostram "Upgrade"
+  // (free) ou um selo "Plano ativo" (pago/teste). Enquanto planLoading, não
+  // renderizamos nem um nem outro para evitar o flash de "Upgrade" em quem
+  // já pagou (o estado inicial do hook é free+loading).
+  const { isPro, plan, trial, loading: planLoading } = usePlan();
+  const planLabel = plan === "corporativo" ? "Corporativo ativo" : "Profissional ativo";
+  const [avatarError, setAvatarError] = useState(false);
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
   const [isLoadingLot, setIsLoadingLot] = useState(false);
   const [lotLoadMessage, setLotLoadMessage] = useState<string | null>(null);
@@ -499,6 +507,12 @@ function AppShell({ path, navigate }: AppShellProps) {
   const displayName =
     (user?.user_metadata?.["full_name"] as string | undefined) ?? user?.email?.split("@")[0] ?? "Você";
   const avatarUrl = user?.user_metadata?.["avatar_url"] as string | undefined;
+
+  // Se a URL do avatar mudar (troca de conta/foto), damos uma nova chance de
+  // carregar — senão um erro anterior manteria as iniciais para sempre.
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   const { helpOn, toggleHelp } = useHelpMode();
 
@@ -653,27 +667,73 @@ function AppShell({ path, navigate }: AppShellProps) {
         )}
       </nav>
 
-      <div style={{ padding: collapsed && !inDrawer ? "12px 10px" : "12px 14px" }}>
-        {collapsed && !inDrawer ? (
-          <HelpHint id="nav.planos">
-            <button className="btn btn--accent btn--icon btn--sm" type="button" onClick={() => go("/app/planos")} title="Ampliar acesso" style={{ width: "100%" }}>
-              <Zap size={15} fill="currentColor" aria-hidden="true" />
-            </button>
-          </HelpHint>
-        ) : (
-          <div className="inset" style={{ padding: 13 }}>
-            <div className="row between" style={{ marginBottom: 7 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)" }}>Fonte.ia Pro</span>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-ink)" }}>7 dias grátis</span>
-            </div>
+      {/* Bloco de plano na sidebar. Enquanto o plano resolve (planLoading) não
+          mostramos nada, para não piscar "Assinar agora" para quem já é Pro.
+          Pro/Corporativo → resumo estático "Plano ativo" com atalho para a
+          conta. Free → CTA de assinatura (comportamento original). */}
+      {!planLoading && (
+        <div style={{ padding: collapsed && !inDrawer ? "12px 10px" : "12px 14px" }}>
+          {isPro ? (
+            collapsed && !inDrawer ? (
+              <HelpHint id="nav.planos">
+                <button
+                  className="btn btn--ghost btn--icon btn--sm"
+                  type="button"
+                  onClick={() => go("/app/conta")}
+                  title={planLabel}
+                  aria-label={planLabel}
+                  style={{ width: "100%", color: "var(--accent-ink)" }}
+                >
+                  <BadgeCheck size={16} aria-hidden="true" />
+                </button>
+              </HelpHint>
+            ) : (
+              <button
+                type="button"
+                onClick={() => go("/app/conta")}
+                className="inset"
+                style={{
+                  padding: 13,
+                  width: "100%",
+                  textAlign: "left",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface-2)",
+                  cursor: "pointer",
+                  font: "inherit",
+                  borderRadius: 12,
+                }}
+                title="Gerenciar assinatura"
+              >
+                <span className="badge badge--accent">
+                  <BadgeCheck size={13} aria-hidden="true" />
+                  {planLabel}
+                </span>
+                <span style={{ display: "block", marginTop: 8, fontSize: 11.5, color: "var(--t-mid)" }}>
+                  {trial ? "Teste ativo — gerenciar assinatura" : "Gerenciar assinatura"}
+                </span>
+              </button>
+            )
+          ) : collapsed && !inDrawer ? (
             <HelpHint id="nav.planos">
-              <button className="btn btn--accent btn--sm btn--block" type="button" onClick={() => go("/app/planos")} style={{ fontSize: 12 }}>
-                <Zap size={13} fill="currentColor" aria-hidden="true" />Assinar agora
+              <button className="btn btn--accent btn--icon btn--sm" type="button" onClick={() => go("/app/planos")} title="Ampliar acesso" style={{ width: "100%" }}>
+                <Zap size={15} fill="currentColor" aria-hidden="true" />
               </button>
             </HelpHint>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="inset" style={{ padding: 13 }}>
+              <div className="row between" style={{ marginBottom: 7 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)" }}>Fonte.ia Pro</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-ink)" }}>7 dias grátis</span>
+              </div>
+              <HelpHint id="nav.planos">
+                <button className="btn btn--accent btn--sm btn--block" type="button" onClick={() => go("/app/planos")} style={{ fontSize: 12 }}>
+                  <Zap size={13} fill="currentColor" aria-hidden="true" />Assinar agora
+                </button>
+              </HelpHint>
+            </div>
+          )}
+        </div>
+      )}
 
       {!inDrawer && (
         <button type="button" onClick={() => setCollapsed((c) => !c)} title={collapsed ? "Expandir" : "Recolher"} style={{ margin: "0 0 14px", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: 0, cursor: "pointer", color: "var(--t-low)", padding: 8, width: "100%" }}>
@@ -719,23 +779,43 @@ function AppShell({ path, navigate }: AppShellProps) {
             <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
               <HelpHint id="topbar.search">
-                <div className="searchbar" role="search" aria-label="Buscar leilões">
+                {/* Busca literal de leilões (Enter ou clique na lupa). É distinta
+                    da Inteligência (IA) ao lado, que responde perguntas livres. */}
+                <form
+                  className="searchbar"
+                  role="search"
+                  aria-label="Buscar leilões"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (topbarQuery.trim().length > 0) {
+                      goToSearch(topbarQuery);
+                      setTopbarQuery("");
+                    }
+                  }}
+                >
                   <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
                   <input
                     ref={topbarInputRef}
-                    placeholder="Buscar leilões…"
+                    placeholder="Buscar leilões por cidade, órgão…"
                     value={topbarQuery}
                     onChange={(e) => setTopbarQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && topbarQuery.trim().length > 0) {
-                        goToSearch(topbarQuery);
-                        setTopbarQuery("");
-                      }
-                    }}
                     aria-label="Buscar leilões"
+                    enterKeyHint="search"
                     style={{ fontSize: 13.5 }}
                   />
-                </div>
+                  {topbarQuery.trim().length > 0 ? (
+                    <button
+                      type="submit"
+                      className="btn btn--icon btn--ghost btn--sm shell-search-go"
+                      title="Buscar"
+                      aria-label="Buscar"
+                    >
+                      <Search size={15} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <kbd className="shell-search-kbd" aria-hidden="true">Enter</kbd>
+                  )}
+                </form>
               </HelpHint>
             </div>
             <div className="shell-actions">
@@ -786,12 +866,31 @@ function AppShell({ path, navigate }: AppShellProps) {
                   <Bell size={18} aria-hidden="true" />
                 </button>
               </HelpHint>
-              <HelpHint id="topbar.upgrade">
-                <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")} aria-label="Ampliar acesso">
-                  <Zap size={14} fill="currentColor" aria-hidden="true" />
-                  <span className="shell-upgrade-label">Upgrade</span>
-                </button>
-              </HelpHint>
+              {/* Plano na topbar. Enquanto planLoading, nada é renderizado — sem
+                  isso o botão "Upgrade" piscaria para quem já pagou a cada
+                  navegação. Pro/Corporativo → selo estático "Plano ativo" que
+                  leva à conta (gerenciar). Free → botão "Upgrade" original. */}
+              {planLoading ? null : isPro ? (
+                <HelpHint id="topbar.upgrade">
+                  <button
+                    className="btn btn--sm shell-plan-active"
+                    type="button"
+                    onClick={() => go("/app/conta")}
+                    title="Gerenciar assinatura"
+                    aria-label={`${planLabel} — gerenciar assinatura`}
+                  >
+                    <BadgeCheck size={14} aria-hidden="true" />
+                    <span className="shell-upgrade-label">{planLabel}</span>
+                  </button>
+                </HelpHint>
+              ) : (
+                <HelpHint id="topbar.upgrade">
+                  <button className="btn btn--accent btn--sm shell-upgrade" type="button" onClick={() => go("/app/planos")} aria-label="Fazer upgrade de plano">
+                    <Zap size={14} fill="currentColor" aria-hidden="true" />
+                    <span className="shell-upgrade-label">Upgrade</span>
+                  </button>
+                </HelpHint>
+              )}
               {isAdmin && (
                 <button
                   className="btn btn--icon btn--ghost shell-admin"
@@ -805,7 +904,20 @@ function AppShell({ path, navigate }: AppShellProps) {
                 </button>
               )}
               <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
-                {avatarUrl ? <img src={avatarUrl} alt={displayName} width={40} height={40} loading="lazy" decoding="async" style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} /> : initialsOf(displayName)}
+                {avatarUrl && !avatarError ? (
+                  <img
+                    src={avatarUrl}
+                    alt={displayName}
+                    width={40}
+                    height={40}
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => setAvatarError(true)}
+                    style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
+                  />
+                ) : (
+                  initialsOf(displayName)
+                )}
               </button>
             </div>
           </header>
@@ -1115,11 +1227,30 @@ function AppShell({ path, navigate }: AppShellProps) {
           white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;
         }
         .shell-search{flex:1 1 auto;max-width:420px;margin-left:auto;min-width:0}
+        /* Dica "Enter" dentro da busca: some ao começar a digitar (dá lugar ao
+           botão de submit). Puramente decorativa, oculta de leitores de tela. */
+        .shell-search-kbd{
+          flex:0 0 auto;font-family:var(--font);font-size:10.5px;font-weight:600;
+          line-height:1;padding:3px 6px;border-radius:6px;color:var(--t-low);
+          background:var(--surface-2);border:1px solid var(--border);
+        }
+        .shell-search-go{flex:0 0 auto;margin-right:-6px}
         .shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
         /* Omnibox de IA na topbar: largura compacta de botão, cresce um pouco no desktop */
         .shell-omnibox{flex:0 0 auto;width:200px;max-width:34vw}
         .shell-omnibox>*{width:100%}
         .shell-upgrade-label{display:inline}
+        /* Selo de plano ativo na topbar (substitui o "Upgrade" para quem já paga).
+           Aparência sóbria de status, não de CTA: superfície neutra + tinta de
+           acento. Compartilha .shell-upgrade-label para virar ícone-only no mobile
+           pela mesma regra de breakpoint do botão de upgrade. */
+        .shell-plan-active{
+          background:color-mix(in srgb,var(--accent) 14%,transparent);
+          color:var(--accent-ink);
+          border:1px solid color-mix(in srgb,var(--accent) 30%,transparent);
+          font-weight:700;
+        }
+        .shell-plan-active:hover{background:color-mix(in srgb,var(--accent) 22%,transparent)}
         .shell-avatar{width:36px;height:36px;font-size:13px;flex:0 0 auto}
 
         /* ---- Main content ---- */
@@ -1154,7 +1285,7 @@ function AppShell({ path, navigate }: AppShellProps) {
              Ajuda, Tema, Alertas e Conta caibam sempre — sem nenhum botão sair da tela. */
           .shell-actions{gap:4px}
           .shell-upgrade-label{display:none}
-          .shell-upgrade{padding:0;width:36px;height:36px;border-radius:11px}
+          .shell-upgrade,.shell-plan-active{padding:0;width:36px;height:36px;border-radius:11px}
           .shell-help{flex:0 0 auto}
           /* clear the fixed bottom nav so content is never hidden behind it */
           .shell-content{padding-bottom:calc(64px + env(safe-area-inset-bottom) + 16px)}
@@ -1221,9 +1352,9 @@ function AppShell({ path, navigate }: AppShellProps) {
            ========================================================= */
         @media (max-width:560px){
           .shell-topbar{gap:8px;height:58px}
-          /* icon-only upgrade button to free horizontal space */
+          /* icon-only upgrade/plano button to free horizontal space */
           .shell-upgrade-label{display:none}
-          .shell-upgrade{padding:0;width:36px;height:36px;border-radius:11px}
+          .shell-upgrade,.shell-plan-active{padding:0;width:36px;height:36px;border-radius:11px}
         }
         @media (max-width:380px){
           /* ultra-narrow: drop the standalone bell (alerts still reachable via bottom nav) */

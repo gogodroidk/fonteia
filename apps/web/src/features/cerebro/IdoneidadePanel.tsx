@@ -202,9 +202,14 @@ function IdoneidadeCard({ card }: { card: IdoneidadeCardState }) {
           <Lock size={13} aria-hidden="true" style={{ color: "var(--brand-ink)", flexShrink: 0 }} />
           <span style={{ fontSize: 12.5, color: "var(--t-mid)" }}>{label}</span>
         </div>
-        <span style={{ fontSize: 11.5, color: "var(--t-low)", fontStyle: "italic" }}>
-          Recurso do plano pago
-        </span>
+        <a
+          href="/app/planos"
+          className="btn btn--primary btn--sm"
+          style={{ fontSize: 11.5 }}
+          aria-label={`Assinar o plano Profissional para consultar ${label}`}
+        >
+          Assinar Profissional
+        </a>
       </div>
     );
   }

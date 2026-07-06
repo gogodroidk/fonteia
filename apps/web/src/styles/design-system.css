@@ -609,6 +609,41 @@ input[type="text"]:not(.input):not([class])::placeholder {
   outline: none;
 }
 
+/* ---- Autofill (Chrome/Edge/Safari) — dark-mode safe ---------------------- */
+/*
+   Sem esta regra, o WebKit/Blink pinta o campo autopreenchido com um fundo
+   claro nativo (branco/amarelo) e texto escuro, ignorando var(--surface)/
+   var(--t-hi). No tema escuro isso faz o campo "piscar" claro ao focar/
+   preencher — a "incompatibilidadezinha ao clicar para escrever" na tela de
+   login/cadastro (primeira tela de um usuário novo).
+
+   Truque padrão: o box-shadow inset de 1000px cobre o fundo amarelo nativo com
+   a superfície do tema, e a transition longuíssima do background-color impede o
+   flash claro antes do override aplicar. -webkit-text-fill-color força a cor do
+   texto (o `color` normal é ignorado no estado autofill). Carregado DEPOIS de
+   styles.css, então vence os .login-field/.alert-modal-field por ordem de fonte.
+
+   Usa --surface-2 porque os campos temáticos (.login-field, .alert-modal-field
+   = --n-50 = --surface-2; filtros; .input) assentam nessa superfície — a leve
+   diferença para --surface é imperceptível e o inset já elimina o flash.
+*/
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--t-hi);
+  caret-color: var(--t-hi);
+  -webkit-box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  box-shadow: 0 0 0 1000px var(--surface-2) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* ---- Reduced-motion: form controls need no extra guard ------------------- */
 /* transitions on form controls are already short (0.18s); no animation to
    disable. The global prefers-reduced-motion block at line ~380 already

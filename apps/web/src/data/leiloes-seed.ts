@@ -318,7 +318,7 @@ export const PLANOS: Plano[] = [
     destaque: true,
     cta: "Assinar o Profissional",
     feats: [
-      "Acesso às 8 áreas: leilões, licitações, empresas, municípios, política, ambiental, sanções e jurídico",
+      "Acesso às 9 áreas: leilões, licitações, empresas, municípios, política, ambiental, sanções, jurídico e INPI (marcas)",
       "Leilões da Receita Federal com Raio-X por IA (resumo, score por regra, riscos)",
       "Busca unificada em ~170 mil registros públicos rastreáveis",
       "Cada dado com link e data da fonte oficial — IA nunca inventa",
@@ -339,7 +339,7 @@ export const PLANOS: Plano[] = [
     destaque: false,
     cta: "Falar com vendas",
     feats: [
-      "Tudo do Profissional, nas 8 áreas",
+      "Tudo do Profissional, nas 9 áreas",
       "Até 8 usuários no mesmo workspace",
       "Exportação CSV/XLSX dos resultados filtrados",
       "Suporte prioritário por e-mail",

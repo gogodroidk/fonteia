@@ -468,7 +468,11 @@ export function UsersSection({
                           {user.full_name ?? "Sem nome"}
                         </span>
                         {role === "admin" ? (
-                          <span className="badge badge--accent" style={{ gap: 4 }}>
+                          <span
+                            className="badge badge--accent"
+                            style={{ gap: 4 }}
+                            title="Admin: acesso total ao painel, inclusive a outras contas"
+                          >
                             <ShieldCheck size={11} aria-hidden="true" /> admin
                           </span>
                         ) : null}
@@ -495,6 +499,7 @@ export function UsersSection({
                     <RoleToggle
                       role={role}
                       disabled={busy === `role:${user.id}` || (isSelf && role === "admin")}
+                      selfLocked={isSelf && role === "admin"}
                       onChange={(r) => void handleRole(user, r)}
                     />
                   </div>
@@ -547,21 +552,25 @@ export function UsersSection({
 function RoleToggle({
   role,
   disabled,
+  selfLocked = false,
   onChange,
 }: {
   role: "user" | "admin";
   disabled: boolean;
+  /** true quando a trava é "não posso rebaixar a mim mesmo" (não confundir com busy). */
+  selfLocked?: boolean;
   onChange: (role: "user" | "admin") => void;
 }) {
-  const options: Array<{ value: "user" | "admin"; label: string }> = [
-    { value: "user", label: "Usuário" },
-    { value: "admin", label: "Admin" },
+  const options: Array<{ value: "user" | "admin"; label: string; title: string }> = [
+    { value: "user", label: "Usuário", title: "Usuário: acesso normal, sem painel admin" },
+    { value: "admin", label: "Admin", title: "Admin: acesso total ao painel, inclusive a outras contas" },
   ];
   return (
     <div
       className="inset"
       role="group"
       aria-label="Papel do usuário"
+      title={selfLocked ? "Você não pode remover seu próprio acesso de admin por aqui" : undefined}
       style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: 10, flexShrink: 0 }}
     >
       {options.map((opt) => {
@@ -572,6 +581,8 @@ function RoleToggle({
             type="button"
             disabled={disabled || active}
             onClick={() => onChange(opt.value)}
+            aria-pressed={active}
+            title={opt.title}
             style={{
               padding: "6px 12px",
               borderRadius: 8,

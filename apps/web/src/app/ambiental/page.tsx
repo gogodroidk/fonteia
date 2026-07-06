@@ -363,6 +363,9 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Retry: incrementar recarrega os dados sem F5 na página ──
+  const [reloadKey, setReloadKey] = useState(0);
+
   // ── Load data ──
   useEffect(() => {
     let cancelled = false;
@@ -385,7 +388,7 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   // ── Derived filter option list (UFs) ──
   const ufOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
@@ -478,12 +481,25 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
             color: "var(--danger)",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
             fontSize: 13.5,
             fontWeight: 600,
           }}
           role="alert"
         >
-          {errorMessage}
+          <span>{errorMessage}</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            style={{ flexShrink: 0 }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 

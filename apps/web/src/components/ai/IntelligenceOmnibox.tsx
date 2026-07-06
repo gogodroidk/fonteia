@@ -35,24 +35,6 @@ export interface IntelligenceOmniboxProps {
 }
 
 const S = {
-  trigger: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "10px",
-    width: "100%",
-    maxWidth: "520px",
-    background: "var(--surface, #fff)",
-    border: "1px solid var(--border, #E4EAF2)",
-    borderRadius: "var(--r-md, 12px)",
-    padding: "10px 14px",
-    color: "var(--t-low, #6B7E96)",
-    cursor: "text",
-    font: "inherit",
-    fontSize: "14px",
-    textAlign: "left" as const,
-    transition: "border-color .18s, box-shadow .18s",
-  } satisfies React.CSSProperties,
-
   overlay: {
     position: "fixed" as const,
     inset: 0,
@@ -315,7 +297,29 @@ export function IntelligenceOmnibox({
 
   return (
     <>
-      <button type="button" style={S.trigger} onClick={() => setOpen(true)} aria-haspopup="dialog">
+      {/* Estilos do gatilho: precisam ser classe (não style inline) para suportar
+          :hover/:active/:focus-visible — antes disso o botão ficava sem nenhum
+          feedback de interação ("cinza morto" ao lado dos outros botões do shell). */}
+      <style>{`
+        .omnibox-trigger{
+          display:inline-flex;align-items:center;gap:10px;width:100%;max-width:520px;
+          background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md, 12px);
+          padding:10px 14px;color:var(--t-mid);cursor:text;font:inherit;font-size:14px;
+          text-align:left;min-height:44px;
+          transition:border-color .18s, box-shadow .18s, background .18s, color .18s;
+        }
+        .omnibox-trigger:hover{border-color:var(--border-2);background:var(--surface-2);color:var(--t-hi)}
+        .omnibox-trigger:focus-visible{outline:none;border-color:var(--brand-ink);box-shadow:0 0 0 4px var(--ring)}
+        .omnibox-trigger:active{transform:translateY(1px) scale(.99)}
+        .omnibox-trigger--open{border-color:var(--brand-ink);background:var(--surface-2)}
+      `}</style>
+      <button
+        type="button"
+        className={`omnibox-trigger${open ? " omnibox-trigger--open" : ""}`}
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
         <Sparkles size={17} aria-hidden style={{ color: "var(--brand-ink, #1D5FE0)" }} />
         <span style={{ flex: 1 }}>{placeholder}</span>
         {shortcut ? <span style={S.kbd}>{shortcutHint}</span> : null}

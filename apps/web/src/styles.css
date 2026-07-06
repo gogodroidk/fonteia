@@ -515,8 +515,8 @@ p { margin: 0; }
   transition: border-color var(--fast), box-shadow var(--fast);
 }
 .ask-box:focus-within {
-  border-color: var(--g-400);
-  box-shadow: 0 0 0 3px rgba(34,168,126,0.12);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .ask-box input {
   flex: 1;
@@ -1112,14 +1112,16 @@ p { margin: 0; }
   padding: 12px var(--s-4);
   color: var(--n-900);
   background: var(--n-50);
+  caret-color: var(--t-hi);
   outline-offset: 2px;
   transition: border-color var(--fast);
 }
+/* Foco alinhado ao token azul do sistema (ver nota em .login-field input:focus). */
 .alert-modal-field input:focus,
 .alert-modal-field select:focus {
-  border-color: var(--g-400);
+  border-color: var(--brand-ink);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(34,168,126,0.12);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .alert-modal-actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-2); }
 
@@ -1205,13 +1207,20 @@ p { margin: 0; }
   padding: 13px var(--s-4);
   color: var(--n-900);
   background: var(--n-50);
+  /* Caret na cor de texto do tema: no escuro, o cursor herdava uma cor de baixo
+     contraste ao clicar para digitar (parte da "incompatibilidadezinha" no dark). */
+  caret-color: var(--t-hi);
   font-size: 1rem;
   transition: border-color var(--fast), box-shadow var(--fast);
 }
+/* Anel de foco alinhado ao token azul do resto do sistema (var(--ring)/
+   var(--brand-ink)), que adapta claro/escuro. Antes era um verde fixo
+   rgba(34,168,126,…) de opacidade baixa, quase invisível no dark e destoante
+   do azul de .input/.searchbar/select. */
 .login-field input:focus {
-  border-color: var(--g-400);
+  border-color: var(--brand-ink);
   outline: none;
-  box-shadow: 0 0 0 3px rgba(34,168,126,0.12);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 .login-error   { color: var(--color-error); background: var(--color-error-bg); border-radius: var(--r-md); padding: var(--s-3) var(--s-4); font-size: 0.875rem; }
 .login-success { color: var(--g-700); background: var(--g-100); border-radius: var(--r-md); padding: var(--s-3) var(--s-4); font-size: 0.875rem; }
@@ -2233,8 +2242,8 @@ p { margin: 0; }
 
 /* Ask box glow */
 .ask-box:focus-within {
-  border-color: var(--g-500);
-  box-shadow: 0 0 0 4px rgba(34,168,126,0.1), var(--shadow-sm);
+  border-color: var(--brand-ink);
+  box-shadow: 0 0 0 4px var(--ring), var(--shadow-sm);
 }
 
 /* =========================================================

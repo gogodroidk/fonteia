@@ -19,6 +19,8 @@ import {
   ChevronRight,
   ExternalLink,
   FileSearch2,
+  RefreshCw,
+  Search,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -35,6 +37,7 @@ import {
   type DossieSection,
 } from "../../features/dossie/dossie-api";
 import { sanitizeCnpj, formatCnpj } from "../../features/cerebro/cerebro-api";
+import { MODULE_META } from "../../features/cerebro/types";
 import { requestCompanyEnrichment } from "../../features/empresas/company-search";
 import { CompanySearch, RoiNote } from "../../components/ui";
 import { ReportButton } from "../../components/report/ReportButton";
@@ -63,6 +66,50 @@ function navigateToCerebro(cnpj: string): void {
   const url = `/app/cerebro?cnpj=${encodeURIComponent(cnpj)}`;
   window.history.pushState(null, "", url);
   window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+/**
+ * Rola até o campo de busca do CompanySearch e foca, para consultar outra
+ * empresa. O CompanySearch renderiza o <input> com id `${id}-input`.
+ */
+function focusSearchInput(baseId: string): void {
+  if (typeof document === "undefined") return;
+  const el = document.getElementById(`${baseId}-input`);
+  if (el === null) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (el instanceof HTMLInputElement) {
+    el.focus();
+    el.select();
+  } else {
+    el.focus();
+  }
+}
+
+/**
+ * Converte os warnings técnicos de falha parcial (ex.: "public_contract: d1-bridge
+ * retornou 503") num texto pt-BR sem código HTTP nem nome de kind cru:
+ * "Alguns módulos (Contratos, Ambiental) tiveram falha parcial e podem estar
+ * incompletos." Presentação apenas — não altera os dados.
+ */
+function friendlyWarning(warnings: readonly string[]): string {
+  const meta = MODULE_META as unknown as Record<string, { label?: string }>;
+  const labels: string[] = [];
+  for (const w of warnings) {
+    const idx = w.indexOf(":");
+    const rawKind = (idx >= 0 ? w.slice(0, idx) : w).trim();
+    // Normaliza tokens do tipo "person(QSA)" → "person".
+    const kindKey = rawKind.replace(/\(.*\)$/, "").trim();
+    const label =
+      Object.prototype.hasOwnProperty.call(meta, kindKey) && meta[kindKey]?.label
+        ? (meta[kindKey]?.label as string)
+        : undefined;
+    if (label !== undefined && !labels.includes(label)) labels.push(label);
+  }
+
+  if (labels.length === 0) {
+    return "Alguns módulos tiveram falha parcial e podem estar incompletos. Os demais carregaram normalmente.";
+  }
+  return `Alguns módulos (${labels.join(", ")}) tiveram falha parcial e podem estar incompletos. Os demais carregaram normalmente.`;
 }
 
 // ─── Sub-componentes: Skeleton ────────────────────────────────────────────────
@@ -825,12 +872,16 @@ export function DossiePage() {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [dossie, setDossie] = useState<Dossie | undefined>();
   const [errorMsg, setErrorMsg] = useState<string | undefined>();
+  // Distingue "CNPJ inválido" (não dá pra tentar de novo) de "falha ao consultar"
+  // (transitória — vale um retry). Guarda o último CNPJ consultável.
+  const [retryCnpj, setRetryCnpj] = useState<string | undefined>();
   const inputId = useId();
 
   const handleSubmit = useCallback(async (rawCnpj: string) => {
     const cnpj = sanitizeCnpj(rawCnpj);
     if (cnpj.length !== 14) {
       setErrorMsg("CNPJ inválido. Informe os 14 dígitos (com ou sem máscara).");
+      setRetryCnpj(undefined);
       setStatus("error");
       return;
     }
@@ -838,6 +889,7 @@ export function DossiePage() {
     // Enriquecimento LAZY do cadastro/QSA no D1 (best-effort; não bloqueia a tela).
     void requestCompanyEnrichment(cnpj);
 
+    setRetryCnpj(cnpj);
     setStatus("loading");
     setErrorMsg(undefined);
     setDossie(undefined);
@@ -847,7 +899,11 @@ export function DossiePage() {
       setDossie(result);
       setStatus("done");
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Erro ao consultar o CNPJ. Tente novamente.");
+      setErrorMsg(
+        err instanceof Error
+          ? err.message
+          : "Falha ao consultar o CNPJ nas bases. Pode ser instabilidade momentânea — tente novamente.",
+      );
       setStatus("error");
     }
   }, []);
@@ -994,6 +1050,18 @@ export function DossiePage() {
               {errorMsg}
             </span>
           </div>
+          {retryCnpj !== undefined && (
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => void handleSubmit(retryCnpj)}
+              >
+                <RefreshCw size={13} aria-hidden="true" />
+                Tentar novamente
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1094,10 +1162,7 @@ export function DossiePage() {
                 }}
                 role="status"
               >
-                <strong>Atenção:</strong>{" "}
-                {dossie.warnings.length === 1
-                  ? dossie.warnings[0]
-                  : `${dossie.warnings.length} módulos com falha parcial (os demais carregaram normalmente): ${dossie.warnings.join("; ")}`}
+                <strong>Atenção:</strong> {friendlyWarning(dossie.warnings)}
               </div>
             )}
           </section>
@@ -1150,18 +1215,48 @@ export function DossiePage() {
           {dossie.sections.every((s) => s.count === 0) && (
             <div
               className="panel"
-              style={{ padding: "24px", textAlign: "center" }}
+              style={{
+                padding: "24px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 12,
+              }}
             >
               <TrendingUp
                 size={32}
-                style={{ color: "var(--ok)", marginBottom: 12 }}
+                style={{ color: "var(--ok)", marginBottom: 0 }}
                 aria-hidden="true"
               />
-              <p style={{ margin: 0, fontSize: 14, color: "var(--t-mid)", lineHeight: 1.55 }}>
-                Nenhum registro encontrado nas fontes públicas para este CNPJ. Isso pode
-                indicar uma empresa nova, de pequeno porte, ou que ainda não tem dados
-                indexados nas bases consultadas.
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--t-hi)" }}>
+                Empresa localizada — sem registros públicos nas bases coletadas
+              </h3>
+              <p style={{ margin: 0, fontSize: 13.5, color: "var(--t-mid)", lineHeight: 1.55, maxWidth: 460 }}>
+                Encontramos o cadastro, mas nenhum registro de sanção, contrato, licitação,
+                infração ou processo apareceu nas fontes já indexadas. Isso costuma indicar uma
+                empresa nova, de pequeno porte ou de baixa exposição pública — ausência de
+                registro <strong>não</strong> é sinal de problema.
               </p>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 2 }}>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => navigateToCerebro(dossie.cnpj)}
+                  title="Ver conexões desta empresa no Cérebro (grafo)"
+                >
+                  <Brain size={13} aria-hidden="true" />
+                  Ver conexões no Cérebro
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => focusSearchInput(inputId)}
+                >
+                  <Search size={13} aria-hidden="true" />
+                  Consultar outra empresa
+                </button>
+              </div>
             </div>
           )}
 
