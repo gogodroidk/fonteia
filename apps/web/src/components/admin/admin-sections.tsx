@@ -1,10 +1,11 @@
 // Seções do Painel Admin. Componentes de apresentação (dark-safe, design-system).
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
   CalendarClock,
   Check,
   Clock,
+  CreditCard,
   Database,
   Gift,
   Layers,
@@ -24,7 +25,7 @@ import {
   type AdminUser,
   type AdminUsersResponse,
 } from "./admin-api";
-import { AdminRpcForbiddenError, AdminRpcMissingError, grantTrial } from "./admin-metrics-api";
+import { AdminRpcForbiddenError, AdminRpcMissingError, fetchUserPlans, grantTrial, type UserPlanRow } from "./admin-metrics-api";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -334,6 +335,32 @@ export function SourcesModulesSection({
 
 // ─── Seção: Usuários ─────────────────────────────────────────────────────────────
 
+function planChip(p: UserPlanRow): { text: string; color: string; title: string } {
+  if (p.trial && p.until) {
+    const days = Math.max(0, Math.ceil((new Date(p.until).getTime() - Date.now()) / 86_400_000));
+    return {
+      text: days <= 1 ? "Teste: último dia" : `Teste: ${days} dias`,
+      color: "var(--accent-ink)",
+      title: `Teste até ${fmtDateTime(p.until)}`,
+    };
+  }
+  if (p.plan === "pro" || p.plan === "corporativo") {
+    return {
+      text: p.plan === "pro" ? "Profissional" : "Corporativo",
+      color: "var(--brand-ink)",
+      title: `Plano ${p.plan} (${p.status})`,
+    };
+  }
+  if (p.status === "expired") {
+    return {
+      text: "Teste expirado",
+      color: "var(--t-mid)",
+      title: p.until ? `Teste acabou em ${fmtDateTime(p.until)}` : "Teste expirado",
+    };
+  }
+  return { text: "Grátis", color: "var(--t-mid)", title: "Plano gratuito (sem assinatura)" };
+}
+
 export function UsersSection({
   data,
   currentUserId,
@@ -353,6 +380,25 @@ export function UsersSection({
   // sobre a lista que a admin-api já devolveu — sem chamada extra ao backend.
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  // Plano/trial por e-mail (RPC admin_list_plans). Falha graciosa: sem a RPC no
+  // banco, a coluna some (honesto) e o resto do painel segue funcionando.
+  const [planByEmail, setPlanByEmail] = useState<Record<string, UserPlanRow>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void fetchUserPlans()
+      .then((rows) => {
+        if (cancelled) return;
+        const map: Record<string, UserPlanRow> = {};
+        for (const r of rows) map[r.email.toLowerCase()] = r;
+        setPlanByEmail(map);
+      })
+      .catch(() => {
+        /* admin_list_plans ausente/forbidden: coluna de plano fica oculta. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const moduleList = data.modules;
 
@@ -636,6 +682,21 @@ export function UsersSection({
                           <Layers size={12} aria-hidden="true" style={{ opacity: 0.7 }} />
                           {modCount}/{moduleList.length} módulos
                         </span>
+                        {(() => {
+                          const p = user.email ? planByEmail[user.email.toLowerCase()] : undefined;
+                          if (!p) return null;
+                          const chip = planChip(p);
+                          return (
+                            <span
+                              className="tiny"
+                              style={{ display: "inline-flex", alignItems: "center", gap: 4, color: chip.color, fontWeight: 600 }}
+                              title={chip.title}
+                            >
+                              <CreditCard size={12} aria-hidden="true" style={{ opacity: 0.7 }} />
+                              {chip.text}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
