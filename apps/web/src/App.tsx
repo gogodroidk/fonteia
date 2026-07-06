@@ -898,7 +898,9 @@ function AppShell({ path, navigate }: AppShellProps) {
                   "expired" (agora free) cai no ramo Upgrade abaixo, coerente com o
                   paywall honesto das páginas de conta/planos. */}
               {!planLoading && trial && planUntil !== undefined && (
-                <TrialBadge trial={trial} status={planStatus} until={planUntil} size="sm" />
+                <span className="shell-trial">
+                  <TrialBadge trial={trial} status={planStatus} until={planUntil} size="sm" />
+                </span>
               )}
               {/* Plano na topbar. Enquanto planLoading, nada é renderizado — sem
                   isso o botão "Upgrade" piscaria para quem já pagou a cada
@@ -1496,6 +1498,8 @@ function AppShell({ path, navigate }: AppShellProps) {
           /* icon-only upgrade/plano button to free horizontal space */
           .shell-upgrade-label{display:none}
           .shell-upgrade,.shell-plan-active{padding:0;width:36px;height:36px;border-radius:11px}
+          /* selo de contagem do trial sai do topo no mobile (segue visível em Conta/Planos) */
+          .shell-trial{display:none}
         }
         @media (max-width:380px){
           /* ultra-narrow: drop the standalone bell (alerts still reachable via bottom nav) */

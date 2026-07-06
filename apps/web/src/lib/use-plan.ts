@@ -56,7 +56,10 @@ export function usePlan(): PlanInfo {
           setInfo({
             plan,
             isPro: plan !== "free",
-            trial: Boolean(d.trial),
+            // Um trial pode chegar de duas formas: pela flag `trial` (teste por
+            // cupom) ou por uma assinatura Stripe em status "trialing" (que pode
+            // vir com trial=false). Tratar ambos como trial garante o contador.
+            trial: Boolean(d.trial) || d.status === "trialing",
             status: typeof d.status === "string" ? d.status : plan === "free" ? "free" : "active",
             until: typeof d.until === "string" ? d.until : undefined,
             loading: false,
