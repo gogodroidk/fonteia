@@ -13,11 +13,19 @@ export interface PlanInfo {
   isPro: boolean;
   /** true quando o acesso premium vem de um cupom de teste. */
   trial: boolean;
+  /**
+   * Estado bruto vindo da RPC `my_plan`. Valores conhecidos:
+   * "admin" (dono, sempre pro), "trialing" (assinatura em teste vigente),
+   * "trial" (teste por cupom), "active" (pago), "expired" (teve trial/assinatura
+   * que JÁ expirou → agora é free, paywall honesto), "free" (nunca teve).
+   * Mantido como string para não quebrar quando o backend introduzir novos estados.
+   */
+  status: string;
   until?: string | undefined;
   loading: boolean;
 }
 
-const FREE: PlanInfo = { plan: "free", isPro: false, trial: false, loading: false };
+const FREE: PlanInfo = { plan: "free", isPro: false, trial: false, status: "free", loading: false };
 
 export function usePlan(): PlanInfo {
   const [info, setInfo] = useState<PlanInfo>({ ...FREE, loading: true });
@@ -43,12 +51,13 @@ export function usePlan(): PlanInfo {
             setInfo(FREE);
             return;
           }
-          const d = data as { plan?: string; trial?: boolean; until?: string };
+          const d = data as { plan?: string; status?: string; trial?: boolean; until?: string };
           const plan: PlanId = d.plan === "pro" || d.plan === "corporativo" ? d.plan : "free";
           setInfo({
             plan,
             isPro: plan !== "free",
             trial: Boolean(d.trial),
+            status: typeof d.status === "string" ? d.status : plan === "free" ? "free" : "active",
             until: typeof d.until === "string" ? d.until : undefined,
             loading: false,
           });

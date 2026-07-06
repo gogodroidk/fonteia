@@ -39,3 +39,6 @@ export type { CompanySearchProps } from "./CompanySearch";
 
 export { RoiNote } from "./RoiNote";
 export type { RoiNoteProps } from "./RoiNote";
+
+export { TrialBadge, trialDaysLeft, trialDaysLabel } from "./TrialBadge";
+export type { TrialBadgeProps } from "./TrialBadge";

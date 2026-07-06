@@ -10,6 +10,8 @@ import {
 import { requestStripeCheckoutUrl } from "../../lib/stripe-checkout-client";
 import { CouponRedeem } from "../../components/coupon-redeem";
 import { useAuth } from "../../auth/auth-context";
+import { usePlan } from "../../lib/use-plan";
+import { TrialBadge, trialDaysLeft } from "../../components/ui/TrialBadge";
 
 const SUPPORT_EMAIL = "contato@olli.com.br";
 
@@ -31,6 +33,7 @@ function goToPaymentLink(link: string, email: string | undefined): void {
 
 export function BillingPage() {
   const { user } = useAuth();
+  const { trial, status, until, loading: planLoading } = usePlan();
   const [chosen, setChosen] = useState<string | null>(null);
   const [paid, setPaid] = useState(false);
   const [canceled, setCanceled] = useState(false);
@@ -227,6 +230,36 @@ export function BillingPage() {
             <strong>{PLANOS.find((p) => p.id === intentPlan)?.nome ?? intentPlan}</strong>. Confirme abaixo
             para iniciar o checkout — são 7 dias grátis e você pode cancelar antes sem pagar nada.
           </span>
+        </div>
+      )}
+
+      {/* Estado do teste de 7 dias: paywall honesto (expirado) ou contagem
+          regressiva (trial vigente). Não renderiza nada para quem é pago ou
+          nunca teve trial. Some enquanto o plano carrega e após pagar. */}
+      {!planLoading && !paid && (status === "expired" || (trial && until !== undefined)) && (
+        <div style={{ marginBottom: 20 }}>
+          <TrialBadge
+            trial={trial}
+            status={status}
+            until={until}
+            size="md"
+            {...(status === "expired"
+              ? {
+                  onUpgrade: () => {
+                    document
+                      .getElementById("plano-pro")
+                      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  },
+                }
+              : {})}
+          />
+          {trial && until !== undefined && (
+            <p className="small muted" style={{ margin: "8px 2px 0", lineHeight: 1.5 }}>
+              {trialDaysLeft(until) <= 1
+                ? "É o último dia do seu teste. Assine agora para não perder o acesso."
+                : "Aproveite o teste. Assine quando quiser para manter o acesso sem interrupção."}
+            </p>
+          )}
         </div>
       )}
 

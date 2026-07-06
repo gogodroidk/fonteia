@@ -31,6 +31,7 @@ import { usePlan } from "../../lib/use-plan";
 import type { PlanId } from "../../lib/use-plan";
 import { requestStripePortalUrl } from "../../lib/stripe-portal-client";
 import { useIsAdmin } from "../../components/admin/use-is-admin";
+import { TrialBadge } from "../../components/ui/TrialBadge";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -256,6 +257,7 @@ interface TabPerfilPlanProps {
   isPro: boolean;
   plan: PlanId;
   trial: boolean;
+  status: string;
   until: string | undefined;
   planLoading: boolean;
 }
@@ -267,6 +269,7 @@ function TabPerfil({
   isPro,
   plan,
   trial,
+  status,
   until,
   planLoading,
 }: Pick<AccountPageProps, "name" | "email" | "avatarUrl"> & TabPerfilPlanProps) {
@@ -275,6 +278,8 @@ function TabPerfil({
   // Se a imagem do avatar (ex.: Google) falhar, cai para as iniciais.
   const [avatarError, setAvatarError] = useState(false);
 
+  const expired = status === "expired";
+
   // Rótulo do badge de plano (exibido sob o email)
   const badgeLabel = planLoading
     ? "Carregando…"
@@ -282,7 +287,9 @@ function TabPerfil({
       ? trial
         ? "Teste ativo"
         : planLabel(plan)
-      : "Sem assinatura";
+      : expired
+        ? "Teste acabou"
+        : "Sem assinatura";
 
   const badgeClass = planLoading
     ? "badge badge--neutral"
@@ -297,7 +304,11 @@ function TabPerfil({
       ? trial && until !== undefined
         ? `${planLabel(plan)} — teste até ${formatUntil(until)}`
         : planLabel(plan)
-      : "Gratuito";
+      : expired
+        ? until !== undefined
+          ? `Gratuito — teste encerrado em ${formatUntil(until)}`
+          : "Gratuito — teste encerrado"
+        : "Gratuito";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -344,6 +355,13 @@ function TabPerfil({
             </span>
           </div>
         </div>
+        {/* Teste vigente: contagem regressiva. Não mostra o paywall de expirado
+            aqui — o painel dourado "Desbloqueie o acesso" abaixo já cobre o CTA. */}
+        {!planLoading && trial && until !== undefined && (
+          <div style={{ marginBottom: 16 }}>
+            <TrialBadge trial={trial} status={status} until={until} size="md" />
+          </div>
+        )}
         <TRow label="Plano atual" val={planRowVal} />
         <TRow label="Teste" val="7 dias grátis nos planos pagos" />
       </div>
@@ -411,7 +429,9 @@ function TabPerfil({
         >
           <div className="row" style={{ gap: 8, marginBottom: 6 }}>
             <Sparkles size={17} aria-hidden="true" />
-            <strong style={{ fontSize: 15 }}>Desbloqueie o acesso completo</strong>
+            <strong style={{ fontSize: 15 }}>
+              {expired ? "Seu teste de 7 dias acabou" : "Desbloqueie o acesso completo"}
+            </strong>
           </div>
           <p
             style={{
@@ -421,8 +441,9 @@ function TabPerfil({
               margin: "0 0 14px",
             }}
           >
-            Análises ilimitadas, alertas de novos editais e relatórios com
-            rastreabilidade completa. Comece com 7 dias grátis — só paga depois.
+            {expired
+              ? "Assine para voltar a ter análises ilimitadas, alertas de novos editais e relatórios com rastreabilidade completa."
+              : "Análises ilimitadas, alertas de novos editais e relatórios com rastreabilidade completa. Comece com 7 dias grátis — só paga depois."}
           </p>
           <button
             type="button"
@@ -430,7 +451,7 @@ function TabPerfil({
             onClick={() => navigate("/app/planos")}
           >
             <Zap size={15} aria-hidden="true" />
-            Ver planos
+            {expired ? "Assinar agora" : "Ver planos"}
           </button>
         </div>
       )}
@@ -442,11 +463,12 @@ interface TabAssinaturaProps {
   isPro: boolean;
   plan: PlanId;
   trial: boolean;
+  status: string;
   until: string | undefined;
   planLoading: boolean;
 }
 
-function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinaturaProps) {
+function TabAssinatura({ isPro, plan, trial, status, until, planLoading }: TabAssinaturaProps) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
 
@@ -479,11 +501,15 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
     }
   }
 
+  const expired = status === "expired";
+
   const badgeLabel = planLoading
     ? "Carregando…"
     : isPro
       ? trial ? "Teste ativo" : "Ativo"
-      : "Sem assinatura";
+      : expired
+        ? "Teste acabou"
+        : "Sem assinatura";
 
   const badgeClass = planLoading
     ? "badge badge--neutral"
@@ -497,7 +523,11 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
       ? trial && until !== undefined
         ? `Acesso de teste (${planLabel(plan)}) ativo até ${formatUntil(until)}. Assine para manter o acesso sem interrupção.`
         : `Você está no plano ${planLabel(plan)}. Gerencie ou cancele abaixo.`
-      : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo.";
+      : expired
+        ? until !== undefined
+          ? `Seu teste de 7 dias acabou em ${formatUntil(until)}. Assine para voltar a ter acesso completo.`
+          : "Seu teste de 7 dias acabou. Assine para voltar a ter acesso completo."
+        : "Você ainda não assinou. Escolha um plano, ou ative um cupom de teste abaixo.";
 
   return (
     <div className="panel" style={{ padding: 26 }}>
@@ -514,6 +544,20 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
       <div style={{ fontSize: 13, color: "var(--t-mid)", marginBottom: 18 }}>
         {descText}
       </div>
+
+      {/* Estado do teste: contagem regressiva (vigente) ou paywall honesto
+          (expirado). O CTA de expirado leva aos planos. */}
+      {!planLoading && (trial && until !== undefined || expired) && (
+        <div style={{ marginBottom: 18 }}>
+          <TrialBadge
+            trial={trial}
+            status={status}
+            until={until}
+            size="md"
+            {...(expired ? { onUpgrade: () => navigate("/app/planos") } : {})}
+          />
+        </div>
+      )}
 
       {!isPro && (
         <div style={{ marginBottom: 18 }}>
@@ -1123,7 +1167,7 @@ function SideNav({
 export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPageProps) {
   const [activeTab, setActiveTab] = useState<TabId>("perfil");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { plan, isPro, trial, until, loading: planLoading } = usePlan();
+  const { plan, isPro, trial, status, until, loading: planLoading } = usePlan();
   // Acesso ao painel de administração: aparece SÓ para quem tem role=admin
   // (gate server-side em profiles via RLS). Para os demais, nem renderiza.
   const { isAdmin } = useIsAdmin();
@@ -1139,6 +1183,7 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
             isPro={isPro}
             plan={plan}
             trial={trial}
+            status={status}
             until={until}
             planLoading={planLoading}
           />
@@ -1149,6 +1194,7 @@ export function AccountPage({ name, email, avatarUrl, onSignOut }: AccountPagePr
             isPro={isPro}
             plan={plan}
             trial={trial}
+            status={status}
             until={until}
             planLoading={planLoading}
           />
