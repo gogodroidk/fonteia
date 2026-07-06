@@ -70,6 +70,19 @@ async function callRpc<T>(name: string, args?: Record<string, unknown>): Promise
   return data as T;
 }
 
+// ─── Planos/trial por usuário (RPC admin_list_plans; gate is_admin server-side) ──
+export interface UserPlanRow {
+  email: string;
+  plan: string;
+  status: string;
+  trial: boolean;
+  until: string | null;
+}
+/** Plano/trial efetivo de cada e-mail (janela vigente já resolvida no servidor). */
+export function fetchUserPlans(): Promise<UserPlanRow[]> {
+  return callRpc<UserPlanRow[]>("admin_list_plans");
+}
+
 // ─── Tipos de retorno ───────────────────────────────────────────────────────
 
 export interface PlatformMetrics {
