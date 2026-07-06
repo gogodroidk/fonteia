@@ -46,6 +46,7 @@ import {
   gerarPlano,
   salvarPerfil,
 } from "../../lib/onboarding-profissao";
+import { navigateSpa } from "../_nav";
 
 // ─── Dados das opções ──────────────────────────────────────────────────────
 
@@ -149,6 +150,13 @@ const ICONE_ROTA: Record<string, React.ElementType> = {
 };
 
 const TOTAL_STEPS = 4;
+
+// As rotas do plano (lib/onboarding-profissao) são módulos sem prefixo ("/empresas").
+// Dentro do app elas vivem sob "/app" ("/app/empresas"). Converte para o destino real
+// e evita o full reload navegando pelo router SPA.
+function rotaApp(rota: string): string {
+  return rota.startsWith("/app") ? rota : `/app${rota}`;
+}
 
 // ─── Componente ────────────────────────────────────────────────────────────
 
@@ -522,15 +530,16 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                     <div className="onb-acao-corpo">
                       <strong>{acao.rotulo}</strong>
                       <span>{acao.detalhe}</span>
-                      <a
-                        href={acao.rota}
+                      <button
+                        type="button"
                         className="onb-acao-link"
+                        onClick={() => navigateSpa(rotaApp(acao.rota))}
                         aria-label={`Ir para ${acao.rota}`}
                       >
                         <IconeRota size={13} aria-hidden="true" />
                         {acao.rota}
                         <ChevronRight size={12} aria-hidden="true" />
-                      </a>
+                      </button>
                     </div>
                   </li>
                 );
@@ -544,9 +553,10 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                 Busca recomendada
               </div>
               <p className="onb-destaque-texto">{plano.buscaRecomendada.rotulo}</p>
-              <a
-                href={plano.buscaRecomendada.rota}
+              <button
+                type="button"
                 className="onb-acao-link"
+                onClick={() => navigateSpa(rotaApp(plano.buscaRecomendada.rota))}
                 aria-label={`Ir para ${plano.buscaRecomendada.rota}`}
               >
                 {(() => {
@@ -555,7 +565,7 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                 })()}
                 {plano.buscaRecomendada.rota}
                 <ChevronRight size={12} aria-hidden="true" />
-              </a>
+              </button>
             </div>
 
             {/* Alerta recomendado */}
@@ -565,9 +575,10 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                 Alerta recomendado
               </div>
               <p className="onb-destaque-texto">{plano.alertaRecomendado.rotulo}</p>
-              <a
-                href={plano.alertaRecomendado.rota}
+              <button
+                type="button"
                 className="onb-acao-link"
+                onClick={() => navigateSpa(rotaApp(plano.alertaRecomendado.rota))}
                 aria-label={`Ir para ${plano.alertaRecomendado.rota}`}
               >
                 {(() => {
@@ -576,7 +587,7 @@ export function OnboardingProfissaoPage({ onFinish, nome }: Props) {
                 })()}
                 {plano.alertaRecomendado.rota}
                 <ChevronRight size={12} aria-hidden="true" />
-              </a>
+              </button>
             </div>
 
             {/* CTA */}
@@ -798,13 +809,16 @@ const ESTILOS = `
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    font-family: inherit;
     font-size: 11.5px;
     font-weight: 700;
     color: var(--brand-ink);
     text-decoration: none;
+    border: 0;
     border-radius: 6px;
     padding: 2px 6px;
     background: color-mix(in srgb, var(--brand) 10%, transparent);
+    cursor: pointer;
     transition: background 0.15s;
   }
   .onb-acao-link:hover {

@@ -101,7 +101,7 @@ export async function listLeads(fetcher: typeof fetch = fetch): Promise<LeadsLoa
       source: "empty",
       leads: [],
       message:
-        "Nenhum contrato público disponível ainda. A coleta do PNCP está sendo ligada — volte em breve.",
+        "Nenhum contrato público disponível ainda. Este módulo estará disponível em breve. Enquanto isso, explore Leilões e Empresas.",
       errors,
     };
   } catch (error) {

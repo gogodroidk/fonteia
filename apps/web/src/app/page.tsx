@@ -14,6 +14,7 @@ import { listProposicoes } from "../features/juridico/juridico-api";
 import { listOrgaos } from "../features/empresas/empresas-api";
 import { FONTES, formatBRL } from "../data/leiloes-seed";
 import { displayCity } from "../lib/receita-localidades";
+import { getOnboardingPrefs, goalToAppRoute } from "../lib/onboarding";
 import { useAuth } from "../auth/auth-context";
 import { PRODUCT_MODULES } from "@fonteia/domain";
 
@@ -74,9 +75,11 @@ interface ConfidenceBadge {
 }
 
 function confiancaBadge(label: OpportunityLabel): ConfidenceBadge {
-  if (label === "alto") return { className: "badge--ok", label: "Confiança alta" };
-  if (label === "medio") return { className: "badge--warn", label: "Confiança média" };
-  return { className: "badge--neutral", label: "Cautela" };
+  // Termo padronizado em todo o produto: "Oportunidade" (antes o painel dizia
+  // "Confiança" enquanto o detalhe do lote dizia "Oportunidade" para o mesmo score).
+  if (label === "alto") return { className: "badge--ok", label: "Oportunidade alta" };
+  if (label === "medio") return { className: "badge--warn", label: "Oportunidade média" };
+  return { className: "badge--neutral", label: "Avaliar com cautela" };
 }
 
 function confiancaColor(label: OpportunityLabel): string {
@@ -590,7 +593,7 @@ export function DashboardPage(props: {
       .catch((err: unknown) => {
         if (!active) return;
         // Log the raw error for debugging; show only a friendly message to users
-        console.error("[DashboardPage] Erro ao carregar lotes:", err);
+        if (import.meta.env.DEV) console.error("[DashboardPage] Erro ao carregar lotes:", err);
         setLoadError("Não foi possível carregar os lotes agora. Tente novamente em alguns instantes.");
         setIsLoading(false);
         setModuleData((prev) => ({
@@ -849,6 +852,14 @@ export function DashboardPage(props: {
     );
   }, [moduleData]);
 
+  // ─── Personalização pelo objetivo do onboarding ─────────────────────────
+  // Lê fonteia.prefs (gravado no onboarding). Se o usuário declarou um objetivo,
+  // a ação correspondente sobe ao topo e a legenda muda para reconhecer que ele
+  // já passou por aqui. Sem preferência → comportamento padrão (lead novo).
+  const onbPrefs = getOnboardingPrefs();
+  const hintRoute = onbPrefs ? goalToAppRoute(onbPrefs.goal) : null;
+  const hintAppRoute = hintRoute ? `/app${hintRoute}` : null;
+
   // ─── Quick actions config (inline so they close over onAsk) ─────────────
   const QUICK_ACTIONS: QuickAction[] = [
     {
@@ -911,6 +922,14 @@ export function DashboardPage(props: {
     },
   ];
 
+  // Objetivo do onboarding em primeiro; o resto mantém a ordem original.
+  const orderedQuickActions = hintAppRoute
+    ? [
+        ...QUICK_ACTIONS.filter((a) => a.route === hintAppRoute),
+        ...QUICK_ACTIONS.filter((a) => a.route !== hintAppRoute),
+      ]
+    : QUICK_ACTIONS;
+
   // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -945,14 +964,14 @@ export function DashboardPage(props: {
             className="section-label"
             style={{ fontSize: 16, marginBottom: 2 }}
           >
-            Comece por aqui
+            {onbPrefs ? "Continuando de onde voc\xea parou" : "Comece por aqui"}
           </div>
           <div className="section-sub" style={{ marginBottom: 0 }}>
             Escolha uma ação — os dados est\xe3o indexados e prontos.
           </div>
         </div>
         <div className="quick-actions-grid">
-          {QUICK_ACTIONS.map((action) => (
+          {orderedQuickActions.map((action) => (
             <QuickActionCard key={action.id} action={action} onAsk={onAsk} />
           ))}
         </div>
@@ -1377,14 +1396,14 @@ export function DashboardPage(props: {
               onChange={(e) => setTerm(e.target.value)}
             />
             <select
-              aria-label="Filtrar confiança"
+              aria-label="Filtrar por oportunidade"
               value={riskFilter}
               onChange={(e) => setRiskFilter(e.target.value)}
             >
-              <option value="all">Toda confiança</option>
-              <option value="alto">Confiança alta</option>
-              <option value="medio">Confiança média</option>
-              <option value="baixo">Cautela</option>
+              <option value="all">Toda oportunidade</option>
+              <option value="alto">Oportunidade alta</option>
+              <option value="medio">Oportunidade média</option>
+              <option value="baixo">Avaliar com cautela</option>
             </select>
             <select
               aria-label="Filtrar pessoa"
@@ -1789,16 +1808,16 @@ export function DashboardPage(props: {
           )}
         </div>
 
-        {/* Distribuição de confiança */}
+        {/* Distribuição de oportunidade */}
         {scoredLots.length > 0 ? (
           <div className="panel" style={{ padding: 22, marginTop: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
-              Distribuição de confiança — Leilões
+              Distribuição de oportunidade — Leilões
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <Bar label="Confiança alta" value={dist.baixo} color="var(--ok)" />
-              <Bar label="Confiança média" value={dist.medio} color="var(--warn)" />
-              <Bar label="Cautela" value={dist.alto} color="var(--t-mid)" />
+              <Bar label="Oportunidade alta" value={dist.baixo} color="var(--ok)" />
+              <Bar label="Oportunidade média" value={dist.medio} color="var(--warn)" />
+              <Bar label="Avaliar com cautela" value={dist.alto} color="var(--t-mid)" />
             </div>
           </div>
         ) : null}

@@ -1008,7 +1008,9 @@ async function fetchTrademarksPremium(
       };
     });
   } catch (error) {
-    console.warn("[cerebro] infosimples-proxy indisponível:", toErrorMessage(error));
+    if (import.meta.env.DEV) {
+      console.warn("[cerebro] infosimples-proxy indisponível:", toErrorMessage(error));
+    }
     return null;
   }
 }

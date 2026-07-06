@@ -377,7 +377,7 @@ export function AmbientalPage({ onSelectInfracao }: AmbientalPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        console.error("[ambiental] falha ao carregar:", err);
+        if (import.meta.env.DEV) console.error("[ambiental] falha ao carregar:", err);
         setErrorMessage("Não foi possível carregar os autos de infração. Verifique sua conexão e tente novamente.");
         setIsLoading(false);
       });

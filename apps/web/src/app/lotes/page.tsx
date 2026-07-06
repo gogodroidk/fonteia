@@ -290,9 +290,22 @@ interface LotCardProps {
   onSelect: (() => void) | undefined;
   editalCount: number;
   onFilterByEdital: (edital: string) => void;
+  /**
+   * Card renderizado DENTRO de um edital já expandido? Se sim, o pill
+   * "+N neste edital" é redundante (os N lotes já estão lado a lado) — ocultamos.
+   */
+  insideEdital?: boolean | undefined;
 }
 
-function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilterByEdital }: LotCardProps) {
+function LotCard({
+  view,
+  watched,
+  onToggleWatch,
+  onSelect,
+  editalCount,
+  onFilterByEdital,
+  insideEdital = false,
+}: LotCardProps) {
   const { lot, scoring, economia } = view;
   const badge = confidenceBadge(scoring.label);
   const days = daysUntil(lot.proposalDeadline);
@@ -478,7 +491,7 @@ function LotCard({ view, watched, onToggleWatch, onSelect, editalCount, onFilter
               style={{ marginTop: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}
             >
               <span style={{ fontFamily: "monospace" }}>{lot.edital}</span>
-              {editalCount > 1 && (
+              {editalCount > 1 && !insideEdital && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -800,6 +813,7 @@ function EditalCard({
                 onSelect={onSelectLot !== undefined ? () => onSelectLot(view.lot) : undefined}
                 editalCount={editalCountMap.get(view.lot.edital.trim()) ?? 1}
                 onFilterByEdital={onFilterByEdital}
+                insideEdital
               />
             ))}
           </div>
@@ -978,6 +992,9 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Retry: incrementar reexecuta a carga sem recarregar a página inteira ────
+  const [reloadKey, setReloadKey] = useState(0);
+
   // ── Watchlist state (kept in sync with localStorage + other views) ──────────
   const [watchIds, setWatchIds] = useState<string[]>(() => readWatchlist());
 
@@ -1009,7 +1026,7 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   // ── Enrich lots with score + economia (memoised) ────────────────────────────
   const views = useMemo<LotView[]>(
@@ -1233,12 +1250,25 @@ export function LotesPage({ onSelectLot }: LotesPageProps) {
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
             color: "var(--danger)",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
             fontSize: 13.5,
             fontWeight: 600,
           }}
           role="alert"
         >
-          Erro ao carregar dados: {errorMessage}
+          <span>Erro ao carregar dados: {errorMessage}</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            style={{ flexShrink: 0 }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 

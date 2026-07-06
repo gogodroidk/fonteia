@@ -1,5 +1,6 @@
 import { LogoMark } from "../../components/ui/logo-mark";
 import { ThemeToggle } from "../../components/ui/ThemeToggle";
+import { navigateSpa } from "../_nav";
 import {
   useSeo,
   articleJsonLd,
@@ -135,21 +136,21 @@ function SegmentoCard({ icon, perfil, dor, beneficios }: SegmentoCardProps) {
       </div>
 
       {/* CTA */}
-      <a
-        href="/entrar"
+      <button
+        type="button"
+        onClick={() => navigateSpa("/entrar")}
         className="btn btn--ghost btn--sm"
         style={{
           display: "inline-flex",
           alignItems: "center",
           gap: "6px",
-          textDecoration: "none",
           alignSelf: "flex-start",
           marginTop: "4px",
         }}
       >
         Experimentar grátis
         <ArrowRight size={14} aria-hidden="true" />
-      </a>
+      </button>
     </div>
   );
 }
@@ -324,9 +325,13 @@ export function ParaQuemPage() {
           <a href="/seguranca" className="btn btn--ghost btn--sm">
             Segurança
           </a>
-          <a href="/entrar" className="btn btn--accent btn--sm">
+          <button
+            type="button"
+            onClick={() => navigateSpa("/entrar")}
+            className="btn btn--accent btn--sm"
+          >
             Começar grátis
-          </a>
+          </button>
         </nav>
       </header>
 
@@ -497,8 +502,9 @@ export function ParaQuemPage() {
           >
             Experimente 7 dias grátis. Sem cartão, sem compromisso.
           </p>
-          <a
-            href="/entrar"
+          <button
+            type="button"
+            onClick={() => navigateSpa("/entrar")}
             className="btn btn--accent btn--lg"
             style={{
               minWidth: "200px",
@@ -506,13 +512,12 @@ export function ParaQuemPage() {
               alignItems: "center",
               justifyContent: "center",
               gap: "8px",
-              textDecoration: "none",
               minHeight: "48px",
             }}
           >
             Começar grátis
             <ArrowRight size={16} aria-hidden="true" />
-          </a>
+          </button>
           <p className="muted" style={{ fontSize: "12px", marginTop: "12px" }}>
             7 dias grátis · sem contrato · dados rastreáveis à fonte oficial
           </p>

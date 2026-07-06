@@ -633,8 +633,8 @@ const searchStyles = `
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 9px;
   background: transparent;
@@ -667,7 +667,8 @@ const searchStyles = `
 }
 .search-kw__chip {
   cursor: pointer;
-  min-height: 34px;
+  min-height: 44px;
+  padding: 11px 14px;
 }
 .search-kw__resultline {
   display: flex;

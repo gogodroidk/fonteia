@@ -513,7 +513,15 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
 
       {!isPro && (
         <div style={{ marginBottom: 18 }}>
-          <CouponRedeem compact />
+          {/* onRedeemed força um reload: usePlan só re-busca em onAuthStateChange,
+              e resgatar cupom não dispara auth change — sem isto o app seguiria
+              tratando o usuário como free até um reload manual. */}
+          <CouponRedeem
+            compact
+            onRedeemed={() => {
+              window.location.reload();
+            }}
+          />
         </div>
       )}
 
@@ -592,9 +600,21 @@ function TabAssinatura({ isPro, plan, trial, until, planLoading }: TabAssinatura
         </a>
       )}
 
-      <TRow label="Método de pagamento" val="Não cadastrado" />
-      <TRow label="Próxima cobrança" val="—" />
-      <TRow label="Teste" val="7 dias grátis nos planos pagos" />
+      {isPro && trial && until !== undefined && (
+        <TRow label="Teste até" val={formatUntil(until)} />
+      )}
+      {isPro && !trial && (
+        <div
+          className="small muted"
+          style={{ marginTop: 4, lineHeight: 1.5 }}
+        >
+          Gerencie a forma de pagamento e veja suas faturas no portal do Stripe
+          (botão acima).
+        </div>
+      )}
+      {!isPro && (
+        <TRow label="Teste" val="7 dias grátis nos planos pagos" />
+      )}
     </div>
   );
 }

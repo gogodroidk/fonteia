@@ -10,6 +10,7 @@ import {
   ImageOff,
   Layers,
   Loader2,
+  Lock,
   MapPin,
   Package,
   FileText,
@@ -45,6 +46,7 @@ import { isVeiculo, fetchFipePreco, type FipePrecoResponse } from "../../feature
 import { supabase } from "../../auth/supabase-client";
 import { usePlan } from "../../lib/use-plan";
 import { useFocusTrap } from "../../hooks/use-focus-trap";
+import { navigateSpa } from "../_nav";
 
 // Renderiza **negrito** simples dentro de uma linha (sem libs de markdown).
 function renderInline(text: string) {
@@ -77,7 +79,6 @@ async function sha256Hex(input: string): Promise<string | null> {
 interface LotDetailPageProps {
   lot: ReceitaLeilaoLot;
   onBack: () => void;
-  onAsk?: ((question: string) => void) | undefined;
   /** Navega para outro lote (usado pela seção "Lotes parecidos"). */
   onSelectLot?: ((lot: ReceitaLeilaoLot) => void) | undefined;
 }
@@ -938,7 +939,6 @@ function PrecoHistoricoSection({ result }: { result: PrecoHistoricoResult }) {
 export function LotDetailPage({
   lot,
   onBack,
-  onAsk: _onAsk,
   onSelectLot,
 }: LotDetailPageProps) {
   const scoring = scoreReceitaLeilaoLot(lot);
@@ -1046,7 +1046,7 @@ export function LotDetailPage({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [lot.id, lot.category, session?.access_token]);
 
   // SHA-256 hash do conteúdo factual exibido (prova de integridade do que está na tela).
@@ -1094,10 +1094,23 @@ export function LotDetailPage({
   const [editalIA, setEditalIA] = useState<string | null>(null);
   const [editalIALoading, setEditalIALoading] = useState(false);
   const [editalIAError, setEditalIAError] = useState<string | null>(null);
+  // Marca quando o bloqueio da análise de edital é por plano (não erro técnico):
+  // aí a mensagem ganha um CTA "Desbloquear" em vez de só um texto cinza.
+  const [editalIAPaywall, setEditalIAPaywall] = useState(false);
   const [alertName, setAlertName] = useState(`Alerta — Edital ${lot.edital}`);
   const [alertChannel, setAlertChannel] = useState<AlertChannel>("in_app");
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Tom do feedback: "ok" pinta como sucesso (role=status); "erro"/"aviso" pintam
+  // como falha (role=alert). Antes toda mensagem — inclusive erros e bloqueios de
+  // plano — usava o estilo verde de sucesso, o que enganava o usuário.
+  const [feedbackTone, setFeedbackTone] = useState<"ok" | "erro">("ok");
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Define mensagem + tom de uma vez. Use tone="erro" para falhas e bloqueios.
+  function showFeedback(message: string, tone: "ok" | "erro" = "ok"): void {
+    setFeedbackTone(tone);
+    setSuccessMessage(message);
+  }
 
   // Assistente de IA (Raio-X do lote)
   const [iaLoading, setIaLoading] = useState(false);
@@ -1109,6 +1122,9 @@ export function LotDetailPage({
   const [iaQuestion, setIaQuestion] = useState("");
 
   async function runRaioX(question?: string) {
+    // Trava cliques repetidos: sem isso, cliques duplos no CTA inicial (comum
+    // quando a resposta demora) disparam chamadas concorrentes de IA.
+    if (iaLoading) return;
     setIaLoading(true);
     setIaError(null);
     setIaUnavailable(false);
@@ -1171,6 +1187,13 @@ export function LotDetailPage({
     setIaQuestion("");
   }, [lot.id]);
 
+  // Sobe o scroll ao trocar de lote (ex.: clique em "Lotes parecidos" no
+  // rodapé) — sem isso o usuário permanece no offset antigo e a troca
+  // parece não ter acontecido.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [lot.id]);
+
   useEffect(() => {
     return () => {
       if (successTimerRef.current !== null) {
@@ -1182,7 +1205,7 @@ export function LotDetailPage({
   async function handleSaveAlert() {
     setAlertOpen(false);
     if (!isPro) {
-      setSuccessMessage("Alertas por e-mail são do plano Profissional. Assine (ou use o cupom de teste) para receber avisos de prazo.");
+      showFeedback("Receba avisos de prazo por e-mail — recurso do plano Profissional. Escolha um plano ou ative um cupom de teste em Minha conta.", "erro");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 6000);
       return;
     }
@@ -1198,16 +1221,16 @@ export function LotDetailPage({
           p_email: email,
         });
         const d = (data ?? {}) as { ok?: boolean; message?: string };
-        setSuccessMessage(
-          !error && d.ok
-            ? `✓ ${d.message ?? "Alerta criado!"} (${email})`
-            : d.message ?? "Não consegui criar o alerta agora. Tente novamente.",
-        );
+        if (!error && d.ok) {
+          showFeedback(`✓ ${d.message ?? "Alerta criado!"} (${email})`, "ok");
+        } else {
+          showFeedback(d.message ?? "Não consegui criar o alerta agora. Tente novamente.", "erro");
+        }
       } catch {
-        setSuccessMessage("Não consegui criar o alerta agora. Tente novamente.");
+        showFeedback("Não consegui criar o alerta agora. Tente novamente.", "erro");
       }
     } else {
-      setSuccessMessage("Entre na sua conta para receber alertas por e-mail deste lote.");
+      showFeedback("Entre na sua conta para receber alertas por e-mail deste lote.", "erro");
     }
     successTimerRef.current = setTimeout(() => {
       setSuccessMessage(null);
@@ -1223,10 +1246,11 @@ export function LotDetailPage({
         { headers: { apikey: key } },
       );
       if (!res.ok) {
-        setSuccessMessage(
+        showFeedback(
           res.status === 404
             ? "Este edital ainda não tem PDF publicado no SLE."
             : "Não consegui baixar o edital agora.",
+          "erro",
         );
         successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
         return;
@@ -1241,7 +1265,7 @@ export function LotDetailPage({
       document.body.removeChild(a);
       URL.revokeObjectURL(objUrl);
     } catch {
-      setSuccessMessage("Não consegui baixar o edital agora.");
+      showFeedback("Não consegui baixar o edital agora.", "erro");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setEditalLoading(false);
@@ -1257,10 +1281,11 @@ export function LotDetailPage({
         { headers: { apikey: key } },
       );
       if (!res.ok) {
-        setSuccessMessage(
+        showFeedback(
           res.status === 404
             ? "Este edital não tem relação de itens publicada no SLE."
             : "Não consegui baixar a relação de itens agora.",
+          "erro",
         );
         successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
         return;
@@ -1275,7 +1300,7 @@ export function LotDetailPage({
       document.body.removeChild(a);
       URL.revokeObjectURL(objUrl);
     } catch {
-      setSuccessMessage("Não consegui baixar a relação de itens agora.");
+      showFeedback("Não consegui baixar a relação de itens agora.", "erro");
       successTimerRef.current = setTimeout(() => setSuccessMessage(null), 4000);
     } finally {
       setRelacaoLoading(false);
@@ -1285,11 +1310,15 @@ export function LotDetailPage({
   async function analisarEdital() {
     if (!isPro) {
       setEditalIA(null);
-      setEditalIAError("A análise do edital por IA é do plano Profissional. Assine (ou use o cupom de teste) para liberar.");
+      setEditalIAPaywall(true);
+      // Texto real do bloqueio é renderizado pelo card de paywall (editalIAPaywall,
+      // abaixo) — este valor só precisa ser truthy pra abrir a seção "O que diz o edital".
+      setEditalIAError("Recurso do plano Profissional.");
       return;
     }
     setEditalIALoading(true);
     setEditalIAError(null);
+    setEditalIAPaywall(false);
     setEditalIA(null);
     try {
       const base = getConfiguredApiUrl();
@@ -1307,7 +1336,10 @@ export function LotDetailPage({
       });
       const data = (await res.json()) as { answer?: string; error?: string; message?: string };
       if (res.status === 403) {
-        setEditalIAError("A análise do edital por IA é do plano Profissional. Assine (ou use o cupom de teste) para liberar.");
+        setEditalIAPaywall(true);
+        // Texto real do bloqueio é renderizado pelo card de paywall (editalIAPaywall,
+        // abaixo) — este valor só precisa ser truthy pra abrir a seção "O que diz o edital".
+        setEditalIAError("Recurso do plano Profissional.");
         return;
       }
       if (res.status === 404) {
@@ -1315,7 +1347,7 @@ export function LotDetailPage({
         return;
       }
       if (res.status === 503) {
-        setEditalIAError("A análise por IA ainda não foi ativada.");
+        setEditalIAError("A análise do edital por IA estará disponível em breve.");
         return;
       }
       if (!res.ok || !data.answer) throw new Error(data.message ?? data.error ?? `Erro ${res.status}`);
@@ -1637,6 +1669,19 @@ export function LotDetailPage({
                 <Bell aria-hidden="true" size={16} />
                 Criar alerta de prazo
               </button>
+              <a
+                href="/ferramentas/calculadora-lance"
+                className="btn btn--ghost lot-hero-action"
+                onClick={(e) => {
+                  if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                    e.preventDefault();
+                    navigateSpa("/ferramentas/calculadora-lance");
+                  }
+                }}
+              >
+                <TrendingDown aria-hidden="true" size={16} />
+                Calcular meu lance máximo
+              </a>
               <button
                 className="btn btn--ghost lot-hero-action"
                 onClick={() => void baixarEdital()}
@@ -1669,11 +1714,14 @@ export function LotDetailPage({
                 type="button"
                 disabled={editalIALoading}
                 title={isPro ? "Analisar o edital com IA" : "Recurso do plano Profissional"}
+                aria-label={isPro ? "Analisar edital com IA" : "Analisar edital com IA — desbloquear com o plano Profissional"}
               >
                 {editalIALoading ? (
                   <Loader2 aria-hidden="true" size={16} className="spin" />
-                ) : (
+                ) : isPro ? (
                   <Sparkles aria-hidden="true" size={16} />
+                ) : (
+                  <Lock aria-hidden="true" size={16} />
                 )}
                 Analisar edital com IA
               </button>
@@ -1690,7 +1738,12 @@ export function LotDetailPage({
             </div>
 
             {successMessage ? (
-              <div className="lot-success-message">{successMessage}</div>
+              <div
+                className={feedbackTone === "erro" ? "lot-feedback-message lot-feedback-message--error" : "lot-feedback-message"}
+                role={feedbackTone === "erro" ? "alert" : "status"}
+              >
+                {successMessage}
+              </div>
             ) : null}
           </section>
 
@@ -1737,7 +1790,7 @@ export function LotDetailPage({
                     : iaAnswer
                     ? "Raio-X gerado com IA"
                     : iaUnavailable
-                    ? "Em ativação"
+                    ? "Em breve"
                     : "Raio-X do lote com IA — entenda este lote em segundos"}
                 </span>
               </div>
@@ -1815,11 +1868,10 @@ export function LotDetailPage({
                 }}
               >
                 <p style={{ margin: "0 0 var(--s-2)" }}>
-                  O assistente de IA ainda não foi ativado nesta conta.
+                  O Raio-X de IA estará disponível em breve.
                 </p>
                 <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--t-low)" }}>
-                  Os dados acima vêm direto da fonte oficial. A análise por IA é ativada assim que a
-                  chave da Anthropic for configurada no servidor.
+                  Enquanto isso, os dados acima vêm direto das fontes oficiais.
                 </p>
               </div>
             ) : (
@@ -1843,9 +1895,20 @@ export function LotDetailPage({
                   className="btn btn--primary raio-x-cta"
                   onClick={() => { void runRaioX(); }}
                   type="button"
+                  disabled={iaLoading}
+                  aria-busy={iaLoading}
                 >
-                  <Sparkles aria-hidden="true" size={18} />
-                  Gerar Raio-X com IA
+                  {iaLoading ? (
+                    <>
+                      <Loader2 aria-hidden="true" size={18} className="spin" />
+                      Gerando…
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles aria-hidden="true" size={18} />
+                      Gerar Raio-X com IA
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -1853,6 +1916,7 @@ export function LotDetailPage({
             {/* Erro */}
             {iaError ? (
               <p
+                role="alert"
                 style={{
                   margin: 0,
                   fontSize: "0.78rem",
@@ -1873,6 +1937,7 @@ export function LotDetailPage({
                   e.preventDefault();
                   if (!iaLoading && iaQuestion.trim()) {
                     void runRaioX(iaQuestion);
+                    setIaQuestion("");
                   }
                 }}
                 style={{ display: "flex", gap: "var(--s-2)" }}
@@ -1919,8 +1984,46 @@ export function LotDetailPage({
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--s-2)", color: "var(--t-mid)", fontSize: "0.85rem" }}>
                   <Loader2 size={16} className="spin" aria-hidden="true" /> Lendo o edital oficial…
                 </div>
+              ) : editalIAPaywall ? (
+                /* Paywall visível: bloqueio de plano com CTA claro (não só texto cinza). */
+                <div
+                  role="note"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--s-3)",
+                    padding: "var(--s-4)",
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--r-md)",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: "var(--s-2)", alignItems: "flex-start" }}>
+                    <Lock size={18} aria-hidden="true" style={{ color: "var(--brand-ink)", flexShrink: 0, marginTop: 2 }} />
+                    <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--t-mid)", lineHeight: 1.55 }}>
+                      A leitura do edital inteiro por IA faz parte do plano Profissional. O restante
+                      dos dados oficiais deste lote continua liberado.
+                    </p>
+                  </div>
+                  <a
+                    href="/app/planos"
+                    className="btn btn--primary"
+                    style={{ alignSelf: "flex-start", textDecoration: "none" }}
+                    onClick={(e) => {
+                      // Navega via SPA no clique simples (mantém href para
+                      // acessibilidade e Ctrl/Cmd+clique em nova aba).
+                      if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+                        e.preventDefault();
+                        navigateSpa("/app/planos");
+                      }
+                    }}
+                  >
+                    <Sparkles size={16} aria-hidden="true" />
+                    Desbloquear com o plano Profissional
+                  </a>
+                </div>
               ) : editalIAError ? (
-                <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--t-mid)" }}>{editalIAError}</p>
+                <p role="alert" style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-error)" }}>{editalIAError}</p>
               ) : editalIA ? (
                 <div style={{ fontSize: "0.88rem", lineHeight: 1.65, color: "var(--t-mid)" }}>
                   {editalIA.split("\n").map((line, i) =>

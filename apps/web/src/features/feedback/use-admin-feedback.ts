@@ -56,7 +56,7 @@ export function useAdminFeedback(opts?: UseAdminFeedbackOptions): UseAdminFeedba
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [enabled, status, limit, tick]);
 
   return { items, loading, error, reload };

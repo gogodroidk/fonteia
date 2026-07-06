@@ -59,7 +59,7 @@ const EXEMPLOS: Exemplo[] = [
   { rotulo: "Petrobras", valor: "Petrobras" },
   { rotulo: "Magazine Luiza", valor: "Magazine Luiza" },
   { rotulo: "Prefeitura de São Paulo", valor: "Prefeitura de São Paulo" },
-  { rotulo: "CNPJ de exemplo", valor: "00.000.000/0001-91" },
+  { rotulo: "Vivo (CNPJ)", valor: "02558157000162" },
 ];
 
 const LS_KEY = "fonteia.cerebro.guideSeen";

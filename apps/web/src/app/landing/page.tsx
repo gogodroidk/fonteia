@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck,
-  Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale,
+  Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale, BadgeCheck, Menu,
 } from "lucide-react";
 import { ScoreRing, FonteDots, ThemeToggle, LogoMark } from "../../components/ui";
 import {
@@ -11,6 +11,7 @@ import {
   formatBRL,
 } from "../../data/leiloes-seed";
 import { navigateSpa } from "../_nav";
+import { setPlanoIntent } from "../../lib/pending-intent";
 
 // ─── Reveal on scroll ───────────────────────────────────────────────────────
 
@@ -304,99 +305,39 @@ function ModuleChip({
 
 // ─── Module card (ativo, com número real) ────────────────────────────────────
 
-function ModuleCard({
-  icon,
-  title,
-  number,
-  numberLabel,
-  desc,
-  hero = false,
-  growing = false,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  number: string;
-  numberLabel: string;
-  desc: string;
-  hero?: boolean;
-  growing?: boolean;
-}) {
-  return (
-    <div
-      className="card card--pad card--hover"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        gap: 10,
-        position: "relative",
-        flex: "1 1 230px",
-        minWidth: 220,
-        paddingTop: 18,
-        borderColor: hero ? "color-mix(in srgb,var(--accent) 50%,var(--border))" : undefined,
-        boxShadow: hero ? "0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent), var(--shadow-md)" : undefined,
-      }}
-    >
-      <div
-        style={{
-          position: "absolute",
-          top: 12,
-          right: 12,
-          display: "flex",
-          gap: 6,
-          flexWrap: "wrap",
-          justifyContent: "flex-end",
-        }}
-      >
-        {hero && (
-          <span className="badge badge--accent" style={{ fontSize: 9, padding: "2px 7px" }}>
-            Carro-chefe
-          </span>
-        )}
-        <span className="badge badge--ok" style={{ fontSize: 9, padding: "2px 7px" }}>
-          Ativo
-        </span>
-      </div>
+// ModuleCard removido: superado pelo ModuleChip no redesign da seção de fontes.
 
-      <div
-        style={{
-          width: 42,
-          height: 42,
-          borderRadius: 12,
-          background: "linear-gradient(135deg,var(--brand),var(--accent))",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          boxShadow: "var(--shadow-md)",
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
-
-      <div className="h3" style={{ fontSize: 15, marginTop: 2 }}>{title}</div>
-
-      <div style={{ marginTop: "auto", paddingTop: 6 }}>
-        <div className="num" style={{ fontWeight: 800, fontSize: 22, color: "var(--t-hi)", lineHeight: 1.1 }}>
-          {number}
-        </div>
-        <div className="tiny muted" style={{ marginTop: 2 }}>
-          {numberLabel}
-          {growing && <span style={{ color: "var(--accent-ink)" }}> · em crescimento</span>}
-        </div>
-      </div>
-
-      <p className="tiny muted" style={{ lineHeight: 1.5, margin: 0 }}>{desc}</p>
-    </div>
-  );
-}
+// Links do nav do cabeçalho — compartilhados entre o menu desktop (.lp-nav-links)
+// e o dropdown mobile (aberto pelo hamburguer em ≤600px, onde .lp-nav-links some).
+const NAV_LINKS = [
+  { label: "Como funciona", href: "#como-funciona" },
+  { label: "Planos", href: "#planos" },
+  { label: "Dúvidas", href: "#faq" },
+  { label: "Para quem", href: "/para-quem" },
+  { label: "Sobre", href: "/sobre" },
+  { label: "Segurança", href: "/seguranca" },
+];
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function LandingPage({ onLogin }: { onLogin: () => void }) {
+export function LandingPage({
+  onLogin,
+  onLoginExisting,
+}: {
+  /** CTAs de cadastro ("Começar agora", "Experimentar 7 dias grátis") — abre o formulário de criação de conta. */
+  onLogin: () => void;
+  /**
+   * CTA "Entrar" no header — abre o formulário de login (não o de cadastro).
+   * Opcional por compatibilidade: se omitido, cai no comportamento de `onLogin`.
+   */
+  onLoginExisting?: () => void;
+}) {
   const scrolled = useScrolled();
   const mouse = useMouse();
+  // Menu mobile (≤600px): os links do nav somem nesse breakpoint (ver .lp-nav-links
+  // no CSS abaixo) — este estado controla um dropdown que os substitui, em vez de
+  // deixar o usuário de celular sem nenhum acesso a "Para quem"/"Sobre"/"Segurança".
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // The first 3 seed lotes for the hero mock
   const heroLotes = LEILAO_SEED.slice(0, 3);
@@ -411,11 +352,11 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
   const FAQ_ITEMS = [
     {
       q: "O que é a Fonte.ia?",
-      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne ~217 mil registros oficiais de 8 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções e jurídico — em uma busca única, com cada dado rastreável à fonte (link + data de coleta). O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
+      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne ~217 mil registros oficiais de 9 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções, jurídico e INPI — em uma busca única, com cada dado rastreável à fonte (link + data de coleta). O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
     },
     {
       q: "Quais fontes e áreas já estão ativas?",
-      a: "Todas as 8 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência/CGU (1.592), empresas por CNPJ (461, crescendo) e jurídico do CNJ/DataJud (280 processos). Mais o módulo INPI com 29.500 marcas.",
+      a: "Todas as 9 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência/CGU (1.592), empresas por CNPJ (461, crescendo), jurídico do CNJ/DataJud (280 processos) e INPI com 29.500 marcas.",
     },
     {
       q: "Os dados são confiáveis? De onde vêm?",
@@ -435,7 +376,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
     },
     {
       q: "Preciso saber de tecnologia para usar?",
-      a: "Não. Você pergunta em português e recebe a resposta com a fonte: link e data de coleta. A busca é unificada nas 8 áreas e a IA responde 'evidência insuficiente' quando não há fonte que sustente a resposta.",
+      a: "Não. Você pergunta em português e recebe a resposta com a fonte: link e data de coleta. A busca é unificada nas 9 áreas e a IA responde 'evidência insuficiente' quando não há fonte que sustente a resposta.",
     },
     {
       q: "Posso cancelar quando quiser?",
@@ -451,6 +392,8 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
         .lp-root { width: 100%; }
         /* CTA shows full label by default; a compact label kicks in on tiny screens. */
         .lp-nav-cta-short { display: none; }
+        /* Hamburger: only exists as a mobile fallback for .lp-nav-links (below). */
+        .lp-nav-hamburger { display: none; }
 
         /* ── Below the hero breakpoint: stack hero, calm the mock card ── */
         @media (max-width: 920px) {
@@ -464,6 +407,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
         /* ── Phones (≤ 600px): tighten gutters, drop 3D mock, surface mobile glimpse ── */
         @media (max-width: 600px) {
           .lp-nav-links { display: none !important; }
+          .lp-nav-hamburger { display: inline-flex !important; }
           .lp-nav-inner { padding: 10px 16px !important; gap: 8px !important; }
 
           /* Section vertical rhythm: hero gets extra top for fixed nav */
@@ -594,14 +538,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               style={{ display: "flex", alignItems: "center", gap: 22, marginLeft: 24 }}
               aria-label="Menu principal"
             >
-              {[
-                { label: "Como funciona", href: "#como-funciona" },
-                { label: "Planos", href: "#planos" },
-                { label: "Dúvidas", href: "#faq" },
-                { label: "Para quem", href: "/para-quem" },
-                { label: "Sobre", href: "/sobre" },
-                { label: "Segurança", href: "/seguranca" },
-              ].map((link) => (
+              {NAV_LINKS.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
@@ -626,7 +563,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               <button
                 type="button"
                 className="btn btn--ghost btn--sm lp-nav-signin"
-                onClick={onLogin}
+                onClick={onLoginExisting ?? onLogin}
               >
                 Entrar
               </button>
@@ -639,8 +576,57 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                 <span className="lp-nav-cta-full">Começar agora</span>
                 <span className="lp-nav-cta-short" aria-hidden="true">Entrar</span>
               </button>
+              {/* Hamburger — único ponto de acesso aos links do nav no mobile
+                  (≤600px), já que .lp-nav-links some nesse breakpoint. */}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm lp-nav-hamburger"
+                aria-expanded={mobileNavOpen}
+                aria-controls="lp-mobile-nav-panel"
+                aria-label={mobileNavOpen ? "Fechar menu" : "Abrir menu"}
+                onClick={() => setMobileNavOpen((v) => !v)}
+              >
+                {mobileNavOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
+              </button>
             </div>
           </div>
+
+          {/* Dropdown mobile — substitui .lp-nav-links quando ela some (≤600px). */}
+          {mobileNavOpen && (
+            <nav
+              id="lp-mobile-nav-panel"
+              className="panel lp-nav-mobile-panel"
+              aria-label="Menu principal (mobile)"
+              style={{
+                margin: "0 16px 12px",
+                padding: 8,
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+              }}
+            >
+              {NAV_LINKS.map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileNavOpen(false)}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "var(--r-md)",
+                    fontSize: 14.5,
+                    fontWeight: 600,
+                    color: "var(--t-hi)",
+                    textDecoration: "none",
+                    minHeight: 44,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          )}
         </div>
       </header>
 
@@ -692,7 +678,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Inteligência de dados públicos · ~217 mil registros · 8 fontes oficiais ao vivo
+                  Inteligência de dados públicos · ~217 mil registros · 9 fontes oficiais ao vivo
                 </span>
               </div>
             </Reveal>
@@ -1338,7 +1324,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               className="tiny muted"
               style={{ fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 20 }}
             >
-              Conectado a 8 fontes oficiais brasileiras
+              Conectado a 9 fontes oficiais brasileiras
             </p>
           </Reveal>
           <Reveal delay={0.05}>
@@ -1827,7 +1813,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               Uma plataforma.<br />Toda a inteligência pública.
             </h2>
             <p className="muted" style={{ fontSize: 15, marginTop: 14, maxWidth: 480, margin: "14px auto 0" }}>
-              Oito áreas de dados públicos ao vivo hoje. Comece pelos leilões — o módulo mais maduro — e explore as demais na mesma assinatura.
+              Nove áreas de dados públicos ao vivo hoje. Comece pelos leilões — o módulo mais maduro — e explore as demais na mesma assinatura.
             </p>
           </Reveal>
 
@@ -1841,6 +1827,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               <ModuleChip label="Sanções" active={true} meta="1.592 · Transparência" icon={<ShieldAlert size={20} color="#fff" />} />
               <ModuleChip label="Empresas (CNPJ)" active={true} meta="461 · em crescimento" icon={<Building2 size={20} color="#fff" />} />
               <ModuleChip label="Jurídico" active={true} meta="280 · em crescimento" icon={<Scale size={20} color="#fff" />} />
+              <ModuleChip label="INPI (Marcas)" active={true} meta="29,5 mil · RPI" icon={<BadgeCheck size={20} color="#fff" />} />
             </div>
           </Reveal>
 
@@ -2007,7 +1994,16 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   <button
                     type="button"
                     className={`btn ${plano.destaque ? "btn--accent" : "btn--ghost"} btn--block btn--lg`}
-                    onClick={() => plano.id === "corporativo" ? navigateSpa("/contato") : onLogin()}
+                    onClick={() => {
+                      if (plano.id === "corporativo") {
+                        navigateSpa("/contato");
+                        return;
+                      }
+                      // Guarda a intenção de assinar este plano para, após o login,
+                      // cair direto no checkout em vez de no painel genérico.
+                      setPlanoIntent(plano.id);
+                      onLogin();
+                    }}
                   >
                     {plano.cta}
                   </button>

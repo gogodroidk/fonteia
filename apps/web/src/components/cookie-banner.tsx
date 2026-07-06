@@ -129,7 +129,7 @@ export function CookieBanner({ onOpenPolicy }: CookieBannerProps) {
                 <strong>Necessários</strong>
                 <small>Essenciais para login e segurança. Sempre ativos.</small>
               </span>
-              <input type="checkbox" checked readOnly aria-disabled="true" />
+              <input type="checkbox" checked disabled />
             </label>
             <label className="cookie-option">
               <span>

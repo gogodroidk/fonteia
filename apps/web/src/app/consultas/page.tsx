@@ -340,16 +340,19 @@ function KindCard({ catalogKind, cnpjDigits, cnpjValid, onNeedCnpj }: KindCardPr
         padding: "14px 16px 16px",
       }}
     >
-      {/* Título + tag premium na mesma linha (sem badge flutuante sobreposto) */}
+      {/* Título + indicador discreto de custo (o aviso de plano já aparece uma
+          vez, no seletor de empresa acima — aqui só um ícone com tooltip, não
+          uma tag gritando "premium" antes do usuário ver qualquer resultado). */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
         <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--t-hi)", lineHeight: 1.35 }}>
           {catalogKind.titulo}
         </p>
         <span
-          className="badge badge--neutral"
-          style={{ flexShrink: 0, textTransform: "uppercase", fontSize: 9.5, letterSpacing: "0.05em" }}
+          title="Esta consulta desconta um crédito do seu plano"
+          aria-label="Esta consulta desconta um crédito do seu plano"
+          style={{ flexShrink: 0, display: "inline-flex", color: "var(--t-low)", marginTop: 2 }}
         >
-          premium
+          <Lock size={13} aria-hidden="true" />
         </span>
       </div>
 
@@ -581,7 +584,7 @@ export function ConsultasPage() {
   }
 
   // Carrega o catálogo uma vez ao montar.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => { runCatalogFetch(); }, []);
 
   const catalogData: CatalogLoaded | null =

@@ -34,9 +34,11 @@ import { useAuth } from "./auth/auth-context";
 import { useIsAdmin } from "./components/admin/use-is-admin";
 import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
+import { takePendingDestination } from "./lib/pending-intent";
 import { ThemeToggle } from "./components/ui";
 import { HelpModeProvider, HelpHint, useHelpMode } from "./components/help-mode";
 import { FeedbackButton } from "./components/feedback/FeedbackButton";
+import { useFocusTrap } from "./hooks/use-focus-trap";
 // LandingPage permanece import ESTÁTICO: é o LCP do visitante anônimo (a rota "/"
 // é pré-renderizada/SSG). Carregá-la sob demanda só piscaria um fallback por cima
 // do HTML já visível. LoginPage/OnboardingPage e os widgets de IA (Omnibox/Chat)
@@ -317,7 +319,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   fontes: "Fontes & Rastreabilidade",
   conta: "Conta",
   billing: "Planos",
-  search: "Perguntar",
+  search: "Buscar leilões",
   "lot-detail": "Análise do lote",
   modules: "Módulos",
   admin: "Administração",
@@ -396,6 +398,11 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Focus traps para os dois drawers mobile (menu lateral e bottom sheet "Mais"):
+  // ao abrir, o foco vai pra dentro e Tab/Shift+Tab circulam só ali, sem vazar
+  // pro conteúdo de fundo; ao fechar, o foco volta pra quem abriu (ACES-04).
+  const sidebarTrapRef = useFocusTrap<HTMLElement>(sidebarOpen);
+  const moreDrawerTrapRef = useFocusTrap<HTMLDivElement>(moreDrawerOpen);
   const [searchSeed, setSearchSeed] = useState("");
   const [topbarQuery, setTopbarQuery] = useState("");
   const topbarInputRef = useRef<HTMLInputElement | null>(null);
@@ -410,6 +417,20 @@ function AppShell({ path, navigate }: AppShellProps) {
       window.history.replaceState(null, "", window.location.pathname + window.location.hash);
     }
   }, [checkoutOk]);
+
+  // Fecha os drawers mobile no Escape (teclado externo / leitor de tela). Sem
+  // isso, o menu lateral e o bottom sheet "Mais" só fechavam por clique no scrim,
+  // deixando quem navega por teclado preso com o drawer aberto (ACES-04).
+  useEffect(() => {
+    if (!sidebarOpen && !moreDrawerOpen) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key !== "Escape") return;
+      setSidebarOpen(false);
+      setMoreDrawerOpen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [sidebarOpen, moreDrawerOpen]);
 
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
@@ -677,7 +698,7 @@ function AppShell({ path, navigate }: AppShellProps) {
         {sidebarOpen && (
           <>
             <div className="shell-scrim" onClick={() => setSidebarOpen(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, background: "rgba(4,8,18,.5)", zIndex: 40 }} />
-            <aside className="shell-sidebar-drawer" style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "min(86vw, 300px)", maxHeight: "100dvh", overflowY: "auto", paddingLeft: "env(safe-area-inset-left)", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", zIndex: 50, boxShadow: "var(--shadow-xl)" }}>
+            <aside ref={sidebarTrapRef} className="shell-sidebar-drawer" role="dialog" aria-modal="true" aria-label="Menu de navegação" style={{ position: "fixed", top: 0, left: 0, bottom: 0, width: "min(86vw, 300px)", maxHeight: "100dvh", overflowY: "auto", paddingLeft: "env(safe-area-inset-left)", background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column", zIndex: 50, boxShadow: "var(--shadow-xl)" }}>
               <div className="row between" style={{ padding: "calc(12px + env(safe-area-inset-top)) 12px 0" }}>
                 <span />
                 <button className="btn btn--icon btn--ghost btn--sm" type="button" onClick={() => setSidebarOpen(false)} aria-label="Fechar menu">
@@ -698,11 +719,11 @@ function AppShell({ path, navigate }: AppShellProps) {
             <h1 className="shell-title">{ROUTE_TITLES[route]}</h1>
             <div className="shell-search">
               <HelpHint id="topbar.search">
-                <div className="searchbar" role="search" aria-label="Buscar">
+                <div className="searchbar" role="search" aria-label="Buscar leilões">
                   <Search size={16} style={{ color: "var(--t-low)", flexShrink: 0 }} aria-hidden="true" />
                   <input
                     ref={topbarInputRef}
-                    placeholder="Buscar…"
+                    placeholder="Buscar leilões…"
                     value={topbarQuery}
                     onChange={(e) => setTopbarQuery(e.target.value)}
                     onKeyDown={(e) => {
@@ -711,7 +732,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                         setTopbarQuery("");
                       }
                     }}
-                    aria-label="Buscar"
+                    aria-label="Buscar leilões"
                     style={{ fontSize: 13.5 }}
                   />
                 </div>
@@ -790,7 +811,11 @@ function AppShell({ path, navigate }: AppShellProps) {
           </header>
 
           <div className="shell-content">
-            {checkoutOk && (
+            {/* Banner global de "pagamento recebido" — mostrado em qualquer tela
+                do retorno do Stripe, EXCETO na própria página de Planos, que já
+                renderiza o seu banner de sucesso. Sem esse guard, os dois
+                aparecem empilhados no momento pós-pagamento (BILL-02). */}
+            {checkoutOk && route !== "billing" && (
               <div
                 className="panel elevated"
                 role="status"
@@ -887,7 +912,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 )}
                 {route === "lot-detail" &&
                   (selectedLot ? (
-                    <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onAsk={goToSearch} onSelectLot={handleSelectLot} />
+                    <LotDetailPage lot={selectedLot} onBack={() => go("/app/lotes")} onSelectLot={handleSelectLot} />
                   ) : (
                     <section className="panel" style={{ padding: 28 }}>
                       <span className="eyebrow">{isLoadingLot ? "Carregando lote" : "Lote não encontrado"}</span>
@@ -1005,8 +1030,10 @@ function AppShell({ path, navigate }: AppShellProps) {
                   style={{ position: "fixed", inset: 0, background: "rgba(4,8,18,.5)", zIndex: 40 }}
                 />
                 <div
+                  ref={moreDrawerTrapRef}
                   className="shell-more-drawer"
                   role="dialog"
+                  aria-modal="true"
                   aria-label="Mais seções"
                   style={{
                     position: "fixed",
@@ -1219,9 +1246,23 @@ export function App() {
 
   useEffect(() => {
     if (!loading && user && (path === "/" || path === "/entrar")) {
-      navigate("/app");
+      // Usuário já onboardado: se veio de um CTA de plano na landing, leva ao
+      // checkout do plano escolhido (consumo único); senão cai no painel.
+      //
+      // Usuário NOVO (ainda não onboardado): NÃO consumimos a intenção aqui —
+      // se consumíssemos, ela seria perdida antes do onboarding renderar (o
+      // onboarding sobrescreveria o destino ao terminar). Deixamos a intenção
+      // no sessionStorage e mandamos pro /app, que renderiza o onboarding; o
+      // takePendingDestination() só é consumido no onFinish do onboarding
+      // (abaixo), priorizando o checkout sobre a rota do objetivo.
+      if (onboarded) {
+        const dest = takePendingDestination();
+        navigate(dest ?? "/app");
+      } else {
+        navigate("/app");
+      }
     }
-  }, [loading, user, path, navigate]);
+  }, [loading, user, path, navigate, onboarded]);
 
   if (loading) {
     return (
@@ -1287,7 +1328,7 @@ export function App() {
       content = (
         <ErrorBoundary>
           <Suspense fallback={pageFallback}>
-            <LoginPage onGoToLanding={() => navigate("/")} />
+            <LoginPage onGoToLanding={() => navigate("/")} initialMode={new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("mode") === "login" ? "login" : "signup"} />
           </Suspense>
         </ErrorBoundary>
       );
@@ -1297,10 +1338,17 @@ export function App() {
           <Suspense fallback={pageFallback}>
             <OnboardingPage
               name={(user.user_metadata?.["full_name"] as string | undefined) ?? user.email?.split("@")[0]}
-              onFinish={() => {
+              onFinish={(dest) => {
                 markOnboarded();
                 setOnboarded(true);
-                navigate("/app");
+                // Prioridade de destino ao sair do onboarding:
+                // 1) Intenção de compra pendente (clicou "Assinar Profissional"
+                //    na landing) → vai direto ao checkout do plano. É o usuário
+                //    de maior valor; não pode cair numa lista genérica.
+                // 2) Deep-link do objetivo escolhido no onboarding (ex.: Lotes).
+                // 3) Painel.
+                const pending = takePendingDestination();
+                navigate(pending ?? dest ?? "/app");
               }}
             />
           </Suspense>
@@ -1313,12 +1361,17 @@ export function App() {
     content = (
       <ErrorBoundary>
         <Suspense fallback={pageFallback}>
-          <LoginPage onGoToLanding={() => navigate("/")} />
+          <LoginPage onGoToLanding={() => navigate("/")} initialMode={new URLSearchParams(typeof window !== "undefined" ? window.location.search : "").get("mode") === "login" ? "login" : "signup"} />
         </Suspense>
       </ErrorBoundary>
     );
   } else {
-    content = <LandingPage onLogin={() => navigate("/entrar")} />;
+    content = (
+      <LandingPage
+        onLogin={() => navigate("/entrar")}
+        onLoginExisting={() => navigate("/entrar?mode=login")}
+      />
+    );
   }
 
   return (
