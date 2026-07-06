@@ -36,7 +36,7 @@ import { usePlan } from "./lib/use-plan";
 import { usePathname } from "./lib/use-pathname";
 import { hasOnboarded, markOnboarded } from "./lib/onboarding";
 import { takePendingDestination } from "./lib/pending-intent";
-import { ThemeToggle } from "./components/ui";
+import { ThemeToggle, TrialBadge } from "./components/ui";
 import { HelpModeProvider, HelpHint, useHelpMode } from "./components/help-mode";
 import { FeedbackButton } from "./components/feedback/FeedbackButton";
 import { useFocusTrap } from "./hooks/use-focus-trap";
@@ -394,7 +394,7 @@ function AppShell({ path, navigate }: AppShellProps) {
   // (free) ou um selo "Plano ativo" (pago/teste). Enquanto planLoading, não
   // renderizamos nem um nem outro para evitar o flash de "Upgrade" em quem
   // já pagou (o estado inicial do hook é free+loading).
-  const { isPro, plan, trial, loading: planLoading } = usePlan();
+  const { isPro, plan, trial, status: planStatus, until: planUntil, loading: planLoading } = usePlan();
   const planLabel = plan === "corporativo" ? "Corporativo ativo" : "Profissional ativo";
   const [avatarError, setAvatarError] = useState(false);
   const [selectedLot, setSelectedLot] = useState<ReceitaLeilaoLot | null>(null);
@@ -406,6 +406,10 @@ function AppShell({ path, navigate }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [moreDrawerOpen, setMoreDrawerOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  // Menu do avatar/conta (topbar). Só vira um menu de fato para admin — para o
+  // usuário comum o avatar continua sendo um atalho direto para /app/conta.
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   // Focus traps para os dois drawers mobile (menu lateral e bottom sheet "Mais"):
   // ao abrir, o foco vai pra dentro e Tab/Shift+Tab circulam só ali, sem vazar
   // pro conteúdo de fundo; ao fechar, o foco volta pra quem abriu (ACES-04).
@@ -439,6 +443,27 @@ function AppShell({ path, navigate }: AppShellProps) {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [sidebarOpen, moreDrawerOpen]);
+
+  // Fecha o menu do avatar/conta no Escape ou clique fora. O foco volta ao
+  // gatilho no onKeyDown (o próprio botão do avatar mantém o foco em desktop).
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") setAccountMenuOpen(false);
+    }
+    function onPointerDown(e: PointerEvent): void {
+      const el = accountMenuRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        setAccountMenuOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [accountMenuOpen]);
 
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
@@ -866,6 +891,17 @@ function AppShell({ path, navigate }: AppShellProps) {
                   <Bell size={18} aria-hidden="true" />
                 </button>
               </HelpHint>
+              {/* Selo de teste (trial) na topbar — contagem regressiva compacta,
+                  só quando o acesso premium vem de um teste vigente (trial + prazo).
+                  Fica ANTES do bloco de plano: um Pro em trialing vê o selo + o
+                  "Plano ativo". Guardado por planLoading para não piscar. O caso
+                  "expired" (agora free) cai no ramo Upgrade abaixo, coerente com o
+                  paywall honesto das páginas de conta/planos. */}
+              {!planLoading && trial && planUntil !== undefined && (
+                <span className="shell-trial">
+                  <TrialBadge trial={trial} status={planStatus} until={planUntil} size="sm" />
+                </span>
+              )}
               {/* Plano na topbar. Enquanto planLoading, nada é renderizado — sem
                   isso o botão "Upgrade" piscaria para quem já pagou a cada
                   navegação. Pro/Corporativo → selo estático "Plano ativo" que
@@ -891,34 +927,141 @@ function AppShell({ path, navigate }: AppShellProps) {
                   </button>
                 </HelpHint>
               )}
-              {isAdmin && (
+              {/* Avatar/conta. Para admin, o clique na FOTO abre um menu com
+                  "Minha conta" e "Administração" (acesso claro ao painel do dono,
+                  pedido explícito). Para o usuário comum, o avatar continua sendo
+                  um atalho direto para /app/conta — sem menu. O popover é ancorado
+                  à direita do avatar (o elemento mais à direita da topbar), com
+                  max-width seguro para nunca vazar da viewport, e fecha no Escape
+                  ou clique fora. */}
+              <div ref={accountMenuRef} style={{ position: "relative", display: "inline-flex" }}>
                 <button
-                  className="btn btn--icon btn--ghost shell-admin"
                   type="button"
-                  onClick={() => go("/app/admin")}
-                  title="Painel de administração"
-                  aria-label="Painel de administração"
-                  style={{ color: "var(--brand-ink)" }}
+                  onClick={() => {
+                    if (isAdmin) {
+                      setAccountMenuOpen((o) => !o);
+                    } else {
+                      go("/app/conta");
+                    }
+                  }}
+                  title="Conta"
+                  aria-label={isAdmin ? "Conta e administração" : "Conta"}
+                  className="avatar shell-avatar"
+                  style={{ border: 0, cursor: "pointer" }}
+                  {...(isAdmin
+                    ? { "aria-haspopup": "menu" as const, "aria-expanded": accountMenuOpen }
+                    : {})}
                 >
-                  <ShieldCheck size={18} aria-hidden="true" />
+                  {avatarUrl && !avatarError ? (
+                    <img
+                      src={avatarUrl}
+                      alt={displayName}
+                      width={40}
+                      height={40}
+                      loading="lazy"
+                      decoding="async"
+                      onError={() => setAvatarError(true)}
+                      style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    initialsOf(displayName)
+                  )}
                 </button>
-              )}
-              <button type="button" onClick={() => go("/app/conta")} title="Conta" aria-label="Conta" className="avatar shell-avatar" style={{ border: 0, cursor: "pointer" }}>
-                {avatarUrl && !avatarError ? (
-                  <img
-                    src={avatarUrl}
-                    alt={displayName}
-                    width={40}
-                    height={40}
-                    loading="lazy"
-                    decoding="async"
-                    onError={() => setAvatarError(true)}
-                    style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }}
-                  />
-                ) : (
-                  initialsOf(displayName)
+                {isAdmin && accountMenuOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Conta e administração"
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      right: 0,
+                      zIndex: 9999,
+                      minWidth: 216,
+                      maxWidth: "calc(100vw - 16px)",
+                      background: "var(--elevated, #fff)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--r-md, 12px)",
+                      boxShadow: "var(--shadow-lg, 0 18px 44px rgba(11,34,64,.16))",
+                      padding: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "6px 10px 8px",
+                        borderBottom: "1px solid var(--border)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t-hi)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {displayName}
+                      </div>
+                      {user?.email && (
+                        <div style={{ fontSize: 11.5, color: "var(--t-low)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {user.email}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        go("/app/conta");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 44,
+                        padding: "8px 10px",
+                        borderRadius: "var(--r-sm, 8px)",
+                        border: 0,
+                        background: "transparent",
+                        color: "var(--t-hi)",
+                        font: "inherit",
+                        fontSize: 13.5,
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <User size={16} aria-hidden="true" style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+                      Minha conta
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setAccountMenuOpen(false);
+                        go("/app/admin");
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 44,
+                        padding: "8px 10px",
+                        borderRadius: "var(--r-sm, 8px)",
+                        border: 0,
+                        background: "transparent",
+                        color: "var(--brand-ink)",
+                        font: "inherit",
+                        fontSize: 13.5,
+                        fontWeight: 600,
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+                      Administração
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
             </div>
           </header>
 
@@ -1355,6 +1498,8 @@ function AppShell({ path, navigate }: AppShellProps) {
           /* icon-only upgrade/plano button to free horizontal space */
           .shell-upgrade-label{display:none}
           .shell-upgrade,.shell-plan-active{padding:0;width:36px;height:36px;border-radius:11px}
+          /* selo de contagem do trial sai do topo no mobile (segue visível em Conta/Planos) */
+          .shell-trial{display:none}
         }
         @media (max-width:380px){
           /* ultra-narrow: drop the standalone bell (alerts still reachable via bottom nav) */

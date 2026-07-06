@@ -2,11 +2,14 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   AlertTriangle,
+  CalendarClock,
   Check,
+  Clock,
   Database,
   Gift,
   Layers,
   RefreshCw,
+  Search,
   ShieldCheck,
   User as UserIcon,
   X,
@@ -34,6 +37,35 @@ function fmtDateTime(value: string | null): string {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Data curta (dd/mm/aaaa) para cadastro/último acesso. */
+function fmtDate(value: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/**
+ * Distância relativa honesta em pt-BR ("hoje", "há 3 dias", "há 2 meses").
+ * Usada no rastreamento de último acesso — sem inventar precisão que não temos.
+ */
+function fmtRelative(value: string | null): string {
+  if (!value) return "nunca";
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "—";
+  const diffMs = Date.now() - then;
+  if (diffMs < 0) return "agora";
+  const day = 86400000;
+  const days = Math.floor(diffMs / day);
+  if (days === 0) return "hoje";
+  if (days === 1) return "ontem";
+  if (days < 30) return `há ${days} dias`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `há ${months} ${months === 1 ? "mês" : "meses"}`;
+  const years = Math.floor(days / 365);
+  return `há ${years} ${years === 1 ? "ano" : "anos"}`;
 }
 
 const KIND_LABELS: Record<string, string> = {
@@ -317,6 +349,10 @@ export function UsersSection({
   // Estado otimista local sobreposto aos dados do servidor.
   const [roleOverride, setRoleOverride] = useState<Record<string, "user" | "admin">>({});
   const [accessOverride, setAccessOverride] = useState<Record<string, boolean>>({});
+  // Filtros locais de rastreamento (nome/email + papel). Puramente client-side
+  // sobre a lista que a admin-api já devolveu — sem chamada extra ao backend.
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
 
   const moduleList = data.modules;
 
@@ -393,6 +429,19 @@ export function UsersSection({
     return found?.allowed ?? false;
   }
 
+  function allowedCount(user: AdminUser): number {
+    return moduleList.reduce((n, m) => (moduleAllowed(user, m.id) ? n + 1 : n), 0);
+  }
+
+  // Lista filtrada por busca (nome/email) e papel. Não muta a original.
+  const q = query.trim().toLowerCase();
+  const visibleUsers = data.users.filter((user) => {
+    if (roleFilter !== "all" && effectiveRole(user) !== roleFilter) return false;
+    if (!q) return true;
+    const haystack = `${user.full_name ?? ""} ${user.email ?? ""}`.toLowerCase();
+    return haystack.includes(q);
+  });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {error ? (
@@ -436,15 +485,90 @@ export function UsersSection({
       ) : null}
 
       <div className="panel" style={{ overflow: "hidden" }}>
-        <div className="row between" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)" }}>
+        <div
+          className="row between"
+          style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", gap: 12, flexWrap: "wrap" }}
+        >
           <div className="h3">Usuários</div>
-          <span className="tiny muted">{data.total} no total</span>
+          <span className="tiny muted" aria-live="polite">
+            {q || roleFilter !== "all"
+              ? `${visibleUsers.length} de ${data.total}`
+              : `${data.total} no total`}
+          </span>
+        </div>
+
+        {/* Barra de busca e filtro de papel — rastreamento rápido em listas grandes. */}
+        <div
+          className="row"
+          style={{ padding: "12px 20px", gap: 10, flexWrap: "wrap", borderBottom: "1px solid var(--border)" }}
+        >
+          <label
+            className="inset"
+            style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 220px", padding: "0 12px", minHeight: 44, borderRadius: 10 }}
+          >
+            <Search size={15} aria-hidden="true" style={{ color: "var(--t-mid)", flexShrink: 0 }} />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nome ou e-mail…"
+              aria-label="Buscar usuários por nome ou e-mail"
+              style={{
+                flex: 1,
+                minWidth: 0,
+                border: 0,
+                background: "transparent",
+                font: "inherit",
+                fontSize: 13.5,
+                color: "var(--t-hi)",
+                outline: "none",
+              }}
+            />
+          </label>
+          <div className="inset" role="group" aria-label="Filtrar por papel" style={{ display: "inline-flex", padding: 3, gap: 3, borderRadius: 10 }}>
+            {([
+              { value: "all", label: "Todos" },
+              { value: "admin", label: "Admins" },
+              { value: "user", label: "Usuários" },
+            ] as const).map((opt) => {
+              const active = roleFilter === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setRoleFilter(opt.value)}
+                  aria-pressed={active}
+                  style={{
+                    padding: "10px 14px",
+                    minHeight: 44,
+                    borderRadius: 8,
+                    border: 0,
+                    cursor: active ? "default" : "pointer",
+                    font: "inherit",
+                    fontSize: 12.5,
+                    fontWeight: active ? 700 : 500,
+                    background: active ? "var(--surface)" : "transparent",
+                    color: active ? "var(--brand-ink)" : "var(--t-mid)",
+                    transition: "background .15s,color .15s",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {data.users.map((user, i) => {
+          {visibleUsers.length === 0 ? (
+            <div className="muted small" style={{ padding: 24, textAlign: "center" }}>
+              Nenhum usuário corresponde ao filtro.
+            </div>
+          ) : null}
+          {visibleUsers.map((user, i) => {
             const role = effectiveRole(user);
             const isSelf = user.id === currentUserId;
+            const modCount = allowedCount(user);
             return (
               <div
                 key={user.id}
@@ -481,6 +605,37 @@ export function UsersSection({
                       <div className="tiny muted" style={{ marginTop: 2, wordBreak: "break-all" }}>
                         {user.email ?? "—"}
                         {user.provider ? ` · ${user.provider}` : ""}
+                      </div>
+                      {/* Rastreamento: cadastro + último acesso (dados que a admin-api
+                          já devolve). Sem inventar: "nunca"/"—" quando ausente. */}
+                      <div
+                        className="row"
+                        style={{ gap: 12, marginTop: 6, flexWrap: "wrap" }}
+                      >
+                        <span
+                          className="tiny"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t-mid)" }}
+                          title={`Cadastro em ${fmtDateTime(user.created_at)}`}
+                        >
+                          <CalendarClock size={12} aria-hidden="true" style={{ opacity: 0.7 }} />
+                          Cadastro: {fmtDate(user.created_at)}
+                        </span>
+                        <span
+                          className="tiny"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t-mid)" }}
+                          title={user.last_sign_in_at ? `Último acesso em ${fmtDateTime(user.last_sign_in_at)}` : "Nunca acessou"}
+                        >
+                          <Clock size={12} aria-hidden="true" style={{ opacity: 0.7 }} />
+                          Último acesso: {fmtRelative(user.last_sign_in_at)}
+                        </span>
+                        <span
+                          className="tiny"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t-mid)" }}
+                          title={`${modCount} de ${moduleList.length} módulos liberados`}
+                        >
+                          <Layers size={12} aria-hidden="true" style={{ opacity: 0.7 }} />
+                          {modCount}/{moduleList.length} módulos
+                        </span>
                       </div>
                     </div>
                   </div>

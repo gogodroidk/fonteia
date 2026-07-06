@@ -114,6 +114,17 @@ type Placement = "above" | "below";
 /** Estimated popover height used to decide if there's room above the trigger. */
 const POPOVER_HEIGHT_ESTIMATE = 140;
 
+/** Popover width mirrors S.popover's `width` (min(280px, 90vw)) — kept as a
+ * plain number for the horizontal-clamp math below (getBoundingClientRect
+ * gives px, so vw comparisons need a concrete viewport-derived value too). */
+function popoverWidthPx(): number {
+  if (typeof window === "undefined") return 280;
+  return Math.min(280, window.innerWidth * 0.9);
+}
+
+/** Safe margin kept between the popover edge and the viewport edge. */
+const VIEWPORT_MARGIN = 8;
+
 const S = {
   wrap: {
     display: "inline-flex",
@@ -128,8 +139,12 @@ const S = {
     borderRadius: "6px",
   } satisfies React.CSSProperties,
 
-  popover: (visible: boolean, placement: Placement): React.CSSProperties => {
+  popover: (visible: boolean, placement: Placement, shiftPx: number): React.CSSProperties => {
     const isAbove = placement === "above";
+    // shiftPx > 0 desloca o popover para a direita (em px) para não vazar da
+    // viewport — a seta compensa em sentido contrário (ver S.arrow) para
+    // continuar apontando ao centro do trigger.
+    const translateX = `calc(-50% + ${shiftPx}px)`;
     return {
       position: "absolute",
       zIndex: 9999,
@@ -139,6 +154,7 @@ const S = {
         : { top: "calc(100% + 10px)" }),
       left: "50%",
       width: "min(280px, 90vw)",
+      maxWidth: "calc(100vw - 16px)",
       background: "var(--elevated, #fff)",
       border: "1px solid var(--border, #E4EAF2)",
       borderRadius: "var(--r-md, 12px)",
@@ -147,10 +163,10 @@ const S = {
       pointerEvents: visible ? "auto" : "none",
       opacity: visible ? 1 : 0,
       transform: visible
-        ? "translateX(-50%) translateY(0)"
+        ? `translateX(${translateX}) translateY(0)`
         : isAbove
-          ? "translateX(-50%) translateY(4px)"
-          : "translateX(-50%) translateY(-4px)",
+          ? `translateX(${translateX}) translateY(4px)`
+          : `translateX(${translateX}) translateY(-4px)`,
       transition: "opacity 0.15s ease, transform 0.15s ease",
       isolation: "isolate",
     };
@@ -174,8 +190,13 @@ const S = {
     margin: 0,
   } satisfies React.CSSProperties,
 
-  arrow: (placement: Placement): React.CSSProperties => {
+  arrow: (placement: Placement, shiftPx: number): React.CSSProperties => {
     const isAbove = placement === "above";
+    // A seta fica fixa no centro do trigger: como o popover já foi deslocado
+    // por shiftPx (para a direita se positivo), a seta compensa com o
+    // deslocamento inverso dentro do próprio popover para continuar alinhada
+    // ao centro do trigger.
+    const arrowTranslate = `calc(-50% - ${shiftPx}px)`;
     return {
       position: "absolute" as const,
       left: "50%",
@@ -183,13 +204,13 @@ const S = {
       ...(isAbove
         ? {
             bottom: "-5px",
-            transform: "translateX(-50%) rotate(45deg)",
+            transform: `translateX(${arrowTranslate}) rotate(45deg)`,
             borderTop: "none",
             borderLeft: "none",
           }
         : {
             top: "-5px",
-            transform: "translateX(-50%) rotate(225deg)",
+            transform: `translateX(${arrowTranslate}) rotate(225deg)`,
             borderBottom: "none",
             borderRight: "none",
           }),
@@ -205,6 +226,7 @@ function HelpHintActive({ id, children }: HelpHintProps) {
   const hint = HELP_HINTS[id]; // may be undefined (noUncheckedIndexedAccess)
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement>("above");
+  const [shiftPx, setShiftPx] = useState(0);
   const wrapRef = useRef<HTMLSpanElement>(null);
   const popoverRef = useRef<HTMLSpanElement>(null);
   const descId = useId();
@@ -259,6 +281,39 @@ function HelpHintActive({ id, children }: HelpHintProps) {
     setPlacement(spaceAbove < POPOVER_HEIGHT_ESTIMATE ? "below" : "above");
   }, [open]);
 
+  /* clamp horizontal: o popover é centralizado no trigger por padrão, mas
+   * triggers perto da borda da tela (ex.: botões de Ajuda/Feedback/Alertas
+   * no canto direito da topbar) fariam ele vazar da viewport. Medimos o
+   * centro do trigger e limitamos o deslocamento para que as duas bordas do
+   * popover fiquem dentro de [VIEWPORT_MARGIN, viewportWidth - MARGIN]. */
+  useEffect(() => {
+    if (!open) {
+      setShiftPx(0);
+      return;
+    }
+    if (typeof window === "undefined") return;
+    if (!wrapRef.current) return;
+
+    const rect = wrapRef.current.getBoundingClientRect();
+    const triggerCenter = rect.left + rect.width / 2;
+    const halfPopover = popoverWidthPx() / 2;
+    const viewportWidth = window.innerWidth;
+
+    // Sem deslocamento, o popover ocuparia [triggerCenter - half, triggerCenter + half]
+    // (relativo à viewport, já que left:50% é resolvido contra o wrapper que fica
+    // ancorado no ponto triggerCenter). shiftPx > 0 empurra o popover para a DIREITA.
+    const idealLeft = triggerCenter - halfPopover;
+    const idealRight = triggerCenter + halfPopover;
+
+    let shift = 0;
+    if (idealLeft < VIEWPORT_MARGIN) {
+      shift = VIEWPORT_MARGIN - idealLeft; // vazaria à esquerda → empurra p/ direita
+    } else if (idealRight > viewportWidth - VIEWPORT_MARGIN) {
+      shift = (viewportWidth - VIEWPORT_MARGIN) - idealRight; // vazaria à direita → empurra p/ esquerda (negativo)
+    }
+    setShiftPx(shift);
+  }, [open]);
+
   // All hooks are called above; now safe to bail out if no hint registered.
   if (hint === undefined) return <>{children}</>;
 
@@ -305,11 +360,11 @@ function HelpHintActive({ id, children }: HelpHintProps) {
         id={descId}
         role="tooltip"
         aria-hidden={!open}
-        style={S.popover(open, placement)}
+        style={S.popover(open, placement, shiftPx)}
       >
         <span style={S.label}>Ajuda</span>
         <p style={S.text}>{hint}</p>
-        <span aria-hidden="true" style={S.arrow(placement)} />
+        <span aria-hidden="true" style={S.arrow(placement, shiftPx)} />
       </span>
     </span>
   );
