@@ -18,7 +18,12 @@ import { saveOnboardingPrefs } from "../../lib/onboarding";
 
 interface OnboardingPageProps {
   name?: string | undefined;
-  onFinish: () => void;
+  /**
+   * Encerra o onboarding. Recebe o destino escolhido pelo objetivo do usuário
+   * (ex.: "/app/lotes"): quem chama navega para lá em vez de cair no painel
+   * genérico. Sem objetivo selecionado, `dest` vem indefinido.
+   */
+  onFinish: (dest?: string) => void;
 }
 
 const goals = [
@@ -86,6 +91,12 @@ const channelLabels: Record<ChannelId, string> = {
   whatsapp: "WhatsApp",
 };
 
+// Nome humano do módulo de destino (evita mostrar a rota crua "/lotes" ao usuário).
+const routeLabels: Record<string, string> = {
+  "/lotes": "Lotes (Receita Federal)",
+  "/empresas": "Empresas (CNPJ)",
+};
+
 export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
   const [step, setStep] = useState(0);
   const [goal, setGoal] = useState<GoalId | null>(null);
@@ -95,7 +106,11 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
 
   function finish() {
     saveOnboardingPrefs({ goal: goal ?? "", channel: channel ?? "" });
-    onFinish();
+    // Roteia o usuário para o módulo que casa com o objetivo escolhido
+    // (hintRoute é relativo à app; ex.: "/lotes" → "/app/lotes"). Assim o
+    // primeiro clique já entrega valor em vez de largar no painel genérico.
+    const dest = selectedGoalData ? `/app${selectedGoalData.hintRoute}` : undefined;
+    onFinish(dest);
   }
 
   const progressPct = Math.round(((step + 1) / TOTAL_STEPS) * 100);
@@ -714,8 +729,8 @@ export function OnboardingPage({ name, onFinish }: OnboardingPageProps) {
                 {selectedGoalData !== null && (
                   <div className="onb-summary-row">
                     <span className="onb-summary-label">Comecar por</span>
-                    <span className="onb-summary-value" style={{ fontSize: "12px" }}>
-                      {selectedGoalData.hintRoute}
+                    <span className="onb-summary-value">
+                      {routeLabels[selectedGoalData.hintRoute] ?? "Painel"}
                     </span>
                   </div>
                 )}

@@ -4,6 +4,9 @@ import { Building2, ExternalLink, Loader2, MapPin, Search, X } from "lucide-reac
 import { listLicitacoes } from "../../features/licitacoes/licitacoes-api";
 import { FonteDots } from "../../components/ui";
 import { formatBRLc, FONTES } from "../../data/leiloes-seed";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
 
 // Quantas licitações renderizar por vez (o scroll carrega mais sozinho).
 const PAGE_SIZE = 24;
@@ -172,6 +175,50 @@ function exportCsv(licitacoes: PncpLicitacao[]): void {
   URL.revokeObjectURL(url);
 }
 
+// ─── Report builder ──────────────────────────────────────────────────────────
+
+/** Monta um SavedReport rastreável a partir de uma licitação (fonte: PNCP). */
+function buildLicitacaoReport(licitacao: PncpLicitacao): SavedReport {
+  const local =
+    licitacao.municipio != null && licitacao.municipio !== ""
+      ? `${licitacao.municipio}${licitacao.uf ? `/${licitacao.uf}` : ""}`
+      : licitacao.ufNome ?? licitacao.uf ?? "Brasil";
+
+  const fields: SavedReport["fields"] = [
+    { label: "Órgão", value: licitacao.orgao },
+    ...(licitacao.unidade != null && licitacao.unidade !== ""
+      ? [{ label: "Unidade", value: licitacao.unidade }]
+      : []),
+    { label: "Objeto", value: licitacao.objeto || "Não informado" },
+    { label: "Modalidade", value: licitacao.modalidade },
+    { label: "Local", value: local },
+    ...(licitacao.valorEstimadoCents > 0
+      ? [{ label: "Valor estimado", value: formatBRLc(licitacao.valorEstimadoCents / 100) }]
+      : []),
+    { label: "Abertura", value: formatDateShort(licitacao.dataAbertura) },
+    { label: "Encerramento", value: formatDateShort(licitacao.dataEncerramento) },
+    { label: "Status", value: isEncerrada(licitacao) ? "Encerrada" : "Aberta" },
+    { label: "Nº controle PNCP", value: licitacao.numeroControlePNCP },
+  ];
+
+  return {
+    id: `licitacao:${licitacao.numeroControlePNCP}`,
+    kind: "licitacao",
+    kindLabel: "Licitação (PNCP)",
+    title: licitacao.objeto || licitacao.orgao || "Licitação",
+    subtitle: `${licitacao.orgao} — ${local}`,
+    fields,
+    sources: [
+      {
+        label: "PNCP — Portal Nacional de Contratações Públicas",
+        url: licitacao.sourceUrl,
+        collectedAt: licitacao.collectedAt,
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // ─── Skeleton card ───────────────────────────────────────────────────────────
 
 function SkeletonCard() {
@@ -226,7 +273,9 @@ function LicitacaoCard({ licitacao, onSelect }: LicitacaoCardProps) {
             }
           : undefined
       }
-      aria-label={cardLabel}
+      // Só anuncia o card como "botão" quando ele é de fato acionável (onSelect).
+      // Sem destino, é um <article> estático — não prometer uma ação inexistente.
+      aria-label={onSelect ? cardLabel : undefined}
     >
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
         {/* Top: modalidade + status */}
@@ -344,6 +393,24 @@ function LicitacaoCard({ licitacao, onSelect }: LicitacaoCardProps) {
             {deadlineLabel(licitacao.dataEncerramento)}
           </div>
           <FonteDots fontes={FONTE_DOTS_PNCP} size={20} />
+        </div>
+
+        {/* Retenção: alerta + relatório (frontend-only; não bloqueiam o clique no card) */}
+        <div
+          className="row wrap"
+          style={{ gap: 8, alignItems: "center" }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <CreateAlertButton
+            kind="licitacao"
+            entityRef={licitacao.numeroControlePNCP}
+            entityLabel={`${licitacao.orgao} — ${licitacao.objeto.slice(0, 80)}`}
+            size="sm"
+            variant="soft"
+          />
+          <ReportButton report={buildLicitacaoReport(licitacao)} label="Salvar" />
         </div>
 
         {/* Link oficial */}
@@ -470,6 +537,9 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Retry: incrementar reexecuta o efeito de carga sem recarregar a página ──
+  const [reloadKey, setReloadKey] = useState(0);
+
   // ── Load data ──
   useEffect(() => {
     let cancelled = false;
@@ -484,7 +554,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        console.error("[licitacoes] falha ao carregar:", err);
+        if (import.meta.env.DEV) console.error("[licitacoes] falha ao carregar:", err);
         setErrorMessage("Não foi possível carregar as licitações. Verifique sua conexão e tente novamente.");
         setIsLoading(false);
       });
@@ -492,7 +562,7 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   // ── Derived filter option lists ──
   const modalidadeOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
@@ -607,12 +677,25 @@ export function LicitacoesPage({ onSelectLicitacao }: LicitacoesPageProps) {
             background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
             border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
             color: "var(--danger)",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
             fontSize: 13.5,
             fontWeight: 600,
           }}
           role="alert"
         >
-          {errorMessage}
+          <span>{errorMessage}</span>
+          <button
+            className="btn btn--ghost btn--sm"
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            style={{ flexShrink: 0 }}
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 

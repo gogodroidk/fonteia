@@ -10,13 +10,14 @@
 // Estados:
 //   idle → submitting → success | error
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { X, CheckCircle, AlertTriangle, MessageSquare } from "lucide-react";
 import {
   submitFeedback,
   FEEDBACK_TIPOS,
   type FeedbackTipo,
 } from "../../features/feedback/feedback-api";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,8 +43,7 @@ export function FeedbackModal({
   currentPath,
   userEmail,
 }: FeedbackModalProps) {
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  const firstFocusRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useFocusTrap<HTMLDialogElement>(open);
   const titleId = useId();
 
   const [tipo, setTipo]         = useState<FeedbackTipo>("sugestão");
@@ -63,17 +63,6 @@ export function FeedbackModal({
       setMensagem("");
       setState("idle");
       setServerMsg("");
-    }
-  }, [open]);
-
-  // Foco inicial quando abre
-  useEffect(() => {
-    if (open) {
-      // defer para garantir que o dialog já está no DOM
-      const id = setTimeout(() => {
-        firstFocusRef.current?.focus();
-      }, 20);
-      return () => clearTimeout(id);
     }
   }, [open]);
 
@@ -214,30 +203,10 @@ export function FeedbackModal({
               </div>
             </div>
             <button
-              ref={firstFocusRef}
               type="button"
+              className="btn btn--icon btn--ghost btn--sm"
               onClick={onClose}
               aria-label="Fechar"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--t-low)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 6,
-                borderRadius: "var(--r-md)",
-                transition: "color .14s, background .14s",
-              }}
-              onMouseOver={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--t-hi)";
-                (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-2)";
-              }}
-              onMouseOut={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.color = "var(--t-low)";
-                (e.currentTarget as HTMLButtonElement).style.background = "none";
-              }}
             >
               <X size={18} aria-hidden="true" />
             </button>

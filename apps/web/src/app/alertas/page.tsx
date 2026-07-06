@@ -146,9 +146,9 @@ function confidenceBadge(label: "baixo" | "medio" | "alto"): {
   className: string;
   label: string;
 } {
-  if (label === "alto") return { className: "badge--ok", label: "Confiança alta" };
-  if (label === "medio") return { className: "badge--warn", label: "Confiança média" };
-  return { className: "badge--neutral", label: "Cautela" };
+  if (label === "alto") return { className: "badge--ok", label: "Oportunidade alta" };
+  if (label === "medio") return { className: "badge--warn", label: "Oportunidade média" };
+  return { className: "badge--neutral", label: "Avaliar com cautela" };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────

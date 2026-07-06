@@ -363,7 +363,7 @@ export function ContextChat({
       </header>
 
       {/* ── Message log ── */}
-      <div style={S.log} ref={logRef}>
+      <div style={S.log} ref={logRef} aria-live="polite" aria-atomic="false">
         {chat.messages.length === 0 && !chat.unavailable && !chat.error ? (
           <div style={S.greetingBox}>
             <p style={S.greetingText}>{greeting}</p>
@@ -410,12 +410,12 @@ export function ContextChat({
         ) : null}
 
         {chat.unavailable ? (
-          <p style={S.notice}>
+          <p style={S.notice} role="status">
             A inteligência está sendo ativada. Tente novamente em instantes.
           </p>
         ) : null}
         {chat.error ? (
-          <p style={S.notice}>Não consegui responder agora. {chat.error}</p>
+          <p style={S.notice} role="alert">Não consegui responder agora. {chat.error}</p>
         ) : null}
       </div>
 
@@ -446,7 +446,8 @@ export function ContextChat({
           </button>
         </form>
         <p style={S.trust}>
-          Olli pode errar. Confira sempre na fonte oficial.
+          Olli responde com IA e pode errar. Para decidir, abra o módulo oficial
+          correspondente e confira o dado na fonte.
         </p>
       </div>
     </section>

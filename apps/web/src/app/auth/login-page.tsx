@@ -34,6 +34,9 @@ type AuthMode = "login" | "signup";
 
 interface LoginPageProps {
   onGoToLanding: () => void;
+  /** Modo inicial do formulário. Default "signup" (lead novo). Um usuário
+   *  existente chega por /entrar?mode=login e precisa ver o login, não o cadastro. */
+  initialMode?: AuthMode;
 }
 
 // ─── Google SVG icon (no external dep) ───────────────────────────────────────
@@ -546,11 +549,11 @@ function TurnstileWidget({ onToken, onError, onExpire, widgetIdRef }: TurnstileW
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function LoginPage({ onGoToLanding }: LoginPageProps) {
+export function LoginPage({ onGoToLanding, initialMode }: LoginPageProps) {
   useNoIndex();
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, demoMode } = useAuth();
 
-  const [mode, setMode] = useState<AuthMode>("signup");
+  const [mode, setMode] = useState<AuthMode>(initialMode ?? "signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   // Signup-only extra fields

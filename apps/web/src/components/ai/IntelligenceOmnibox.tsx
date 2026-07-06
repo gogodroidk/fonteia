@@ -68,6 +68,9 @@ const S = {
 
   panel: {
     width: "min(640px, 100%)",
+    maxHeight: "min(76vh, 720px)",
+    display: "flex",
+    flexDirection: "column" as const,
     background: "var(--elevated, #fff)",
     border: "1px solid var(--border, #E4EAF2)",
     borderRadius: "var(--r-lg, 16px)",
@@ -81,6 +84,7 @@ const S = {
     gap: "10px",
     padding: "14px 16px",
     borderBottom: "1px solid var(--border, #E4EAF2)",
+    flex: "0 0 auto",
   } satisfies React.CSSProperties,
 
   input: {
@@ -93,7 +97,54 @@ const S = {
     fontSize: "16px",
   } satisfies React.CSSProperties,
 
-  body: { padding: "16px", display: "grid", gap: "14px" } satisfies React.CSSProperties,
+  body: {
+    padding: "16px",
+    display: "grid",
+    gap: "14px",
+    overflowY: "auto" as const,
+    minHeight: 0,
+  } satisfies React.CSSProperties,
+
+  /* Estado inicial guiado: dica + chips de exemplo (cold-start). */
+  emptyHint: {
+    fontSize: "12px",
+    color: "var(--t-low, #6B7E96)",
+    margin: 0,
+    lineHeight: 1.5,
+  } satisfies React.CSSProperties,
+
+  chipsRow: {
+    display: "flex",
+    flexWrap: "wrap" as const,
+    gap: "8px",
+  } satisfies React.CSSProperties,
+
+  chip: {
+    background: "var(--surface-2, #F7F9FC)",
+    border: "1px solid var(--border, #E4EAF2)",
+    borderRadius: "20px",
+    padding: "7px 13px",
+    fontSize: "13px",
+    color: "var(--t-mid, #56657D)",
+    cursor: "pointer",
+    minHeight: "34px",
+    display: "inline-flex",
+    alignItems: "center",
+    lineHeight: 1.3,
+    textAlign: "left" as const,
+  } satisfies React.CSSProperties,
+
+  /* Rodapé de rastreabilidade — a resposta é gerada por IA, não é fonte oficial. */
+  trust: {
+    flex: "0 0 auto",
+    borderTop: "1px solid var(--border, #E4EAF2)",
+    padding: "10px 16px",
+    fontSize: "11px",
+    lineHeight: 1.45,
+    color: "var(--t-low, #6B7E96)",
+    background: "var(--surface, #fff)",
+    margin: 0,
+  } satisfies React.CSSProperties,
 
   label: {
     fontSize: "11px",
@@ -143,7 +194,28 @@ const S = {
     color: "var(--t-mid, #56657D)",
     marginLeft: "auto",
   } satisfies React.CSSProperties,
+
+  // Alvo de toque de 40px (era ~18px com `all: unset`, abaixo do recomendado).
+  closeBtn: {
+    all: "unset" as const,
+    cursor: "pointer",
+    color: "var(--t-low, #6B7E96)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "40px",
+    height: "40px",
+    borderRadius: "var(--r-md, 12px)",
+    flexShrink: 0,
+  } satisfies React.CSSProperties,
 } as const;
+
+/* Exemplos de cold-start: ensinam o que a IA sabe responder. */
+const EXAMPLE_CHIPS = [
+  "Lotes com maior desconto",
+  "Esta empresa está apta a contratar?",
+  "Infrações do IBAMA por UF",
+] as const;
 
 function isApplePlatform(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -191,9 +263,14 @@ export function IntelligenceOmnibox({
     return undefined;
   }, [open]);
 
+  const { reset: resetAi } = ai;
   const close = useCallback(() => {
     setOpen(false);
-  }, []);
+    // Zera para a próxima abertura começar limpa e coerente com o context atual
+    // (senão reabrir mostra a resposta de outra tela).
+    setQuery("");
+    resetAi();
+  }, [resetAi]);
 
   /* Esc fecha */
   useEffect(() => {
@@ -211,6 +288,15 @@ export function IntelligenceOmnibox({
       await ai.resolve(query);
     },
     [ai, query],
+  );
+
+  // Clique num chip de exemplo: preenche o campo e já resolve.
+  const runExample = useCallback(
+    (example: string) => {
+      setQuery(example);
+      void ai.resolve(example);
+    },
+    [ai],
   );
 
   const goToRoute = useCallback(
@@ -270,21 +356,21 @@ export function IntelligenceOmnibox({
                   type="button"
                   onClick={close}
                   aria-label="Fechar"
-                  style={{ all: "unset", cursor: "pointer", color: "var(--t-low)" }}
+                  style={S.closeBtn}
                 >
                   <X size={18} aria-hidden />
                 </button>
               )}
             </form>
 
-            {(ai.intent || ai.unavailable || ai.error) && (
+            {ai.intent || ai.unavailable || ai.error ? (
               <div style={S.body}>
                 {ai.unavailable ? (
-                  <p style={S.muted}>
+                  <p style={S.muted} role="alert">
                     A inteligência está sendo ativada. Tente novamente em instantes.
                   </p>
                 ) : ai.error ? (
-                  <p style={S.muted}>Não consegui interpretar agora. {ai.error}</p>
+                  <p style={S.muted} role="alert">Não consegui interpretar agora. {ai.error}</p>
                 ) : ai.intent ? (
                   <>
                     <div>
@@ -293,7 +379,7 @@ export function IntelligenceOmnibox({
                     </div>
 
                     <div>
-                      <div style={S.label}>Resposta</div>
+                      <div style={S.label}>Resposta da IA</div>
                       <p style={S.text}>{ai.intent.answer}</p>
                     </div>
 
@@ -303,14 +389,41 @@ export function IntelligenceOmnibox({
                         style={S.actionBtn}
                         onClick={() => goToRoute(ai.intent!.suggestedRoute as string)}
                       >
-                        <span>{ai.intent.suggestedAction ?? "Ir"}</span>
+                        <span>{ai.intent.suggestedAction ?? "Ver dados oficiais"}</span>
                         <ArrowRight size={16} aria-hidden />
                       </button>
                     ) : null}
                   </>
                 ) : null}
               </div>
-            )}
+            ) : !ai.loading ? (
+              /* Cold-start: ensina o que a IA sabe responder (senão o painel abre mudo). */
+              <div style={S.body}>
+                <p style={S.emptyHint}>Experimente uma destas perguntas:</p>
+                <div style={S.chipsRow} role="list" aria-label="Exemplos de perguntas">
+                  {EXAMPLE_CHIPS.map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      role="listitem"
+                      style={S.chip}
+                      onClick={() => runExample(example)}
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Rastreabilidade: a resposta é gerada por IA, não é fonte oficial. */}
+            {ai.intent ? (
+              <p style={S.trust}>
+                {ai.intent.suggestedRoute
+                  ? "Resposta gerada por IA — pode conter erros. Para decidir, confira nos dados oficiais pelo botão acima."
+                  : "Resposta gerada por IA — pode conter erros. Para decidir, confira no módulo oficial correspondente."}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

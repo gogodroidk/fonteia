@@ -7,7 +7,7 @@
  *
  * Suporta ?cnpj= na URL para pré-preenchimento e busca automática.
  */
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
   AlertTriangle,
   Building2,
@@ -798,12 +798,18 @@ export default function RaioXPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [report, setReport] = useState<RaioXReportData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Guarda de corrida: só a busca mais recente pode escrever o resultado.
+  // Evita que a resposta de um CNPJ antigo sobrescreva a de um novo.
+  const reqIdRef = useRef(0);
 
   // Executa a busca completa (cadastro + sanções + contratos) para um CNPJ já
   // resolvido. Compartilhada pelo CompanySearch (escolha por nome/CNPJ) e pelo
   // efeito de deep-link ?cnpj=. Antes de buscar, dispara o enriquecimento LAZY do
   // cadastro no D1 (best-effort, não bloqueia) — TODO do #96.
   const runSearch = useCallback(async (rawCnpj: string) => {
+    // Marca esta busca como a mais recente; qualquer resposta que chegar
+    // depois de uma nova busca iniciar será descartada (guarda de corrida).
+    const myReqId = ++reqIdRef.current;
     const cnpj = sanitizeCnpj(rawCnpj);
     if (cnpj === "") {
       setErrorMsg("CNPJ inválido: digite os 14 números (com ou sem máscara).");
@@ -825,6 +831,9 @@ export default function RaioXPage() {
         fetchSancoesByCnpj(cnpj),
         fetchContratosByCnpj(cnpj),
       ]);
+
+      // Uma busca mais nova começou enquanto esta esperava — descarta o resultado.
+      if (myReqId !== reqIdRef.current) return;
 
       if (empresaResult.status === "rejected") {
         throw empresaResult.reason instanceof Error
@@ -859,6 +868,8 @@ export default function RaioXPage() {
       setReport(reportData);
       setStatus("done");
     } catch (err) {
+      // Ignora o erro se já não é a busca mais recente.
+      if (myReqId !== reqIdRef.current) return;
       setErrorMsg(err instanceof Error ? err.message : "Erro ao consultar o CNPJ.");
       setStatus("error");
     }

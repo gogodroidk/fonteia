@@ -8,6 +8,9 @@ import {
   type ProcessoJudicialItem,
 } from "../../features/juridico/juridico-api";
 import { FonteDots } from "../../components/ui";
+import { CreateAlertButton } from "../../components/alerts/CreateAlertButton";
+import { ReportButton } from "../../components/report/ReportButton";
+import type { SavedReport } from "../../features/reports/reports-store";
 
 // Quantos itens renderizar por vez (o scroll carrega mais sozinho).
 const PAGE_SIZE = 36;
@@ -113,6 +116,40 @@ function SkeletonCard() {
   );
 }
 
+// ─── Report builder ──────────────────────────────────────────────────────────
+
+/** URL oficial da ficha de tramitação da proposição na Câmara. */
+function proposicaoUrl(proposicao: ProposicaoItem): string {
+  return `https://www.camara.leg.br/proposicoesWeb/fichadetramitacao?idProposicao=${encodeURIComponent(proposicao.id)}`;
+}
+
+/** Monta um SavedReport rastreável a partir de uma proposição (fonte: Câmara). */
+function buildProposicaoReport(proposicao: ProposicaoItem): SavedReport {
+  const fields: SavedReport["fields"] = [
+    { label: "Título", value: proposicao.titulo || "Proposição" },
+    { label: "Tipo", value: proposicao.tipo || "—" },
+    { label: "Ano", value: Number.isFinite(proposicao.ano) ? String(proposicao.ano) : "—" },
+    { label: "Ementa", value: proposicao.ementa || "Sem ementa registrada." },
+    { label: "Situação", value: "Em tramitação" },
+  ];
+
+  return {
+    id: `proposicao:${proposicao.id}`,
+    kind: "proposicao",
+    kindLabel: "Proposição (Câmara)",
+    title: proposicao.titulo || "Proposição",
+    subtitle: proposicao.tipo || undefined,
+    fields,
+    sources: [
+      {
+        label: "Câmara dos Deputados — Proposições (Dados Abertos)",
+        url: proposicaoUrl(proposicao),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 // ─── Proposição card ─────────────────────────────────────────────────────────
 
 interface ProposicaoCardProps {
@@ -145,7 +182,9 @@ function ProposicaoCard({ proposicao, onSelect }: ProposicaoCardProps) {
             }
           : undefined
       }
-      aria-label={cardLabel}
+      // Só anuncia como "botão" quando de fato acionável (onSelect). Sem destino,
+      // é um <article> estático — não prometer uma ação que ninguém dispara.
+      aria-label={onSelect ? cardLabel : undefined}
     >
       <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
         {/* Top: tipo + ano */}
@@ -197,6 +236,24 @@ function ProposicaoCard({ proposicao, onSelect }: ProposicaoCardProps) {
             Em tramitação
           </span>
           <FonteDots fontes={FONTE_DOTS_CAMARA} size={20} />
+        </div>
+
+        {/* Retenção: alerta + relatório (frontend-only; não bloqueiam o card) */}
+        <div
+          className="row wrap"
+          style={{ gap: 8, alignItems: "center" }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="presentation"
+        >
+          <CreateAlertButton
+            kind="proposicao"
+            entityRef={proposicao.id}
+            entityLabel={proposicao.titulo || "Proposição"}
+            size="sm"
+            variant="soft"
+          />
+          <ReportButton report={buildProposicaoReport(proposicao)} label="Salvar" />
         </div>
       </div>
     </article>
@@ -438,6 +495,10 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
   const sentinelPropRef = useRef<HTMLDivElement | null>(null);
   const sentinelProcRef = useRef<HTMLDivElement | null>(null);
 
+  // ── Retry: cada aba tem sua própria chave de recarga (sem reload da página) ──
+  const [reloadKeyProp, setReloadKeyProp] = useState(0);
+  const [reloadKeyProc, setReloadKeyProc] = useState(0);
+
   // ── Load proposições ──
   useEffect(() => {
     let cancelled = false;
@@ -452,7 +513,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        console.error("[juridico] falha ao carregar proposições:", err);
+        if (import.meta.env.DEV) console.error("[juridico] falha ao carregar proposições:", err);
         setErrorProp("Não foi possível carregar as proposições. Verifique sua conexão e tente novamente.");
         setIsLoadingProp(false);
       });
@@ -460,7 +521,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKeyProp]);
 
   // ── Load processos ──
   useEffect(() => {
@@ -476,7 +537,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        console.error("[juridico] falha ao carregar processos:", err);
+        if (import.meta.env.DEV) console.error("[juridico] falha ao carregar processos:", err);
         setErrorProc("Não foi possível carregar os processos judiciais. Verifique sua conexão e tente novamente.");
         setIsLoadingProc(false);
       });
@@ -484,7 +545,7 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKeyProc]);
 
   // ── Derived filter option list (tipos) ──
   const tipoOptions = useMemo<ReadonlyArray<readonly [string, string]>>(() => {
@@ -667,12 +728,25 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
                 background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
                 border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
                 color: "var(--danger)",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
                 fontSize: 13.5,
                 fontWeight: 600,
               }}
               role="alert"
             >
-              {errorProp}
+              <span>{errorProp}</span>
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={() => setReloadKeyProp((k) => k + 1)}
+                style={{ flexShrink: 0 }}
+              >
+                Tentar novamente
+              </button>
             </div>
           )}
 
@@ -834,12 +908,25 @@ export function JuridicoPage({ onSelectProposicao }: JuridicoPageProps) {
                 background: "color-mix(in srgb, var(--danger) 10%, var(--surface))",
                 border: "1px solid color-mix(in srgb, var(--danger) 28%, transparent)",
                 color: "var(--danger)",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
                 fontSize: 13.5,
                 fontWeight: 600,
               }}
               role="alert"
             >
-              {errorProc}
+              <span>{errorProc}</span>
+              <button
+                className="btn btn--ghost btn--sm"
+                type="button"
+                onClick={() => setReloadKeyProc((k) => k + 1)}
+                style={{ flexShrink: 0 }}
+              >
+                Tentar novamente
+              </button>
             </div>
           )}
 

@@ -34,7 +34,10 @@ import {
   ExternalLink,
   Filter,
   Loader2,
+  Lock,
   Maximize2,
+  Minus,
+  Plus,
   Search,
   ShieldAlert,
   ShieldQuestion,
@@ -90,6 +93,7 @@ import {
   type IdoneidadeSelo,
 } from "../../features/cerebro/idoneidade";
 import IdoneidadePanel from "../../features/cerebro/IdoneidadePanel";
+import { usePlan } from "../../lib/use-plan";
 
 // ─── Helpers de grafo ───────────────────────────────────────────────────────────
 
@@ -279,6 +283,9 @@ export function CerebroPage() {
   const [info, setInfo] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  // Plano do usuário: a verificação de idoneidade é premium (InfoSimples). Saber
+  // isto antes do clique deixa sinalizar o cadeado sem depender só do tooltip.
+  const { isPro, loading: planLoading } = usePlan();
 
   // Resultados da busca por nome (dropdown para escolher o centro).
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -307,6 +314,12 @@ export function CerebroPage() {
   // Refs vivos para o loop de render (evita recriar o RAF a cada state change).
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  // Refs de rolagem: painéis de resultado (abaixo do grafo) e o painel lateral.
+  // Sem isto, clicar "Beneficiário final"/"Verificar idoneidade" ou selecionar um
+  // nó abria conteúdo fora da viewport sem sinal — parecia que nada acontecia.
+  const uboPanelRef = useRef<HTMLDivElement | null>(null);
+  const idoneidadePanelRef = useRef<HTMLDivElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
   const simRef = useRef<ForceSimulation | null>(null);
   const graphRef = useRef<GraphData>(graph);
   const cameraRef = useRef<Camera>({ tx: 0, ty: 0, scale: 1 });
@@ -333,6 +346,15 @@ export function CerebroPage() {
     lastY: number;
     movedSq: number;
   }>({ mode: "none", nodeId: null, lastX: 0, lastY: 0, movedSq: 0 });
+
+  // Pinch-zoom (toque com 2 dedos): guarda a posição de cada pointerId ativo e a
+  // distância inicial entre eles. Sem esta lógica o zoom só existia no wheel do
+  // mouse — inacessível no celular, onde o grafo é o diferencial do produto.
+  const pinchRef = useRef<{
+    pointers: Map<number, { x: number; y: number }>;
+    startDist: number;
+    startScale: number;
+  }>({ pointers: new Map(), startDist: 0, startScale: 1 });
 
   // Mantém graphRef em sincronia com o estado e (re)inicia a simulação.
   useEffect(() => {
@@ -712,7 +734,7 @@ export function CerebroPage() {
 
         setSelectedId(centerId);
         announceResult(result, setInfo);
-        if (result.errors.length > 0) {
+        if (result.errors.length > 0 && import.meta.env.DEV) {
           console.warn("[cerebro] Erros parciais por módulo:", result.errors);
         }
       } catch (err) {
@@ -870,7 +892,7 @@ export function CerebroPage() {
             ? `Nenhuma conexão nova a partir de ${node.label}.`
             : `${total} ${total === 1 ? "conexão" : "conexões"} a partir de ${node.label}.`,
         );
-        if (result.errors.length > 0) {
+        if (result.errors.length > 0 && import.meta.env.DEV) {
           console.warn("[cerebro] Erros parciais ao expandir:", result.errors);
         }
       } catch (err) {
@@ -952,6 +974,33 @@ export function CerebroPage() {
     }
   }, []);
 
+  // Aplica um zoom multiplicativo mantendo fixo o ponto de tela (sx, sy) sob o
+  // cursor/foco. Base compartilhada pelo wheel, pelos botões +/- e pelo pinch.
+  const zoomAt = useCallback(
+    (factor: number, sx: number, sy: number) => {
+      const cam = cameraRef.current;
+      const { w, h } = sizeRef.current;
+      const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, cam.scale * factor));
+      const wx = (sx - w / 2 - cam.tx) / cam.scale;
+      const wy = (sy - h / 2 - cam.ty) / cam.scale;
+      cam.scale = nextScale;
+      cam.tx = sx - w / 2 - wx * nextScale;
+      cam.ty = sy - h / 2 - wy * nextScale;
+      if (reducedRef.current) draw();
+      else ensureRaf();
+    },
+    [draw, ensureRaf],
+  );
+
+  // Zoom pelo centro do palco (usado pelos botões +/-, que não têm cursor).
+  const zoomByButton = useCallback(
+    (factor: number) => {
+      const { w, h } = sizeRef.current;
+      zoomAt(factor, w / 2, h / 2);
+    },
+    [zoomAt],
+  );
+
   // ── Handlers de ponteiro (drag de nó + pan) ──
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -963,6 +1012,25 @@ export function CerebroPage() {
       const sy = e.clientY - rect.top;
       const node = nodeAtScreen(sx, sy);
       const d = dragRef.current;
+
+      // Registra o ponteiro para detecção de pinch (2 dedos).
+      const pinch = pinchRef.current;
+      pinch.pointers.set(e.pointerId, { x: sx, y: sy });
+      if (pinch.pointers.size === 2) {
+        // Entrou em pinch: cancela qualquer drag/pan em curso e fixa a base.
+        const pts = [...pinch.pointers.values()];
+        const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+        pinch.startDist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        pinch.startScale = cameraRef.current.scale;
+        if (d.nodeId) {
+          const dragged = graphRef.current.nodes.find((n) => n.id === d.nodeId);
+          if (dragged) dragged.fixed = false;
+        }
+        d.mode = "none";
+        d.nodeId = null;
+        return;
+      }
+
       d.lastX = sx;
       d.lastY = sy;
       d.movedSq = 0;
@@ -987,6 +1055,22 @@ export function CerebroPage() {
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
       const d = dragRef.current;
+
+      // Pinch em andamento (2 dedos): recalcula a escala pela razão das distâncias
+      // e centraliza o zoom no ponto médio entre os dedos.
+      const pinch = pinchRef.current;
+      if (pinch.pointers.has(e.pointerId)) {
+        pinch.pointers.set(e.pointerId, { x: sx, y: sy });
+      }
+      if (pinch.pointers.size >= 2) {
+        const pts = [...pinch.pointers.values()];
+        const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+        const target = pinch.startScale * (dist / pinch.startDist);
+        const factor = target / cameraRef.current.scale;
+        zoomAt(factor, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        return;
+      }
 
       if (d.mode === "none") {
         const node = nodeAtScreen(sx, sy);
@@ -1024,13 +1108,22 @@ export function CerebroPage() {
       if (reducedRef.current) draw();
       else ensureRaf();
     },
-    [draw, ensureRaf, nodeAtScreen, screenToWorld],
+    [draw, ensureRaf, nodeAtScreen, screenToWorld, zoomAt],
   );
 
   const onPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       const d = dragRef.current;
+      // Remove o ponteiro do rastreio de pinch; se ainda restar 1 dedo, ele
+      // não retoma pan/drag até um novo pointerdown (evita salto brusco).
+      const pinch = pinchRef.current;
+      if (pinch.pointers.has(e.pointerId)) {
+        pinch.pointers.delete(e.pointerId);
+        if (pinch.pointers.size < 2) {
+          pinch.startDist = 0;
+        }
+      }
       if (canvas) {
         try {
           canvas.releasePointerCapture(e.pointerId);
@@ -1070,23 +1163,11 @@ export function CerebroPage() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const rect = canvas.getBoundingClientRect();
-      const sx = e.clientX - rect.left;
-      const sy = e.clientY - rect.top;
-      const cam = cameraRef.current;
-      const { w, h } = sizeRef.current;
-      const factor = Math.exp(-e.deltaY * 0.0015);
-      const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, cam.scale * factor));
-      const wx = (sx - w / 2 - cam.tx) / cam.scale;
-      const wy = (sy - h / 2 - cam.ty) / cam.scale;
-      cam.scale = nextScale;
-      cam.tx = sx - w / 2 - wx * nextScale;
-      cam.ty = sy - h / 2 - wy * nextScale;
-      if (reducedRef.current) draw();
-      else ensureRaf();
+      zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - rect.left, e.clientY - rect.top);
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
-  }, [draw, ensureRaf]);
+  }, [zoomAt]);
 
   /** Reenquadra a câmera para caber os nós VISÍVEIS (botão "Centralizar"). */
   const fitView = useCallback(() => {
@@ -1146,6 +1227,45 @@ export function CerebroPage() {
     !showIdoneidade &&
     !nodeSeloMap.has(selectedNode.id) &&
     !hintDismissed;
+
+  // Ao abrir o painel de Beneficiário Final, rola-o à vista (ele nasce abaixo do
+  // grafo). Sem isto, em telas menores o clique parecia não fazer nada.
+  useEffect(() => {
+    if (!showUbo) return;
+    window.requestAnimationFrame(() => {
+      uboPanelRef.current?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, [showUbo, reducedMotion]);
+
+  // Idem para o painel de Idoneidade (consulta premium): a percepção de "não
+  // funcionou" aqui custa conversão, então garantimos que o resultado apareça.
+  useEffect(() => {
+    if (!showIdoneidade) return;
+    window.requestAnimationFrame(() => {
+      idoneidadePanelRef.current?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, [showIdoneidade, reducedMotion]);
+
+  // Em telas estreitas (layout de coluna única), o painel lateral fica ABAIXO do
+  // canvas de ~74vh. Ao selecionar um nó, traz o painel de detalhe à vista para
+  // o usuário mobile perceber que o clique abriu conteúdo.
+  useEffect(() => {
+    if (selectedId === null) return;
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    if (!window.matchMedia("(max-width:920px)").matches) return;
+    window.requestAnimationFrame(() => {
+      asideRef.current?.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, [selectedId, reducedMotion]);
 
   /** Contagem de nós por kind (para badges das camadas). */
   const countByKind = useMemo(() => {
@@ -1343,13 +1463,13 @@ export function CerebroPage() {
       <div className="cerebro-layout">
         {/* Palco do grafo */}
         <section
-          className="panel"
+          className="panel cerebro-stage"
           style={{ position: "relative", overflow: "hidden", padding: 0, minHeight: 420 }}
           aria-label="Grafo de conhecimento interativo"
         >
           <div
             ref={wrapRef}
-            className="gridbg"
+            className="gridbg cerebro-stage-wrap"
             style={{ position: "relative", width: "100%", height: "min(74vh, 680px)", minHeight: 420 }}
           >
             <canvas
@@ -1532,6 +1652,26 @@ export function CerebroPage() {
                 >
                   <Maximize2 size={16} aria-hidden="true" />
                 </button>
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  type="button"
+                  onClick={() => zoomByButton(1.25)}
+                  aria-label="Aproximar o grafo"
+                  title="Aproximar"
+                  style={{ background: "var(--glass)", backdropFilter: "blur(10px)" }}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                </button>
+                <button
+                  className="btn btn--icon btn--ghost btn--sm"
+                  type="button"
+                  onClick={() => zoomByButton(0.8)}
+                  aria-label="Afastar o grafo"
+                  title="Afastar"
+                  style={{ background: "var(--glass)", backdropFilter: "blur(10px)" }}
+                >
+                  <Minus size={16} aria-hidden="true" />
+                </button>
               </div>
             )}
 
@@ -1607,6 +1747,7 @@ export function CerebroPage() {
 
         {/* Painel lateral: detalhe do nó + lista textual navegável (a11y) */}
         <aside
+          ref={asideRef}
           className="panel cerebro-aside"
           style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}
           aria-label="Detalhes e lista de conexões"
@@ -1734,6 +1875,15 @@ export function CerebroPage() {
                     >
                       <ShieldAlert size={13} aria-hidden="true" />
                       {idoneidadeLoading && showIdoneidade ? "Verificando…" : "Verificar idoneidade"}
+                      {!planLoading && !isPro && !nodeSeloMap.has(selectedNode.id) && (
+                        <span
+                          className="badge badge--neutral"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, padding: "1px 6px" }}
+                        >
+                          <Lock size={10} aria-hidden="true" />
+                          Pro
+                        </span>
+                      )}
                       {(() => {
                         const s = nodeSeloMap.get(selectedNode.id);
                         if (!s) return null;
@@ -1819,7 +1969,38 @@ export function CerebroPage() {
                                 node.id === selectedId ? colorOf(node.kind) : "var(--border)",
                             }}
                           >
-                            <span className="cerebro-list-label">{node.label}</span>
+                            <span className="cerebro-list-row">
+                              <span className="cerebro-list-label">{node.label}</span>
+                              {(() => {
+                                // Paridade com o canvas/painel: mostra o selo de
+                                // idoneidade já calculado direto na lista, para o
+                                // usuário não precisar reabrir cada nó.
+                                const s = nodeSeloMap.get(node.id);
+                                if (!s) return null;
+                                const c =
+                                  s === "irregular"
+                                    ? "var(--danger)"
+                                    : s === "atencao"
+                                      ? "var(--warn)"
+                                      : s === "regular"
+                                        ? "var(--ok)"
+                                        : "var(--t-low)";
+                                return (
+                                  <span
+                                    aria-label={`Idoneidade: ${s}`}
+                                    title={`Idoneidade: ${s}`}
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: "50%",
+                                      background: c,
+                                      flexShrink: 0,
+                                      display: "inline-block",
+                                    }}
+                                  />
+                                );
+                              })()}
+                            </span>
                             {node.sublabel && (
                               <span className="cerebro-list-sub">{node.sublabel}</span>
                             )}
@@ -1840,35 +2021,39 @@ export function CerebroPage() {
 
       {/* Rodapé: dica de uso + reduced-motion */}
       <p className="tiny muted" style={{ margin: 0 }}>
-        Clique num nó para ver detalhes e a fonte · arraste os nós para reorganizar · role para dar zoom ·
-        arraste o fundo para mover.
+        Clique num nó para ver detalhes e a fonte · arraste os nós para reorganizar · role, use os botões +/− ou
+        junte dois dedos para dar zoom · arraste o fundo para mover.
         {reducedMotion ? " Animação reduzida ativada — o grafo é assentado sem movimento." : ""}
       </p>
 
       {/* Painel de Beneficiário Final (UBO) — aparece abaixo do grafo */}
       {showUbo && (
-        <UBOPanel
-          result={uboResult}
-          loading={uboLoading}
-          onClose={() => {
-            setShowUbo(false);
-            setUboResult(null);
-          }}
-        />
+        <div ref={uboPanelRef} style={{ scrollMarginTop: 16 }}>
+          <UBOPanel
+            result={uboResult}
+            loading={uboLoading}
+            onClose={() => {
+              setShowUbo(false);
+              setUboResult(null);
+            }}
+          />
+        </div>
       )}
 
       {/* Painel de Idoneidade / Compliance — aparece abaixo do grafo (após UBO) */}
       {showIdoneidade && selectedNode?.cnpj && (
-        <IdoneidadePanel
-          cnpj={selectedNode.cnpj}
-          empresaNome={selectedNode.label}
-          cards={idoneidade ?? []}
-          loading={idoneidadeLoading}
-          onClose={() => {
-            setShowIdoneidade(false);
-            setIdoneidade(null);
-          }}
-        />
+        <div ref={idoneidadePanelRef} style={{ scrollMarginTop: 16 }}>
+          <IdoneidadePanel
+            cnpj={selectedNode.cnpj}
+            empresaNome={selectedNode.label}
+            cards={idoneidade ?? []}
+            loading={idoneidadeLoading}
+            onClose={() => {
+              setShowIdoneidade(false);
+              setIdoneidade(null);
+            }}
+          />
+        </div>
       )}
 
       {/* Estilos locais — responsivo, dropdown, filtros, detalhe e itens da lista */}
@@ -1883,6 +2068,12 @@ export function CerebroPage() {
         @media (max-width:920px){
           .cerebro-layout{grid-template-columns:1fr}
           .cerebro-aside{max-height:none}
+          /* Em coluna única o canvas não pode ocupar 74vh, senão o painel de
+             detalhe/resultado nasce todo fora da tela. Reduz o palco no mobile. */
+          .cerebro-stage-wrap{height:min(52vh,440px)!important;min-height:320px!important}
+          .cerebro-stage{min-height:320px!important}
+          /* Encolhe a legenda para não cobrir a área de toque do grafo. */
+          .cerebro-legend{max-width:min(48%,220px);font-size:11px}
         }
         /* Dropdown de resultados da busca por nome */
         .cerebro-hits{
@@ -1909,7 +2100,7 @@ export function CerebroPage() {
         }
         .cerebro-layer{
           width:100%;display:flex;align-items:center;gap:8px;cursor:pointer;
-          background:transparent;border:0;border-radius:8px;padding:5px 6px;font-family:inherit;
+          background:transparent;border:0;border-radius:8px;padding:9px 6px;min-height:44px;font-family:inherit;
           transition:background .12s;
         }
         .cerebro-layer:hover{background:var(--surface-2)}
@@ -1929,13 +2120,15 @@ export function CerebroPage() {
         /* Lista textual */
         .cerebro-list-item{
           width:100%;text-align:left;cursor:pointer;
-          display:flex;flex-direction:column;gap:2px;
+          display:flex;flex-direction:column;justify-content:center;gap:2px;
           background:var(--surface-2);border:1px solid var(--border);
-          border-radius:9px;padding:7px 10px;font-family:inherit;
+          border-radius:9px;padding:10px 12px;min-height:44px;font-family:inherit;
           transition:border-color .15s,background .15s,transform .1s;
         }
         .cerebro-list-item:hover{background:var(--surface);transform:translateX(2px)}
+        .cerebro-list-row{display:flex;align-items:center;gap:6px;min-width:0}
         .cerebro-list-label{
+          flex:1;min-width:0;
           font-size:13px;font-weight:600;color:var(--t-hi);
           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
         }

@@ -37,6 +37,8 @@ export function BillingPage() {
   // Plano em processamento (id) — trava o botão clicado enquanto cria a sessão.
   const [pendingPlan, setPendingPlan] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  // Plano vindo do CTA da landing (?plano=pro): destaca o card e mostra um aviso.
+  const [intentPlan, setIntentPlan] = useState<string | null>(null);
 
   useEffect(() => {
     // Lê o retorno do Stripe pelos helpers compartilhados (mesma fonte da verdade
@@ -44,7 +46,42 @@ export function BillingPage() {
     const search = window.location.search;
     if (isCheckoutSuccess(search)) setPaid(true);
     else if (isCheckoutCanceled(search)) setCanceled(true);
+
+    // Consome o ?checkout= e o remove da URL: um refresh ou link compartilhado
+    // não deve reabrir o aviso de sucesso/cancelamento (BILL-06). Preserva os
+    // demais params (ex.: ?plano=), removendo só o checkout.
+    if (isCheckoutSuccess(search) || isCheckoutCanceled(search)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("checkout");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+
+    // Intenção de assinatura vinda da landing: destaca o plano escolhido e leva
+    // o card à vista. NÃO abre checkout sozinho — o usuário confirma clicando.
+    try {
+      const plano = new URLSearchParams(search).get("plano");
+      if (plano && PLANOS.some((p) => p.id === plano)) {
+        setIntentPlan(plano);
+        window.requestAnimationFrame(() => {
+          document.getElementById(`plano-${plano}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+    } catch {
+      // URL malformada — ignora e mostra a grade normal.
+    }
   }, []);
+
+  // Quando surge um erro de checkout, o alerta é inserido no topo da página —
+  // longe do botão clicado. Rola o alerta à vista (mesmo padrão do intentPlan)
+  // para o usuário ver a mensagem e o CTA de recuperação em telas longas.
+  useEffect(() => {
+    if (!checkoutError) return;
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector('[role="alert"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [checkoutError]);
 
   // Inicia a assinatura: tenta a Checkout Session amarrada ao usuário (mata o bug de
   // correlação por e-mail). Cai no Payment Link se a função estiver indisponível, e
@@ -78,7 +115,13 @@ export function BillingPage() {
           return;
         }
         if (result.reason === "plano_invalido") {
-          setChosen(nome);
+          // Plano COM checkout direto que o backend recusou: é uma falha de
+          // configuração, não o fluxo comercial do Corporativo. Mostra erro
+          // honesto em vez do painel de contato de vendas (que confundiria
+          // quem clicou "Assinar Profissional").
+          setCheckoutError(
+            `Não foi possível iniciar o checkout deste plano agora. Tente de novo ou fale com ${SUPPORT_EMAIL}.`,
+          );
           return;
         }
         // Sem Payment Link de fallback: mensagem honesta com o contato.
@@ -172,6 +215,21 @@ export function BillingPage() {
         </div>
       )}
 
+      {intentPlan && !paid && (
+        <div
+          className="panel"
+          role="status"
+          style={{ padding: 14, marginBottom: 20, display: "flex", gap: 10, alignItems: "center", borderColor: "color-mix(in srgb,var(--accent) 40%,var(--border))" }}
+        >
+          <Zap size={17} fill="currentColor" style={{ color: "var(--accent-ink)", flexShrink: 0 }} aria-hidden="true" />
+          <span className="small">
+            Você escolheu o plano{" "}
+            <strong>{PLANOS.find((p) => p.id === intentPlan)?.nome ?? intentPlan}</strong>. Confirme abaixo
+            para iniciar o checkout — são 7 dias grátis e você pode cancelar antes sem pagar nada.
+          </span>
+        </div>
+      )}
+
       <div style={{ textAlign: "center", marginBottom: 28 }}>
         <span className="eyebrow">Planos</span>
         <h2 className="h1" style={{ marginTop: 8 }}>Escolha seu plano. Cancele quando quiser.</h2>
@@ -185,16 +243,23 @@ export function BillingPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(264px,1fr))", gap: 16, alignItems: "start" }}>
         {PLANOS.map((plano) => {
           const isFeatured = plano.destaque;
+          const isIntent = intentPlan === plano.id;
           return (
             <article
               key={plano.id}
+              id={`plano-${plano.id}`}
               className={isFeatured ? "card card--pad glow-accent" : "card card--pad"}
               style={{
                 display: "flex",
                 flexDirection: "column",
                 gap: 14,
                 position: "relative",
-                borderColor: isFeatured ? "color-mix(in srgb,var(--accent) 40%,var(--border))" : undefined,
+                borderColor: isIntent
+                  ? "var(--accent-ink)"
+                  : isFeatured
+                    ? "color-mix(in srgb,var(--accent) 40%,var(--border))"
+                    : undefined,
+                boxShadow: isIntent ? "0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)" : undefined,
               }}
             >
               {isFeatured && (
@@ -247,7 +312,15 @@ export function BillingPage() {
       </div>
 
       <div style={{ maxWidth: 460, margin: "22px auto 0" }}>
-        <CouponRedeem />
+        {/* onRedeemed leva o usuário ao app já com o acesso ativo: usePlan só
+            re-busca em onAuthStateChange e o resgate de cupom não dispara auth
+            change, então sem esta navegação o app seguiria bloqueado até um
+            reload manual. */}
+        <CouponRedeem
+          onRedeemed={() => {
+            window.location.assign("/app");
+          }}
+        />
       </div>
 
       <div className="inset" style={{ marginTop: 16, padding: 14, display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>

@@ -759,7 +759,7 @@ export function IdoneidadePanel({
             padding: "14px 0",
             color: "var(--t-mid)",
           }}
-          role="status"
+          role="alert"
         >
           <AlertTriangle size={15} aria-hidden="true" style={{ color: "var(--warn)", flexShrink: 0 }} />
           <span className="small">

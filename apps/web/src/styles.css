@@ -468,34 +468,9 @@ p { margin: 0; }
 
 .btn-label { display: none; }
 
-/* ── Bottom Nav (mobile only) ── */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
-  display: flex;
-  background: var(--white);
-  border-top: 1px solid var(--n-100);
-  padding-bottom: env(safe-area-inset-bottom);
-  box-shadow: 0 -4px 16px rgba(0,0,0,0.05);
-}
-.bottom-nav-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 10px 0;
-  color: var(--n-400);
-  font-size: 0.65rem;
-  font-weight: 600;
-  transition: color var(--fast);
-}
-.bottom-nav-item.active { color: var(--g-700); }
-.bottom-nav-item svg { transition: transform var(--fast); }
-.bottom-nav-item.active svg { transform: scale(1.1); }
+/* NOTE: a navegação mobile real do app é `.shell-bottomnav` (estilizada inline
+   em App.tsx). O antigo bloco `.bottom-nav`/`.bottom-nav-item` foi removido por
+   ser CSS morto — nenhum componente o usava (MOBI-05). */
 
 /* ── Dashboard grid ── */
 .dashboard-grid {
@@ -1048,13 +1023,21 @@ p { margin: 0; }
 }
 .lot-meta-item strong { display: block; margin-top: var(--s-1); font-size: 0.95rem; color: var(--n-900); }
 .lot-minimum-value { color: var(--g-700); font-size: 1.1rem; }
-.lot-success-message {
+.lot-feedback-message {
   background: var(--g-100);
   border: 1px solid var(--g-300);
   border-radius: var(--r-md);
   color: var(--g-700);
   font-weight: 700;
   padding: var(--s-3) var(--s-4);
+}
+
+/* Tom de erro/bloqueio: vermelho de perigo em vez do verde de sucesso.
+   Antes erros e paywalls apareciam com estilo de sucesso, confundindo o usuário. */
+.lot-feedback-message--error {
+  background: var(--color-error-bg);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--surface));
+  color: var(--color-error);
 }
 
 /* ── Score detail ── */
@@ -1640,9 +1623,6 @@ p { margin: 0; }
     align-items: start;
   }
   .workspace { grid-column: 2; grid-row: 1; min-height: 100dvh; }
-
-  /* Hide bottom nav on larger screens */
-  .bottom-nav { display: none; }
 
   /* Dashboard */
   .dashboard-grid {

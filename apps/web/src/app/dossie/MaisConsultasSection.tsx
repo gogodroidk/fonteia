@@ -912,7 +912,7 @@ export function MaisConsultasSection({ cnpj, ufEmpresa }: MaisConsultasSectionPr
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   // ── Dispatch de um kind individual ────────────────────────────────────────

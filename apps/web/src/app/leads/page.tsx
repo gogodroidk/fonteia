@@ -703,10 +703,10 @@ function EmptySourceState() {
       >
         <TrendingUp size={28} />
       </div>
-      <div style={{ fontWeight: 700, fontSize: 15 }}>Contratos sendo coletados</div>
+      <div style={{ fontWeight: 700, fontSize: 15 }}>Nenhum lead disponível ainda</div>
       <p className="muted small" style={{ margin: 0, maxWidth: 380 }}>
-        A integração com o PNCP está sendo ligada. Em breve cada contrato assinado vai gerar um lead
-        automático aqui. Volte em alguns minutos.
+        Os leads vêm dos contratos publicados no PNCP. Assim que houver contratos que casem com
+        seu perfil, eles aparecem aqui automaticamente.
       </p>
       <p className="tiny muted" style={{ margin: 0 }}>
         Os dados vêm do{" "}

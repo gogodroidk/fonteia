@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { BellPlus, X } from "lucide-react";
 import { useAuth } from "../../auth/auth-context";
 import { createEntityAlert, ALERT_KIND_LABELS } from "../../features/alerts/alerts-api";
+import { useFocusTrap } from "../../hooks/use-focus-trap";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,13 +45,10 @@ function AlertModal({
   const [email, setEmail] = useState(defaultEmail);
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState<string | undefined>();
-  const firstInputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-
-  // Focus the email input on mount
-  useEffect(() => {
-    firstInputRef.current?.focus();
-  }, []);
+  // Prende o foco dentro do dialog enquanto estiver aberto (cumpre a promessa
+  // de aria-modal="true") e devolve o foco ao elemento anterior ao fechar.
+  const dialogRef = useFocusTrap<HTMLDivElement>(true);
 
   // Close on Escape key
   useEffect(() => {
@@ -118,6 +116,7 @@ function AlertModal({
     >
       {/* Dialog */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="alert-modal-title"
@@ -197,7 +196,6 @@ function AlertModal({
             </label>
             <input
               id="alert-email"
-              ref={firstInputRef}
               type="email"
               className="input"
               required
