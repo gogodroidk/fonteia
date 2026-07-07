@@ -1,18 +1,19 @@
 // Supabase Edge Function: "send-alerts"
-// Disparador diário (via pg_cron) dos alertas de prazo por e-mail (Resend).
+// Disparador diário (via pg_cron: job "send-alerts-daily") dos alertas de prazo
+// por e-mail, enviados pelo Resend a partir de alertas@fontebrasil.online
+// (domínio verificado no Resend — DKIM + SPF ok).
 //
 // Busca alertas ativos, ainda não notificados, com prazo entre agora e +3 dias,
-// envia o e-mail via Resend e marca notified_at (idempotente — não reenvia).
+// envia o e-mail e marca notified_at (idempotente — não reenvia).
 //
 // verify_jwt = TRUE: só o cron (com Authorization) dispara — não é público.
-// Secrets (injetados/configurados): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY.
+// Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY.
+// Self-contained: helpers inlinados para deploy sem dependências de ../_shared.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { hasValidBearerSecret } from "../_shared/auth.ts";
-import { fetchWithTimeout } from "../_shared/http.ts";
 
 const RESEND_URL = "https://api.resend.com/emails";
-const FROM = "Fonte.ia <alertas@olli.com.br>";
+const FROM = "Fonte.ia <alertas@fontebrasil.online>";
 const DIAS_ANTES = 3;
 
 interface AlertRow {
@@ -31,6 +32,27 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Comparação em tempo constante para o Bearer do cron (evita timing oracle).
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let r = 0;
+  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return r === 0;
+}
+function hasValidBearerSecret(req: Request, secret: string): boolean {
+  const m = (req.headers.get("Authorization") ?? "").match(/^Bearer\s+(.+)$/i);
+  return m ? safeEqual(m[1], secret) : false;
+}
+async function fetchWithTimeout(url: string, opts: RequestInit, ms: number): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 function fmtPrazo(iso: string | null): string {
   if (!iso) return "(prazo não informado)";
   const d = new Date(iso);
@@ -46,7 +68,7 @@ function fmtPrazo(iso: string | null): string {
 
 Deno.serve(async (req: Request) => {
   // OPT-IN: quando ALERTS_CRON_SECRET está configurado, exige o Bearer correspondente.
-  // Sem o secret definido (env vazio), o gate é ignorado — cron atual não quebra.
+  // Sem o secret definido (env vazio), o gate é ignorado — o cron atual não quebra.
   const cronSecret = Deno.env.get("ALERTS_CRON_SECRET") ?? "";
   if (cronSecret && !hasValidBearerSecret(req, cronSecret)) {
     return json({ ok: false, error: "nao_autorizado" }, 401);
