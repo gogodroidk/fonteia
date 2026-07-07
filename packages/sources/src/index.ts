@@ -7,4 +7,5 @@ export * from "./connectors/camara-proposicoes";
 export * from "./connectors/ibge-municipios";
 export * from "./connectors/orgaos-publicos";
 export * from "./connectors/ibama-ambiental";
+export * from "./connectors/querido-diario";
 export * from "./registry";

@@ -6,23 +6,53 @@
 //       ?dataInicial=AAAAMMDD&dataFinal=AAAAMMDD
 //       &codigoModalidadeContratacao={1..14}&pagina={n}&tamanhoPagina=50
 //
-// Fluxo: para cada modalidade (default: licitações com disputa — 2..7), varre todas
-// as páginas da janela de datas -> normaliza cada contratação -> chama a RPC
+// LIMITE CONFIRMADO AO VIVO (2026-07-07): a API rejeita com 422 "Período inicial
+// e final maior que 365 dias" quando (dataFinal - dataInicial) > 365. Uma janela
+// de exatos 365 dias funciona. Por isso todo backfill de período longo é fatiado
+// em CHUNKS <= CHUNK_DAYS (default 180 = semestre, bem dentro do limite) e cada
+// chunk é uma chamada HTTP independente — múltiplas modalidades x múltiplos
+// chunks x múltiplas páginas.
+//
+// VOLUME REAL (amostrado ao vivo, ano civil de 2025, uma única modalidade):
+//   modalidade 8  (Dispensa)             ~718.000 contratações / ano
+//   modalidade 9  (Inexigibilidade)      ~261.000 contratações / ano
+//   modalidade 6  (Pregão Eletrônico)    ~397.000 contratações / ano
+// Ou seja: incluir 8 e 9 no default multiplica em ordens de grandeza o volume
+// coletado. Ver README/relatório de entrega para estimativa de custo/tempo de
+// um backfill de 3 anos antes de disparar.
+//
+// Fluxo: para cada modalidade, para cada chunk de datas dentro da janela pedida,
+// varre todas as páginas -> normaliza cada contratação -> chama a RPC
 // public.ingest_pncp em lotes. Espelha 1:1 a ingest-receita-catalog.
 //
 // Idempotente: id da licitação = numeroControlePNCP (único e perene no PNCP),
-// então rodar de novo na mesma janela não duplica (a RPC faz upsert por id).
+// então rodar de novo na mesma janela (ou um chunk sobreposto) não duplica (a
+// RPC faz upsert por id); há também dedup em memória por execução.
 //
 // Secrets: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são injetados automaticamente
 // pelo Supabase nas Edge Functions — não precisa configurar nada.
 //
 // Parâmetros de query (todos opcionais):
-//   ?dias=N            -> janela = [hoje - N, hoje]  (default 3)
-//   ?dataInicial=...   -> AAAAMMDD (sobrepõe ?dias)
-//   ?dataFinal=...     -> AAAAMMDD (default hoje)
-//   ?modalidades=6,8   -> CSV de códigos (default 2,3,4,5,6,7)
-//   ?uf=SP             -> filtra por UF
-//   ?maxPaginas=N      -> teto de páginas por modalidade (0 = todas; default 0)
+//   ?dias=N              -> janela = [hoje - N, hoje]  (default 3; modo incremental/cron)
+//   ?dataInicial=...      -> AAAAMMDD (sobrepõe ?dias) — início do BACKFILL
+//   ?dataFinal=...        -> AAAAMMDD (default hoje)
+//   ?modalidades=6,8      -> CSV de códigos (default 2,3,4,5,6,7,8,9)
+//   ?uf=SP                -> filtra por UF
+//   ?maxPaginas=N         -> teto de páginas por (modalidade,chunk) (0 = todas; default 0)
+//   ?chunkDias=N           -> tamanho do fatiamento de datas (default 180; teto 365)
+//   ?maxChunks=N           -> teto de chunks processados NESTA chamada (default 0 = todos
+//                             os chunks da janela; use para fatiar o backfill em várias
+//                             invocações e nunca estourar o timeout de ~150s da Edge Function)
+//   ?cursor=AAAAMMDD       -> retoma o backfill a partir desta dataFinal de chunk (ver
+//                             `next_cursor` na resposta quando `maxChunks` corta a execução)
+//
+// Backfill de ~2021-01-01 até hoje, por exemplo:
+//   POST /ingest-pncp?dataInicial=20210101&dataFinal=20260107&modalidades=2,3,4,5,6,7,8,9
+//        &chunkDias=180&maxChunks=1
+// e repetir a chamada usando o `next_cursor` devolvido até a resposta trazer
+// `next_cursor: null` (backfill completo). Rodar maxChunks alto processa mais
+// chunks numa única invocação, mas arrisca timeout se o volume for grande —
+// prefira maxChunks pequeno (1-2) para modalidades de alto volume (8, 9, 6).
 //
 // Deploy: Edge Functions -> Create function "ingest-pncp" -> cole este arquivo.
 // (Verify JWT pode ficar LIGADO; o cron manda Authorization, igual às outras.)
@@ -41,11 +71,20 @@ const SOURCE_ID = "pncp-contratacoes";
 
 const MAX_PAGE_SIZE = 50;
 // Pausa educada entre chamadas (ms).
-const RATE_MS = 350;
+const RATE_MS = 600; // PNCP dispara 429 sob 350ms em backfill; 600ms é o rate seguro observado ao vivo
 // Itens por chamada de RPC (evita payload gigante).
 const RPC_BATCH = 200;
-// Default: licitações com disputa (concorrências, pregões, concurso, diálogo).
-const DEFAULT_MODALIDADES = [2, 3, 4, 5, 6, 7];
+// Default: licitações com disputa (concorrências, pregões, concurso, diálogo)
+// + as duas maiores fontes de volume de contratação direta (Dispensa e
+// Inexigibilidade — Lei 14.133/2021 arts. 74/75), que respondem pela imensa
+// maioria das contratações públicas do país e estavam de fora do default.
+const DEFAULT_MODALIDADES = [2, 3, 4, 5, 6, 7, 8, 9];
+// Limite confirmado ao vivo na API: janela (dataFinal - dataInicial) > 365 dias
+// devolve 422. Nunca gerar um chunk maior que isto.
+const MAX_WINDOW_DAYS = 365;
+// Tamanho de fatia default para o backfill (bem abaixo do teto, deixa margem
+// e mantém cada chunk com paginação previsível).
+const DEFAULT_CHUNK_DAYS = 180;
 
 const MODALIDADES: Record<number, string> = {
   1: "Leilão - Eletrônico",
@@ -147,6 +186,47 @@ function ymd(date: Date): string {
   return `${y}${m}${d}`;
 }
 
+/** Parseia "AAAAMMDD" -> Date (meia-noite UTC). Lança se o formato for inválido. */
+function parseYmd(value: string): Date {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(value.trim());
+  if (!m) throw new Error(`Data inválida (esperado AAAAMMDD): "${value}"`);
+  const [, y, mo, d] = m;
+  const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+  if (Number.isNaN(date.getTime())) throw new Error(`Data inválida: "${value}"`);
+  return date;
+}
+
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 86_400_000);
+}
+
+interface DateChunk {
+  dataInicial: string;
+  dataFinal: string;
+}
+
+/**
+ * Fatia [dataInicial, dataFinal] (ambas AAAAMMDD, inclusive) em chunks de no
+ * máximo `chunkDays` dias, respeitando o teto de 365 dias da API do PNCP.
+ * Chunks são contíguos e não sobrepostos, em ordem cronológica ascendente.
+ */
+function buildDateChunks(dataInicial: string, dataFinal: string, chunkDays: number): DateChunk[] {
+  const start = parseYmd(dataInicial);
+  const end = parseYmd(dataFinal);
+  const safeChunkDays = Math.max(1, Math.min(chunkDays, MAX_WINDOW_DAYS));
+  if (end.getTime() < start.getTime()) return [];
+
+  const chunks: DateChunk[] = [];
+  let cursor = start;
+  while (cursor.getTime() <= end.getTime()) {
+    const chunkEnd = addDays(cursor, safeChunkDays - 1);
+    const clampedEnd = chunkEnd.getTime() > end.getTime() ? end : chunkEnd;
+    chunks.push({ dataInicial: ymd(cursor), dataFinal: ymd(clampedEnd) });
+    cursor = addDays(clampedEnd, 1);
+  }
+  return chunks;
+}
+
 function normalize(raw: RawContratacao, collectedAt: string): Record<string, unknown> {
   const orgao = raw.orgaoEntidade ?? {};
   const unidade = raw.unidadeOrgao ?? {};
@@ -218,8 +298,8 @@ function buildUrl(
 async function getJson(url: string): Promise<PncpPage> {
   const res = await fetchWithRetry(url, {
     timeoutMs: 15000,
-    retries: 3,
-    backoffMs: 800,
+    retries: 4,
+    backoffMs: 800, // backoff 0.8→6.4s: absorve 429 ocasional sem estourar o time-budget do chunk
     init: { headers: HEADERS },
   });
   if (res.status === 204) return { data: [], totalPaginas: 0, empty: true };
@@ -243,13 +323,15 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
 
-  // Janela de datas.
+  // Janela de datas. Modo default (sem dataInicial explícito) = incremental do
+  // cron: [hoje - dias, hoje]. Passar dataInicial ativa o modo BACKFILL, que
+  // fatia a janela inteira em chunks <= chunkDias (teto MAX_WINDOW_DAYS).
   const dias = Number(url.searchParams.get("dias") ?? "3");
   const now = new Date();
   const dataFinal = url.searchParams.get("dataFinal") ?? ymd(now);
+  const dataInicialParam = url.searchParams.get("dataInicial");
   const dataInicial =
-    url.searchParams.get("dataInicial") ??
-    ymd(new Date(now.getTime() - Math.max(0, dias) * 86_400_000));
+    dataInicialParam ?? ymd(new Date(now.getTime() - Math.max(0, dias) * 86_400_000));
 
   // Modalidades.
   const modParam = url.searchParams.get("modalidades");
@@ -262,6 +344,12 @@ Deno.serve(async (req) => {
 
   const uf = url.searchParams.get("uf");
   const maxPaginas = Number(url.searchParams.get("maxPaginas") ?? "0"); // 0 = todas
+  const chunkDiasParam = Number(url.searchParams.get("chunkDias") ?? String(DEFAULT_CHUNK_DAYS));
+  const chunkDias = Number.isFinite(chunkDiasParam) && chunkDiasParam > 0 ? chunkDiasParam : DEFAULT_CHUNK_DAYS;
+  const maxChunks = Number(url.searchParams.get("maxChunks") ?? "0"); // 0 = todos os chunks da janela
+  const cursorParam = url.searchParams.get("cursor"); // AAAAMMDD: retoma a partir daqui
+  const rateMsParam = Number(url.searchParams.get("rateMs") ?? String(RATE_MS));
+  const rateMs = Number.isFinite(rateMsParam) && rateMsParam >= 0 ? rateMsParam : RATE_MS; // pausa entre páginas (calibrável p/ o rate limit do PNCP)
 
   try {
     const collectedAt = new Date().toISOString();
@@ -270,44 +358,101 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const items: Array<Record<string, unknown>> = [];
-    const errors: Array<{ modalidade: number; pagina: number; error: string }> = [];
-    const seen = new Set<string>(); // dedup por numeroControlePNCP dentro da execução
+    // Monta todos os chunks da janela pedida e, se houver cursor, pula os que
+    // já foram processados em chamadas anteriores (retomada de backfill).
+    let allChunks: DateChunk[];
+    try {
+      allChunks = buildDateChunks(dataInicial, dataFinal, chunkDias);
+    } catch (e) {
+      return jsonResponse({ ok: false, error: String(e) }, { status: 400 }, req);
+    }
+    const totalChunksJanela = allChunks.length;
+    let chunks = allChunks;
+    if (cursorParam) {
+      const idx = chunks.findIndex((c) => c.dataInicial > cursorParam);
+      chunks = idx === -1 ? [] : chunks.slice(idx);
+    }
+    const chunksToRun = maxChunks > 0 ? chunks.slice(0, maxChunks) : chunks;
+    const remaining = chunks.length - chunksToRun.length;
 
-    for (const modalidade of modalidades) {
-      let pagina = 1;
-      let totalPaginas = 1;
-      do {
-        const target = buildUrl(dataInicial, dataFinal, modalidade, pagina, uf);
-        try {
-          const page = await getJson(target);
-          totalPaginas = page.totalPaginas ?? 0;
-          for (const raw of page.data ?? []) {
-            if (!raw?.numeroControlePNCP || seen.has(raw.numeroControlePNCP)) continue;
-            seen.add(raw.numeroControlePNCP);
-            items.push(normalize(raw, collectedAt));
+    const errors: Array<{ modalidade: number; chunk: DateChunk; pagina: number; error: string }> = [];
+    const seen = new Set<string>(); // dedup por numeroControlePNCP dentro da execução
+    let coletadas = 0;
+    let ingested = 0;
+    let chunksProcessados = 0;
+    let chunkIncompleto: DateChunk | null = null;
+
+    for (const chunk of chunksToRun) {
+      // Buffer por chunk (não acumula a janela inteira em memória — importante
+      // em backfills de milhões de registros).
+      const chunkItems: Array<Record<string, unknown>> = [];
+      const errorsBefore = errors.length;
+
+      for (const modalidade of modalidades) {
+        let pagina = 1;
+        let totalPaginas = 1;
+        do {
+          const target = buildUrl(chunk.dataInicial, chunk.dataFinal, modalidade, pagina, uf);
+          try {
+            const page = await getJson(target);
+            totalPaginas = page.totalPaginas ?? 0;
+            for (const raw of page.data ?? []) {
+              if (!raw?.numeroControlePNCP || seen.has(raw.numeroControlePNCP)) continue;
+              seen.add(raw.numeroControlePNCP);
+              chunkItems.push(normalize(raw, collectedAt));
+            }
+            console.log(
+              `[ingest-pncp] modalidade=${modalidade} chunk=${chunk.dataInicial}-${chunk.dataFinal} ` +
+                `pagina=${pagina}/${totalPaginas} total=${page.totalRegistros ?? "?"}`,
+            );
+            if ((page.data ?? []).length === 0) break;
+          } catch (e) {
+            errors.push({ modalidade, chunk, pagina, error: String(e) });
+            break; // não insiste numa modalidade/chunk que falhou
           }
-          if ((page.data ?? []).length === 0) break;
-        } catch (e) {
-          errors.push({ modalidade, pagina, error: String(e) });
-          break; // não insiste numa modalidade que falhou
-        }
-        pagina += 1;
-        if (maxPaginas > 0 && pagina > maxPaginas) break;
-        if (pagina <= totalPaginas && RATE_MS > 0) await sleep(RATE_MS);
-      } while (pagina <= totalPaginas);
-      if (RATE_MS > 0) await sleep(RATE_MS);
+          pagina += 1;
+          if (maxPaginas > 0 && pagina > maxPaginas) break;
+          if (pagina <= totalPaginas && rateMs > 0) await sleep(rateMs);
+        } while (pagina <= totalPaginas);
+        if (rateMs > 0) await sleep(rateMs);
+      }
+
+      // Grava o chunk em lotes via a RPC antes de seguir para o próximo chunk
+      // — progresso é persistido incrementalmente, nunca perdido se a próxima
+      // fatia falhar ou o tempo acabar.
+      for (let i = 0; i < chunkItems.length; i += RPC_BATCH) {
+        const batch = chunkItems.slice(i, i + RPC_BATCH);
+        const { data, error } = await supabase.rpc("ingest_pncp", {
+          p_payload: { collectedAt, items: batch },
+        });
+        if (error) throw error;
+        ingested += typeof data === "number" ? data : batch.length;
+      }
+      coletadas += chunkItems.length;
+      chunksProcessados += 1;
+      console.log(
+        `[ingest-pncp] chunk concluído ${chunk.dataInicial}-${chunk.dataFinal}: ` +
+          `${chunkItems.length} itens coletados (acumulado: ${coletadas} coletadas, ${ingested} ingeridas)`,
+      );
+
+      // Se ALGUMA página deste chunk falhou (ex.: 429 que não recuperou nos
+      // retries), o chunk está incompleto. Paramos aqui e NÃO deixamos o cursor
+      // passar dele — a próxima invocação o reprocessa do início (o upsert por
+      // numeroControlePNCP é idempotente). Evita perda silenciosa de dados nos
+      // períodos de maior volume, que é justamente onde o 429 aparece.
+      if (errors.length > errorsBefore) {
+        chunkIncompleto = chunk;
+        break;
+      }
     }
 
-    // Grava em lotes via a RPC.
-    let ingested = 0;
-    for (let i = 0; i < items.length; i += RPC_BATCH) {
-      const batch = items.slice(i, i + RPC_BATCH);
-      const { data, error } = await supabase.rpc("ingest_pncp", {
-        p_payload: { collectedAt, items: batch },
-      });
-      if (error) throw error;
-      ingested += typeof data === "number" ? data : batch.length;
+    let nextCursor: string | null;
+    if (chunkIncompleto) {
+      // cursor = véspera do início do chunk incompleto → o filtro `> cursor` o reinclui
+      nextCursor = ymd(addDays(parseYmd(chunkIncompleto.dataInicial), -1));
+    } else {
+      const lastChunk = chunksToRun[chunksToRun.length - 1];
+      nextCursor = remaining > 0 && lastChunk ? lastChunk.dataFinal : null;
     }
 
     return jsonResponse({
@@ -315,9 +460,17 @@ Deno.serve(async (req) => {
       janela: { dataInicial, dataFinal },
       modalidades,
       uf: uf ?? null,
-      coletadas: items.length,
+      chunkDias,
+      chunks_total_janela: totalChunksJanela, // total de chunks na janela inteira (dataInicial..dataFinal)
+      chunks_pendentes_antes: chunks.length, // pendentes ao iniciar esta chamada (pós-cursor)
+      chunks_processados: chunksProcessados,
+      chunks_restantes: remaining, // ainda faltam após esta chamada (use next_cursor p/ continuar)
+      processed: coletadas,
+      total: null, // desconhecido a priori (depende de totalRegistros por modalidade/chunk)
+      coletadas,
       ingested,
       errors,
+      next_cursor: nextCursor,
     }, {}, req);
   } catch (e) {
     return jsonResponse({ ok: false, error: String(e) }, { status: 500 }, req);

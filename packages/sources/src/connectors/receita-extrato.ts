@@ -104,6 +104,8 @@ export function parseExtrato(text: string): ExtratoLote[] {
 
   // Normaliza: NBSP → espaço, quebras → espaço, colapsa espaços. A segmentação é
   // feita por conteúdo (terminadores), então a estrutura de linhas é irrelevante.
+  // O NBSP literal no primeiro regex é intencional (é justamente o que normalizamos).
+  // eslint-disable-next-line no-irregular-whitespace
   const flat = text.replace(/ /g, " ").replace(/\s+/g, " ");
   // Remove a(s) frase(s) de cabeçalho, onde quer que estejam.
   const stream = flat.replace(HEADER_RE, " ");
