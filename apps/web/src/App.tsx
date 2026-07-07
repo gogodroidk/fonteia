@@ -133,6 +133,7 @@ const InpiPage = lazy(() =>
 const DossiePage = lazy(() =>
   import("./app/dossie/page").then((m) => ({ default: m.DossiePage })),
 );
+const RaioX360Page = lazy(() => import("./app/raiox/page"));
 
 // --- Páginas PÚBLICAS de marketing/SEO (fora do login, indexáveis pelos robôs) ---
 const CalculadoraLancePage = lazy(() =>
@@ -249,6 +250,7 @@ type RouteKey =
   | "juridico"
   | "inpi"
   | "raio-x"
+  | "raiox-360"
   | "leads"
   | "cerebro"
   | "dossie"
@@ -334,6 +336,7 @@ const ROUTE_TITLES: Record<RouteKey, string> = {
   juridico: "Jurídico",
   inpi: "INPI",
   "raio-x": "Raio-X de Empresa",
+  "raiox-360": "Raio-X 360°",
   leads: "Leads com Motivo",
   cerebro: "Cérebro",
   dossie: "Dossiê da Empresa",
@@ -357,6 +360,9 @@ function pathToRoute(path: string): RouteKey {
   if (path.startsWith("/app/cerebro")) return "cerebro";
   if (path.startsWith("/app/dossie")) return "dossie";
   if (path.startsWith("/app/consultas")) return "consultas";
+  // /app/raiox (sem hífen) é a rota nova do Raio-X 360°; precisa ser checada
+  // ANTES de /app/raio-x (com hífen) para não colidir por prefixo.
+  if (path.startsWith("/app/raiox")) return "raiox-360";
   if (path.startsWith("/app/raio-x")) return "raio-x";
   if (path.startsWith("/app/leads")) return "leads";
   if (path.startsWith("/app/onboarding")) return "onboarding";
@@ -1283,6 +1289,7 @@ function AppShell({ path, navigate }: AppShellProps) {
                 {route === "juridico" && <JuridicoPage />}
                 {route === "inpi" && <InpiPage />}
                 {route === "raio-x" && <RaioXPage />}
+                {route === "raiox-360" && <RaioX360Page />}
                 {route === "cerebro" && <CerebroPage />}
                 {route === "dossie" && <DossiePage />}
                 {route === "consultas" && <ConsultasPage />}

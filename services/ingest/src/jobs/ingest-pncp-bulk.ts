@@ -444,7 +444,6 @@ export async function streamCsvRows(
     parser.on("readable", () => {
       if (stopped) return;
       let record: string[] | null;
-      // eslint-disable-next-line no-cond-assign
       while ((record = parser.read() as string[] | null) !== null) {
         if (!cols) {
           cols = resolveColumnIndex(record);
@@ -583,7 +582,7 @@ export async function ingestPncpBulk(options: IngestPncpBulkOptions): Promise<In
   let ingested = 0;
   let rowsExcluidas = 0;
   let rowsSemNumeroControle = 0;
-  let pendingFlushes: Promise<void>[] = [];
+  const pendingFlushes: Promise<void>[] = [];
 
   const flush = async (items: PncpLicitacao[]): Promise<void> => {
     if (items.length === 0) return;

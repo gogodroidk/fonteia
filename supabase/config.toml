@@ -90,3 +90,15 @@ verify_jwt = true
 # a "fonteia"/"empresas-cnpj". O gateway nao deve rejeitar o token de sessao.
 [functions.infosimples-proxy]
 verify_jwt = false
+
+# Webhook Stripe (ponte pagamento->acesso). verify_jwt=false: o Stripe nao manda
+# JWT Supabase, manda stripe-signature — a autenticacao e 100% a verificacao
+# HMAC (STRIPE_WEBHOOK_SECRET) feita DENTRO da funcao. Sem assinatura valida -> 400.
+[functions.stripe-webhook-v2]
+verify_jwt = false
+
+# Raio-X 360 (dossie por CNPJ). verify_jwt=false: rota consultavel por anon
+# (free ve versao cortada); o gate free/pro e aplicado DENTRO da funcao via
+# my_plan, mesmo padrao de fonteia/d1-bridge.
+[functions.dossie]
+verify_jwt = false
