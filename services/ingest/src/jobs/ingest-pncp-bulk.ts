@@ -509,22 +509,41 @@ function createRestWriterFromEnv(env: NodeJS.ProcessEnv): BatchWriter | undefine
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!baseUrl || !serviceKey) return undefined;
   const endpoint = `${baseUrl.replace(/\/+$/, "")}/rest/v1/rpc/ingest_pncp`;
+  // Retry com backoff para falhas TRANSITÓRIAS (rede/5xx/429): PostgREST pode
+  // reiniciar ou recusar conexão momentaneamente sob carga (visto ao vivo:
+  // "delayed connect error: 111"). A RPC é idempotente, então repetir o mesmo
+  // lote é seguro. 4xx (exceto 429) não re-tenta — é erro nosso, falha honesta.
   return async (items, collectedAt) => {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ p_payload: { collectedAt, items } }),
-    });
-    if (!res.ok) {
+    // 8 tentativas, backoff 2s→60s (cap): sobrevive a rebuild de schema cache do
+    // PostgREST pós-upgrade (PGRST002), que dura mais que um blip de rede.
+    const attempts = 8;
+    let lastErr: Error | undefined;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, Math.min(60_000, 2000 * 2 ** (attempt - 1))));
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: serviceKey,
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ p_payload: { collectedAt, items } }),
+        });
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        continue; // erro de rede puro: re-tenta
+      }
+      if (res.ok) {
+        const data: unknown = await res.json().catch(() => undefined);
+        return typeof data === "number" ? data : items.length;
+      }
       const body = await res.text().catch(() => "");
-      throw new Error(`RPC ingest_pncp via PostgREST falhou: ${res.status} ${body.slice(0, 300)}`);
+      lastErr = new Error(`RPC ingest_pncp via PostgREST falhou: ${res.status} ${body.slice(0, 300)}`);
+      if (res.status < 500 && res.status !== 429) throw lastErr; // 4xx real: não insiste
     }
-    const data: unknown = await res.json().catch(() => undefined);
-    return typeof data === "number" ? data : items.length;
+    throw lastErr ?? new Error("RPC ingest_pncp: falha após retries");
   };
 }
 
