@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  ArrowRight, Check, X, Lock, ChevronDown, Zap, Shield, Database, ShieldCheck,
+  ArrowRight, Check, X, ChevronDown, Zap, Database, ShieldCheck,
   Gavel, FileText, Building2, MapPin, Landmark, Leaf, ShieldAlert, Scale, BadgeCheck, Menu,
+  AlertTriangle, Users2, Sparkles,
 } from "lucide-react";
-import { ScoreRing, FonteDots, ThemeToggle, LogoMark } from "../../components/ui";
+import { ScoreRing, FonteDots, ThemeToggle, LogoMark, CompanySearch } from "../../components/ui";
 import {
   PLANOS,
   FONTES,
@@ -11,7 +12,7 @@ import {
   formatBRL,
 } from "../../data/leiloes-seed";
 import { navigateSpa } from "../_nav";
-import { setPlanoIntent } from "../../lib/pending-intent";
+import { setPlanoIntent, setRaioXIntent } from "../../lib/pending-intent";
 
 // ─── Reveal on scroll ───────────────────────────────────────────────────────
 
@@ -232,16 +233,14 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   );
 }
 
-// ─── Module chip (locked / active) ──────────────────────────────────────────
+// ─── Module chip (compact, secondary section below the fold) ───────────────
 
 function ModuleChip({
   label,
-  active,
   icon,
   meta,
 }: {
   label: string;
-  active: boolean;
   icon: React.ReactNode;
   meta?: string;
 }) {
@@ -253,47 +252,33 @@ function ModuleChip({
         flexDirection: "column",
         alignItems: "flex-start",
         gap: 10,
-        opacity: active ? 1 : 0.55,
         position: "relative",
         minWidth: 150,
         flex: "1 1 150px",
       }}
     >
-      {!active && (
-        <span
-          className="badge badge--neutral"
-          style={{ position: "absolute", top: 10, right: 10, fontSize: 10, padding: "3px 7px" }}
-        >
-          <Lock size={10} aria-hidden="true" style={{ marginRight: 3 }} />
-          Roteiro
-        </span>
-      )}
-      {active && (
-        <span
-          className="badge badge--ok"
-          style={{ position: "absolute", top: 10, right: 10, fontSize: 10, padding: "3px 7px" }}
-        >
-          Ativo
-        </span>
-      )}
+      <span
+        className="badge badge--ok"
+        style={{ position: "absolute", top: 10, right: 10, fontSize: 10, padding: "3px 7px" }}
+      >
+        Ativo
+      </span>
       <div
         style={{
           width: 42,
           height: 42,
           borderRadius: 12,
-          background: active
-            ? "linear-gradient(135deg,var(--brand),var(--accent))"
-            : "var(--surface-2)",
+          background: "linear-gradient(135deg,var(--brand),var(--accent))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: active ? "#fff" : "var(--t-low)",
-          boxShadow: active ? "var(--shadow-md)" : "none",
+          color: "#fff",
+          boxShadow: "var(--shadow-md)",
         }}
       >
         {icon}
       </div>
-      <span style={{ fontWeight: 700, fontSize: 14, color: active ? "var(--t-hi)" : "var(--t-mid)" }}>
+      <span style={{ fontWeight: 700, fontSize: 14, color: "var(--t-hi)" }}>
         {label}
       </span>
       {meta && (
@@ -303,19 +288,15 @@ function ModuleChip({
   );
 }
 
-// ─── Module card (ativo, com número real) ────────────────────────────────────
-
-// ModuleCard removido: superado pelo ModuleChip no redesign da seção de fontes.
-
 // Links do nav do cabeçalho — compartilhados entre o menu desktop (.lp-nav-links)
 // e o dropdown mobile (aberto pelo hamburguer em ≤600px, onde .lp-nav-links some).
 const NAV_LINKS = [
+  { label: "O que descobre", href: "#red-flags" },
   { label: "Como funciona", href: "#como-funciona" },
   { label: "Planos", href: "#planos" },
   { label: "Dúvidas", href: "#faq" },
   { label: "Para quem", href: "/para-quem" },
   { label: "Sobre", href: "/sobre" },
-  { label: "Segurança", href: "/seguranca" },
 ];
 
 // ─── Main component ──────────────────────────────────────────────────────────
@@ -339,7 +320,7 @@ export function LandingPage({
   // deixar o usuário de celular sem nenhum acesso a "Para quem"/"Sobre"/"Segurança".
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // The first 3 seed lotes for the hero mock
+  // The first 3 seed lotes for the "módulos" strip further down the page
   const heroLotes = LEILAO_SEED.slice(0, 3);
 
   // Font items for the hero mock (from the first lote)
@@ -349,34 +330,44 @@ export function LandingPage({
     .filter((f): f is NonNullable<typeof f> => f !== undefined)
     .map((f) => ({ sigla: f.sigla, cor: f.cor, nome: f.nome }));
 
+  // Input de CNPJ/nome acima da dobra: leva ao cadastro (o Raio-X exige conta;
+  // o gate free já mostra a degustação de 3 itens por seção dentro do app).
+  function handleCnpjSubmit(cnpj: string) {
+    // Guarda o CNPJ digitado para, após o cadastro/login, cair direto no
+    // relatório daquele CNPJ em vez do painel genérico — mesmo padrão do
+    // intent de plano usado no CTA de assinatura logo abaixo.
+    setRaioXIntent(cnpj);
+    onLogin();
+  }
+
   const FAQ_ITEMS = [
     {
       q: "O que é a Fonte.ia?",
-      a: "É uma plataforma de inteligência de dados públicos brasileiros: reúne ~217 mil registros oficiais de 9 áreas — leilões, licitações, empresas, municípios, política, ambiental, sanções, jurídico e INPI — em uma busca única, com cada dado rastreável à fonte (link + data de coleta). O módulo de leilões da Receita Federal é o mais maduro e funciona como porta de entrada da plataforma.",
+      a: "É o Raio-X 360° de qualquer empresa brasileira: você digita o CNPJ e recebe sanções, contratos públicos, licitações vencidas, leilões arrematados, sócios, marcas registradas e conexões políticas — tudo em um só relatório, com fonte oficial e data em cada dado.",
     },
     {
-      q: "Quais fontes e áreas já estão ativas?",
-      a: "Todas as 9 estão ao vivo hoje, com dados reais: leilões da Receita Federal (1.065 lotes), licitações e contratos do PNCP (153.945 contratos e 1.051 oportunidades), municípios do IBGE (5.571), política da Câmara e do Senado (4.000 proposições e 594 parlamentares), ambiental do IBAMA (1.500 autos de infração), sanções do Portal da Transparência/CGU (1.592), empresas por CNPJ (461, crescendo), jurídico do CNJ/DataJud (280 processos) e INPI com 29.500 marcas.",
+      q: "De onde vêm os dados?",
+      a: "Direto das fontes oficiais: mais de 1 milhão de licitações e contratações do PNCP (Portal Nacional de Contratações Públicas, 2021–2026), 154 mil contratos públicos, arremates da Receita Federal, marcas do INPI (29,5 mil registros via RPI), sanções do Portal da Transparência/CGU, processos do CNJ, autos do IBAMA e despesas da Câmara e do Senado.",
     },
     {
-      q: "Os dados são confiáveis? De onde vêm?",
-      a: "Cada dado exibido vem direto da fonte oficial — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal da Transparência, IBGE ou INPI — com a URL e a data de coleta registradas. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
+      q: "Os dados são confiáveis?",
+      a: "Cada dado exibido vem direto da fonte oficial — Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, Portal da Transparência ou INPI — com a URL e a data de coleta registradas. A IA nunca inventa: se a informação não existir na fonte, ela informa 'evidência insuficiente' em vez de preencher com estimativas.",
+    },
+    {
+      q: "O que o Raio-X mostra que eu não acharia sozinho?",
+      a: "Cruzamentos que exigiriam abrir dezenas de portais separados: se um fornecedor está sancionado, se uma empresa recebe verba de um político E vence contrato público, se um arrematante tem uma empresa recém-aberta sem histórico. É o mesmo trabalho de due diligence, em segundos.",
     },
     {
       q: "Como funciona o score dos leilões?",
       a: "O score (0–100) é específico do módulo de leilões e é calculado por regras fixas a partir dos dados publicados na fonte: quem pode participar (PF/PJ), prazo disponível para análise, acessibilidade do valor mínimo e se o lote tem imagem. É apoio de decisão calculado por regra — não é opinião de IA nem análise humana, e não substitui a leitura do edital.",
     },
     {
-      q: "Como verifico se uma empresa tem sanções ou está impedida de contratar?",
-      a: "No módulo Sanções, você busca pelo CNPJ e a Fonte.ia cruza com as três listas da CGU: CEIS (empresas inidôneas e suspensas), CNEP (punidas pela Lei Anticorrupção) e CEPIM (entidades sem fins lucrativos impedidas). São 1.592 registros indexados. Cada resultado tem link à publicação original no Portal da Transparência (portaldatransparencia.gov.br/sancoes).",
-    },
-    {
       q: "O que é o PNCP e por que ele importa?",
-      a: "O PNCP (Portal Nacional de Contratações Públicas) é o repositório oficial de licitações e contratos públicos criado pela Nova Lei de Licitações (Lei 14.133/2021). Órgãos federais, estaduais e municipais publicam obrigatoriamente ali. A Fonte.ia indexa 153.945 contratos e 1.051 licitações do PNCP, com link direto a cada publicação original.",
+      a: "O PNCP é o repositório oficial de licitações e contratos públicos criado pela Nova Lei de Licitações (Lei 14.133/2021). Órgãos federais, estaduais e municipais publicam obrigatoriamente ali. A Fonte.ia indexa mais de 1 milhão de registros do PNCP entre 2021 e 2026, com link direto a cada publicação original.",
     },
     {
       q: "Preciso saber de tecnologia para usar?",
-      a: "Não. Você pergunta em português e recebe a resposta com a fonte: link e data de coleta. A busca é unificada nas 9 áreas e a IA responde 'evidência insuficiente' quando não há fonte que sustente a resposta.",
+      a: "Não. Você digita o CNPJ ou o nome da empresa e recebe o relatório com a fonte: link e data de coleta em cada item. A IA responde 'evidência insuficiente' quando não há fonte que sustente a resposta.",
     },
     {
       q: "Posso cancelar quando quiser?",
@@ -448,6 +439,10 @@ export function LandingPage({
 
           /* Fontes strip pill sizing */
           .lp-fonte-pill { padding: 9px 14px !important; }
+
+          /* Hero CNPJ search: stack input and button on very small screens */
+          .lp-cnpj-search .row.wrap { flex-direction: column !important; }
+          .lp-cnpj-search .row.wrap > button { width: 100% !important; justify-content: center !important; }
         }
 
         @media (max-width: 400px) {
@@ -572,10 +567,10 @@ export function LandingPage({
                 className="btn btn--accent btn--sm lp-nav-cta"
                 onClick={onLogin}
                 title="7 dias grátis · sem cartão até o fim do teste"
-                aria-label="Começar agora — 7 dias grátis, sem cartão até o fim do teste"
+                aria-label="Criar conta grátis — 7 dias grátis, sem cartão até o fim do teste"
               >
                 <Zap size={14} fill="currentColor" aria-hidden="true" />
-                <span className="lp-nav-cta-full">Começar agora</span>
+                <span className="lp-nav-cta-full">Criar conta grátis</span>
                 <span className="lp-nav-cta-short" aria-hidden="true">Entrar</span>
               </button>
               {/* Hamburger — único ponto de acesso aos links do nav no mobile
@@ -680,7 +675,7 @@ export function LandingPage({
                     style={{ background: "var(--accent-ink)", marginRight: 5 }}
                     aria-hidden="true"
                   />
-                  Inteligência de dados públicos · ~217 mil registros · 9 fontes oficiais ao vivo
+                  Mais de 1 milhão de registros oficiais · fonte + data em cada dado
                 </span>
               </div>
             </Reveal>
@@ -689,20 +684,20 @@ export function LandingPage({
               <h1
                 className="display"
                 style={{
-                  fontSize: "clamp(34px,4.6vw,58px)",
-                  lineHeight: 1.03,
+                  fontSize: "clamp(32px,4.4vw,54px)",
+                  lineHeight: 1.06,
                   margin: 0,
                   letterSpacing: "-0.03em",
                 }}
               >
-                Dado público vira<br />
+                Puxe a ficha completa<br />de qualquer CNPJ<br />
                 <span
                   className="clip-text"
                   style={{
                     backgroundImage: "linear-gradient(100deg,var(--brand-2),var(--accent-2))",
                   }}
                 >
-                  decisão rastreável.
+                  no governo inteiro.
                 </span>
               </h1>
             </Reveal>
@@ -714,22 +709,36 @@ export function LandingPage({
                   color: "var(--t-mid)",
                   lineHeight: 1.65,
                   marginTop: 22,
-                  maxWidth: 520,
+                  maxWidth: 540,
                 }}
               >
-                Nos leilões da Receita Federal, a Fonte.ia mostra o{" "}
-                <strong style={{ color: "var(--t-hi)" }}>desconto sobre a avaliação, lê o edital por você e aponta os riscos do lote</strong>{" "}
-                — para você arrematar com margem e sem cair em cilada. Cada número vem
-                vinculado à fonte oficial (link + data) e a IA nunca inventa: quando falta
-                dado, ela diz. É o nosso módulo mais maduro, dentro de uma base de ~217 mil
-                registros de 9 áreas públicas.
+                Leilões arrematados, licitações vencidas, contratos públicos, sócios,
+                sanções, marcas registradas e conexões políticas —{" "}
+                <strong style={{ color: "var(--t-hi)" }}>tudo em um único relatório</strong>,
+                com fonte oficial e data em cada dado. A IA nunca inventa: quando falta
+                evidência, ela diz.
               </p>
             </Reveal>
 
+            {/* CTA primário: input de CNPJ/nome que leva ao cadastro e depois
+                cai direto no Raio-X (o app já mostra a degustação de 3 itens
+                por seção no plano free). */}
             <Reveal delay={0.15}>
+              <div className="lp-cnpj-search" style={{ marginTop: 32, maxWidth: 540 }}>
+                <CompanySearch
+                  id="lp-hero-cnpj"
+                  label="Puxe o Raio-X de uma empresa agora"
+                  placeholder="CNPJ ou nome da empresa"
+                  buttonLabel="Ver Raio-X"
+                  onSelect={handleCnpjSubmit}
+                />
+              </div>
+            </Reveal>
+
+            <Reveal delay={0.18}>
               <div
                 className="lp-hero-ctas"
-                style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 32 }}
+                style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}
               >
                 <button
                   type="button"
@@ -738,18 +747,18 @@ export function LandingPage({
                   style={{ minHeight: 48 }}
                 >
                   <Zap size={18} fill="currentColor" aria-hidden="true" />
-                  Experimentar 7 dias grátis
+                  Criar conta grátis
                 </button>
                 <a
-                  href="#como-funciona"
+                  href="#red-flags"
                   className="btn btn--ghost btn--lg"
                   style={{ minHeight: 48 }}
                 >
-                  Como funciona <ArrowRight size={16} aria-hidden="true" />
+                  O que você descobre <ArrowRight size={16} aria-hidden="true" />
                 </a>
               </div>
               <p className="tiny muted" style={{ marginTop: 10 }}>
-                Sem cartão até o fim do teste · Cancele quando quiser
+                7 dias grátis · Sem cartão até o fim do teste · Cancele quando quiser
               </p>
             </Reveal>
 
@@ -803,7 +812,7 @@ export function LandingPage({
                     letterSpacing: "0.01em",
                   }}
                 >
-                  fonte.ia/lotes · exemplo ilustrativo
+                  fonte.ia/raiox · exemplo ilustrativo
                 </span>
               </div>
 
@@ -822,7 +831,7 @@ export function LandingPage({
                         marginBottom: 4,
                       }}
                     >
-                      RFB · Alfândega SP
+                      Raio-X · CNPJ consultado
                     </div>
                     <div
                       style={{
@@ -833,10 +842,10 @@ export function LandingPage({
                         lineHeight: 1.3,
                       }}
                     >
-                      Lote de eletrônicos
+                      2 red flags encontradas
                     </div>
                     <div style={{ fontSize: 11, color: "var(--t-low)", marginTop: 2 }}>
-                      Lance mín.: <strong style={{ color: "var(--t-hi)" }}>R$ 414.000</strong>
+                      Sanção CGU + contrato com órgão do político
                     </div>
                   </div>
 
@@ -850,10 +859,10 @@ export function LandingPage({
                       <circle
                         cx={26} cy={26} r={21}
                         fill="none"
-                        stroke="var(--ok)"
+                        stroke="var(--danger)"
                         strokeWidth="6"
                         strokeDasharray={String(2 * Math.PI * 21)}
-                        strokeDashoffset={String(2 * Math.PI * 21 * (1 - 0.82))}
+                        strokeDashoffset={String(2 * Math.PI * 21 * (1 - 0.35))}
                         strokeLinecap="round"
                       />
                     </svg>
@@ -861,42 +870,29 @@ export function LandingPage({
                       style={{
                         position: "absolute", inset: 0,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontWeight: 800, fontSize: 14, color: "var(--ok)",
+                        fontWeight: 800, fontSize: 12, color: "var(--danger)",
                         fontFamily: "var(--font)",
+                        textAlign: "center",
+                        lineHeight: 1.1,
                       }}
                     >
-                      82
+                      Risco<br />alto
                     </div>
                   </div>
                 </div>
 
-                {/* Score bars */}
+                {/* Flag rows */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {(
                     [
-                      ["Participação (PF/PJ)", 90, "var(--ok)"],
-                      ["Prazo para análise", 85, "var(--accent-ink)"],
-                      ["Valor acessível", 88, "var(--brand-ink)"],
+                      ["Fornecedor sancionado (CEIS/CNEP)", "var(--danger)"],
+                      ["Recebe de político e vence contrato", "var(--warn)"],
+                      ["Empresa recém-aberta arrematando", "var(--warn)"],
                     ] as const
-                  ).map(([lb, v, c]) => (
-                    <div key={lb}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                        <span style={{ fontSize: 11, color: "var(--t-low)", fontFamily: "var(--font)" }}>{lb}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: c, fontFamily: "var(--font)" }}>{v}</span>
-                      </div>
-                      <div
-                        style={{
-                          height: 5,
-                          borderRadius: 999,
-                          background: "var(--surface-2)",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          className="lp-glimpse-bar"
-                          style={{ width: `${v}%`, height: "100%", background: c, borderRadius: 999 }}
-                        />
-                      </div>
+                  ).map(([lb, c]) => (
+                    <div key={lb} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: "var(--t-mid)", fontFamily: "var(--font)", fontWeight: 600 }}>{lb}</span>
                     </div>
                   ))}
                 </div>
@@ -919,7 +915,7 @@ export function LandingPage({
                       fontFamily: "var(--font)",
                     }}
                   >
-                    Fonte: Receita Federal
+                    Fonte: CGU · PNCP · Câmara
                   </span>
                   <span
                     style={{
@@ -973,9 +969,9 @@ export function LandingPage({
                   justifyContent: "center",
                 }}
               >
-                <span style={{ color: "var(--brand-ink)", fontWeight: 800, fontSize: 13 }}>★</span>
+                <AlertTriangle size={13} color="var(--danger)" />
                 <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t-hi)", fontFamily: "var(--font)" }}>
-                  Score 82
+                  1 min para saber
                 </span>
               </div>
             </div>
@@ -1044,7 +1040,7 @@ export function LandingPage({
                       />
                     ))}
                     <span className="kbd" style={{ marginLeft: 10, fontSize: 10 }}>
-                      fonte.ia/lotes · exemplo ilustrativo
+                      fonte.ia/raiox · exemplo ilustrativo
                     </span>
                   </div>
 
@@ -1061,54 +1057,52 @@ export function LandingPage({
                       }}
                     >
                       <div>
-                        <span className="badge badge--neutral" style={{ marginBottom: 8, fontSize: 10 }}>
-                          Exemplo ilustrativo · RFB
+                        <span className="badge badge--danger" style={{ marginBottom: 8, fontSize: 10 }}>
+                          Exemplo ilustrativo · Raio-X
                         </span>
                         <div className="h3" style={{ lineHeight: 1.25, fontSize: 14 }}>
-                          Lote de eletrônicos
+                          2 red flags encontradas
                         </div>
                         <div className="small muted" style={{ marginTop: 2, fontWeight: 500, fontSize: 12 }}>
-                          Alfândega de Santos · SP
+                          Sanção CGU + contrato com órgão do político
                         </div>
                       </div>
-                      <ScoreRing value={82} size={54} />
+                      <ScoreRing value={35} size={54} />
                     </div>
 
                     {/* Stats grid */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
                       <div className="inset" style={{ padding: 11 }}>
-                        <div className="tiny muted">Lance mínimo (fonte)</div>
-                        <div className="num" style={{ fontWeight: 800, fontSize: 15 }}>R$ 414.000</div>
+                        <div className="tiny muted">Contratos públicos</div>
+                        <div className="num" style={{ fontWeight: 800, fontSize: 15 }}>7 vencidos</div>
                       </div>
                       <div className="inset" style={{ padding: 11 }}>
-                        <div className="tiny muted">Quem pode participar</div>
-                        <div className="num" style={{ fontWeight: 800, fontSize: 15 }}>PF e PJ</div>
+                        <div className="tiny muted">Situação nas listas CGU</div>
+                        <div className="num" style={{ fontWeight: 800, fontSize: 15, color: "var(--danger)" }}>Sancionada</div>
                       </div>
                     </div>
 
-                    {/* Score bars */}
+                    {/* Flag rows */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                       {(
                         [
-                          ["Quem pode participar (PF/PJ)", 90, "var(--ok)"],
-                          ["Prazo para análise", 85, "var(--accent-ink)"],
-                          ["Acessibilidade do valor mínimo", 88, "var(--brand-ink)"],
+                          ["Fornecedor sancionado (CEIS/CNEP)", "var(--danger)"],
+                          ["Recebe de político e vence contrato público", "var(--warn)"],
                         ] as const
-                      ).map(([lb, v, c]) => (
-                        <div key={lb}>
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              marginBottom: 3,
-                            }}
-                          >
-                            <span className="tiny muted">{lb}</span>
-                            <span className="num tiny" style={{ color: c, fontWeight: 700 }}>{v}</span>
-                          </div>
-                          <div className="track">
-                            <i style={{ display: "block", width: `${v}%`, background: c, height: "100%", borderRadius: 999 }} />
-                          </div>
+                      ).map(([lb, c]) => (
+                        <div
+                          key={lb}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 9,
+                            padding: "7px 10px",
+                            borderRadius: "var(--r-sm)",
+                            background: "color-mix(in srgb, " + c + " 10%, var(--surface-2))",
+                          }}
+                        >
+                          <AlertTriangle size={13} style={{ color: c, flexShrink: 0 }} aria-hidden="true" />
+                          <span className="tiny" style={{ fontWeight: 700, color: "var(--t-hi)" }}>{lb}</span>
                         </div>
                       ))}
                     </div>
@@ -1126,7 +1120,7 @@ export function LandingPage({
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <FonteDots fontes={heroFontItems} size={20} />
-                        <span className="tiny muted">Fonte oficial: Receita Federal</span>
+                        <span className="tiny muted">Fonte oficial: CGU, PNCP, Câmara</span>
                       </div>
                       <span className="badge badge--ok" style={{ fontSize: 10 }}>
                         <ShieldCheck size={10} aria-hidden="true" style={{ marginRight: 3 }} />
@@ -1192,7 +1186,7 @@ export function LandingPage({
                         className="num"
                         style={{ fontWeight: 800, fontSize: 14, color: "var(--accent-ink)" }}
                       >
-                        Receita Federal
+                        CGU · PNCP · Câmara
                       </div>
                     </div>
                   </div>
@@ -1214,8 +1208,8 @@ export function LandingPage({
                   }}
                   aria-hidden="true"
                 >
-                  <span style={{ color: "var(--brand-ink)" }}>★</span>
-                  <span className="num small" style={{ fontWeight: 800 }}>Score 82</span>
+                  <AlertTriangle size={14} style={{ color: "var(--danger)" }} />
+                  <span className="num small" style={{ fontWeight: 800 }}>2 red flags</span>
                 </div>
               </div>
             </div>
@@ -1224,7 +1218,7 @@ export function LandingPage({
 
       </section>
 
-      {/* ── TRACTION STRIP — atividade do dado ────────────────────────── */}
+      {/* ── TRACTION STRIP — prova de escala honesta e atualizada ──────── */}
       <section
         style={{
           padding: "28px 24px",
@@ -1246,11 +1240,11 @@ export function LandingPage({
             >
               {(
                 [
-                  { icon: <Database size={15} aria-hidden="true" />, text: "Dados oficiais da Receita Federal (SLE)" },
-                  { icon: <Zap size={15} fill="currentColor" aria-hidden="true" />, text: "Atualizado automaticamente a cada 6 h" },
+                  { icon: <Landmark size={15} aria-hidden="true" />, text: "Mais de 1 milhão de licitações e contratações · PNCP 2021–2026" },
+                  { icon: <FileText size={15} aria-hidden="true" />, text: "154 mil contratos públicos indexados" },
+                  { icon: <Gavel size={15} aria-hidden="true" />, text: "Arremates da Receita Federal atualizados a cada 6 h" },
+                  { icon: <BadgeCheck size={15} aria-hidden="true" />, text: "29,5 mil marcas do INPI (RPI)" },
                   { icon: <ShieldCheck size={15} aria-hidden="true" />, text: "Rastreável à fonte — link + data de coleta" },
-                  { icon: <Shield size={15} aria-hidden="true" />, text: "Mais de 45 categorias de bens monitoradas" },
-                  { icon: <Check size={15} aria-hidden="true" />, text: "Veículos, eletrônicos, celulares e mais" },
                 ] as const
               ).map(({ icon, text }) => (
                 <div
@@ -1283,9 +1277,9 @@ export function LandingPage({
                   Fonte:
                 </span>
                 {[
+                  { label: "PNCP", href: "https://pncp.gov.br" },
                   { label: "Receita Federal", href: "https://www.gov.br/receitafederal/pt-br/servicos/leilao" },
-                  { label: "gov.br", href: "https://www.gov.br" },
-                  { label: "SLE", href: "https://www.gov.br/receitafederal/pt-br/servicos/leilao" },
+                  { label: "INPI", href: "https://www.gov.br/inpi" },
                 ].map((src, idx, arr) => (
                   <span key={src.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <a
@@ -1313,106 +1307,31 @@ export function LandingPage({
         </div>
       </section>
 
-      {/* ── FONTES STRIP ───────────────────────────────────────────────── */}
+      {/* ── RED FLAGS — o que você descobre em 1 minuto ────────────────── */}
       <section
+        id="red-flags"
         style={{
-          padding: "40px 24px",
-          borderTop: "1px solid var(--border)",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        <div style={{ maxWidth: 1100, margin: "0 auto", textAlign: "center" }}>
-          <Reveal>
-            <p
-              className="tiny muted"
-              style={{ fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", marginBottom: 20 }}
-            >
-              Conectado a 9 fontes oficiais brasileiras
-            </p>
-          </Reveal>
-          <Reveal delay={0.05}>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                justifyContent: "center",
-              }}
-            >
-              {FONTES.map((f) => {
-                const active = true;
-                return (
-                <div
-                  key={f.id}
-                  className="card lp-fonte-pill"
-                  style={{
-                    padding: "11px 18px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    opacity: active ? 1 : 0.55,
-                  }}
-                >
-                  <div
-                    className="num"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: 8,
-                      background: f.cor,
-                      color: "#fff",
-                      fontWeight: 800,
-                      fontSize: 10,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                    aria-hidden="true"
-                  >
-                    {f.sigla}
-                  </div>
-                  <span className="small" style={{ fontWeight: 600, color: "var(--t-mid)" }}>
-                    {f.nome.split("—")[0]?.trim() ?? f.nome}
-                  </span>
-                  <span
-                    className={`badge ${active ? "badge--ok" : "badge--neutral"}`}
-                    style={{ fontSize: 9, padding: "2px 6px", flexShrink: 0 }}
-                  >
-                    {active ? "Ativo" : "Roteiro"}
-                  </span>
-                </div>
-                );
-              })}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── PERGUNTAS QUE A FONTE.IA RESPONDE (AEO block) ─────────────── */}
-      <section
-        style={{
-          padding: "72px 24px",
+          padding: "90px 24px",
           borderTop: "1px solid var(--border)",
           borderBottom: "1px solid var(--border)",
           background: "var(--bg)",
         }}
       >
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Reveal style={{ textAlign: "center", marginBottom: 44 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Respostas com fonte oficial</div>
+          <Reveal style={{ textAlign: "center", marginBottom: 50 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>O que você descobre em 1 minuto</div>
             <h2
               className="display"
-              style={{ fontSize: "clamp(26px,3.2vw,40px)", lineHeight: 1.1, margin: 0 }}
+              style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
             >
-              Perguntas que a Fonte.ia responde
+              Antes de fechar negócio,<br />pergunte à Fonte.ia.
             </h2>
             <p
               className="muted"
-              style={{ fontSize: 15, marginTop: 14, maxWidth: 540, margin: "14px auto 0" }}
+              style={{ fontSize: 15, marginTop: 14, maxWidth: 560, margin: "14px auto 0" }}
             >
-              Cada resposta cita a fonte oficial com link e data de coleta. A IA nunca inventa —
-              quando a evidência falta, diz "evidência insuficiente".
+              Fornecedor, concorrente, sócio ou arrematante — o Raio-X cruza as fontes oficiais
+              e aponta os riscos que normalmente exigiriam horas de checagem manual.
             </p>
           </Reveal>
 
@@ -1420,138 +1339,67 @@ export function LandingPage({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                gap: 14,
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gap: 22,
               }}
             >
               {(
                 [
                   {
-                    fonte: "Receita Federal",
-                    perguntas: [
-                      "Quais lotes da Receita Federal estão abertos agora?",
-                      "Quem pode participar deste lote — pessoa física ou jurídica?",
-                      "Qual o lance mínimo e o prazo de encerramento?",
-                      "Quais são os custos além do lance (DARF, comissão, transporte)?",
-                    ],
+                    icon: <ShieldAlert size={24} color="#fff" aria-hidden="true" />,
+                    title: "Fornecedor sancionado",
+                    desc: "A empresa está no CEIS, CNEP ou CEPIM da CGU? A Fonte.ia cruza o CNPJ com as três listas de sanções federais e mostra a publicação original — antes de você assinar o contrato.",
+                    tag: "Compliance",
                   },
                   {
-                    fonte: "PNCP · Portal Nacional de Contratações",
-                    perguntas: [
-                      "Quais contratos o governo firmou com determinado CNPJ?",
-                      "Quais licitações estão abertas em determinada área?",
-                      "O que é o PNCP e quais órgãos publicam licitações nele?",
-                      "Uma empresa tem histórico de contratos públicos?",
-                    ],
+                    icon: <Users2 size={24} color="#fff" aria-hidden="true" />,
+                    title: "Político e contrato, no mesmo CNPJ",
+                    desc: "A empresa que recebe verba de cota parlamentar (CEAP) de um deputado é a mesma que vence licitações do órgão dele? A Fonte.ia liga os dois pontos — dado que normalmente fica em portais separados.",
+                    tag: "Due diligence",
                   },
                   {
-                    fonte: "Portal da Transparência · CGU",
-                    perguntas: [
-                      "Um CNPJ está impedido de contratar com o governo federal?",
-                      "A empresa consta no CEIS, CNEP ou CEPIM?",
-                      "Quais sanções uma empresa tem por atos de corrupção?",
-                    ],
-                  },
-                  {
-                    fonte: "INPI · Marcas",
-                    perguntas: [
-                      "Uma marca está registrada no INPI?",
-                      "Quais marcas estão em nome de determinado CNPJ?",
-                      "Qual o status e a classe NCL de um registro de marca?",
-                    ],
-                  },
-                  {
-                    fonte: "Câmara · Senado",
-                    perguntas: [
-                      "Como votou determinado deputado em uma proposição?",
-                      "Quais fornecedores receberam verba da cota parlamentar (CEAP)?",
-                      "Quais são as despesas de um parlamentar nos últimos meses?",
-                    ],
-                  },
-                  {
-                    fonte: "IBAMA · CNJ · IBGE",
-                    perguntas: [
-                      "Uma empresa tem autos de infração ambiental pelo IBAMA?",
-                      "Um CNPJ é parte em processos judiciais públicos (CNJ/DataJud)?",
-                      "Quais são os indicadores socioeconômicos de um município?",
-                    ],
+                    icon: <Gavel size={24} color="#fff" aria-hidden="true" />,
+                    title: "Arrematante sem histórico",
+                    desc: "Uma empresa aberta há poucos meses está arrematando lotes de alto valor na Receita Federal? É um padrão que merece atenção antes de você negociar ou disputar o mesmo lote.",
+                    tag: "Leiloeiro",
                   },
                 ] as const
-              ).map((grupo) => (
-                <div
-                  key={grupo.fonte}
-                  className="card card--pad"
-                  style={{ padding: "20px 22px" }}
-                >
+              ).map((flag, i) => (
+                <Reveal key={flag.title} delay={i * 0.08}>
                   <div
+                    className="panel"
                     style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      color: "var(--accent-ink)",
-                      marginBottom: 14,
+                      padding: 28,
+                      height: "100%",
+                      position: "relative",
+                      borderColor: "color-mix(in srgb,var(--danger) 20%,var(--border))",
                     }}
                   >
-                    {grupo.fonte}
+                    <div
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: 14,
+                        background: "linear-gradient(135deg,var(--danger),var(--warn))",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "var(--shadow-md)",
+                        marginBottom: 20,
+                      }}
+                    >
+                      {flag.icon}
+                    </div>
+                    <span
+                      className="badge badge--neutral"
+                      style={{ fontSize: 10, marginBottom: 10, display: "inline-flex" }}
+                    >
+                      {flag.tag}
+                    </span>
+                    <div className="h3" style={{ fontSize: 17 }}>{flag.title}</div>
+                    <p className="muted small" style={{ marginTop: 10, lineHeight: 1.6 }}>{flag.desc}</p>
                   </div>
-                  <ul
-                    style={{
-                      listStyle: "none",
-                      padding: 0,
-                      margin: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                    }}
-                  >
-                    {grupo.perguntas.map((p) => (
-                      <li
-                        key={p}
-                        style={{
-                          display: "flex",
-                          gap: 9,
-                          alignItems: "flex-start",
-                        }}
-                      >
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            marginTop: 3,
-                            width: 14,
-                            height: 14,
-                            borderRadius: "50%",
-                            background: "color-mix(in srgb,var(--accent) 18%,var(--surface-2))",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          aria-hidden="true"
-                        >
-                          <span
-                            style={{
-                              display: "block",
-                              width: 5,
-                              height: 5,
-                              borderRadius: "50%",
-                              background: "var(--accent-ink)",
-                            }}
-                          />
-                        </span>
-                        <span
-                          style={{
-                            fontSize: 13.5,
-                            lineHeight: 1.5,
-                            color: "var(--t-mid)",
-                            fontWeight: 500,
-                          }}
-                        >
-                          {p}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                </Reveal>
               ))}
             </div>
           </Reveal>
@@ -1575,138 +1423,10 @@ export function LandingPage({
                 <strong style={{ color: "var(--t-hi)" }}>Garantia de rastreabilidade:</strong>{" "}
                 cada resposta inclui a URL da fonte oficial e a data de coleta. A Fonte.ia nunca
                 publica dado sem evidência — quando falta, diz explicitamente "evidência
-                insuficiente". Fontes: Receita Federal, PNCP, CNJ, IBAMA, Câmara, Senado, CGU, IBGE, INPI.
+                insuficiente".
               </p>
             </div>
           </Reveal>
-        </div>
-      </section>
-
-      {/* ── ANTES x DEPOIS ─────────────────────────────────────────────── */}
-      <section style={{ padding: "90px 24px" }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Reveal style={{ textAlign: "center", marginBottom: 50 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Do caos à clareza</div>
-            <h2
-              className="display"
-              style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
-            >
-              Leilão da Receita não precisa<br />dar medo.
-            </h2>
-          </Reveal>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: 22,
-            }}
-          >
-            {/* Sem a Fonte.ia */}
-            <Reveal>
-              <div
-                className="panel"
-                style={{
-                  padding: 30,
-                  height: "100%",
-                  borderColor: "color-mix(in srgb,var(--danger) 22%,var(--border))",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: "color-mix(in srgb,var(--danger) 12%,transparent)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <X size={20} color="var(--danger)" aria-hidden="true" />
-                  </div>
-                  <span className="h3" style={{ color: "var(--t-mid)", fontWeight: 700 }}>
-                    Sem a Fonte.ia
-                  </span>
-                </div>
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 14 }}>
-                  {[
-                    "Editais publicados em PDFs dispersos por dezenas de portais",
-                    "Risco oculto em cláusulas técnicas que exigem tempo e especialização",
-                    "Cruzamento manual entre lote, laudo e tributação — horas de trabalho",
-                    "Prazo de leilão eletrônico encerrado sem aviso prévio",
-                    "Comprador paga o lance e descobre depois o ônus tributário",
-                  ].map((t) => (
-                    <li key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
-                      <X
-                        size={16}
-                        color="var(--danger)"
-                        aria-hidden="true"
-                        style={{ flexShrink: 0, marginTop: 2, opacity: 0.75 }}
-                      />
-                      <span className="small" style={{ color: "var(--t-mid)", lineHeight: 1.55 }}>{t}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-
-            {/* Com a Fonte.ia */}
-            <Reveal delay={0.08}>
-              <div
-                className="panel glow-accent"
-                style={{
-                  padding: 30,
-                  height: "100%",
-                  position: "relative",
-                  overflow: "hidden",
-                  borderColor: "color-mix(in srgb,var(--accent) 30%,var(--border))",
-                }}
-              >
-                <div
-                  aria-hidden="true"
-                  className="orb"
-                  style={{ width: 180, height: 140, background: "var(--accent)", top: -40, right: -20, opacity: 0.15 }}
-                />
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: "linear-gradient(135deg,var(--brand),var(--accent))",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Shield size={20} color="#fff" aria-hidden="true" />
-                  </div>
-                  <span className="h3">Com a Fonte.ia</span>
-                </div>
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 14 }}>
-                  {[
-                    "Lotes da Receita Federal reunidos em uma única plataforma",
-                    "Score de oportunidade por regra, com cada lote rastreado à fonte oficial",
-                    "Lance mínimo, prazo e elegibilidade (PF/PJ) lidos direto da fonte",
-                    "Alerta de prazo para não perder a data do leilão",
-                    "Relatório PDF com link e data de coleta da fonte oficial",
-                  ].map((t) => (
-                    <li key={t} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
-                      <Check
-                        size={16}
-                        color="var(--accent-ink)"
-                        aria-hidden="true"
-                        style={{ flexShrink: 0, marginTop: 2 }}
-                      />
-                      <span className="small" style={{ lineHeight: 1.55, fontWeight: 500 }}>{t}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          </div>
         </div>
       </section>
 
@@ -1727,10 +1447,10 @@ export function LandingPage({
               className="display"
               style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
             >
-              Do clique ao arremate em 3 passos
+              Do CNPJ à decisão em 3 passos
             </h2>
             <p className="muted" style={{ fontSize: 16, marginTop: 14, maxWidth: 520, margin: "14px auto 0" }}>
-              Para quem nunca arrematou nada e quer entender o que está comprando. E para quem opera há anos e quer dado oficial sem a correria manual.
+              Para quem está fechando um negócio agora e quer saber com quem está lidando. E para quem opera há anos e quer dado oficial sem a correria manual.
             </p>
           </Reveal>
 
@@ -1745,18 +1465,18 @@ export function LandingPage({
               [
                 {
                   icon: <Database size={24} color="#fff" aria-hidden="true" />,
-                  title: "Acompanhe os leilões da Receita",
-                  desc: "Os lotes do Sistema de Leilão Eletrônico da Receita Federal chegam reunidos em um só lugar — nenhum lote passa despercebido.",
+                  title: "Digite o CNPJ ou o nome",
+                  desc: "Sem formulário complicado. Digite o nome da empresa ou o CNPJ e a Fonte.ia já cruza as fontes oficiais em segundos.",
                 },
                 {
-                  icon: <Zap size={24} fill="#fff" color="#fff" aria-hidden="true" />,
-                  title: "Veja o lote com rastreabilidade",
-                  desc: "Lance mínimo, prazo, elegibilidade (PF/PJ) e score de oportunidade por regra — cada dado vinculado à fonte oficial. Pergunte em português ao assistente, receba com prova.",
+                  icon: <Sparkles size={24} color="#fff" aria-hidden="true" />,
+                  title: "Veja o Raio-X com rastreabilidade",
+                  desc: "Sanções, contratos, licitações, leilões, sócios e marcas — cada dado vinculado à fonte oficial. Pergunte em português ao assistente, receba com prova.",
                 },
                 {
                   icon: <ShieldCheck size={24} color="#fff" aria-hidden="true" />,
                   title: "Decida com fundamento",
-                  desc: "Relatório com link e data de coleta da fonte oficial e evidência rastreável. O score é apoio de decisão — confirme sempre no edital antes de propor.",
+                  desc: "Relatório com link e data de coleta da fonte oficial e evidência rastreável. É apoio de decisão — confirme sempre o edital ou o contrato antes de propor.",
                 },
               ] as const
             ).map((step, i) => (
@@ -1804,38 +1524,38 @@ export function LandingPage({
         </div>
       </section>
 
-      {/* ── MÓDULOS ────────────────────────────────────────────────────── */}
-      <section style={{ padding: "90px 24px" }}>
+      {/* ── MÓDULOS — seção secundária, compacta, abaixo da dobra ──────── */}
+      <section style={{ padding: "72px 24px" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-          <Reveal style={{ textAlign: "center", marginBottom: 50 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Módulos</div>
+          <Reveal style={{ textAlign: "center", marginBottom: 36 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>Por trás do Raio-X</div>
             <h2
               className="display"
-              style={{ fontSize: "clamp(28px,3.4vw,42px)", lineHeight: 1.1, margin: 0 }}
+              style={{ fontSize: "clamp(22px,2.6vw,32px)", lineHeight: 1.15, margin: 0 }}
             >
-              Uma plataforma.<br />Toda a inteligência pública.
+              Tudo que alimenta o Raio-X
             </h2>
-            <p className="muted" style={{ fontSize: 15, marginTop: 14, maxWidth: 480, margin: "14px auto 0" }}>
-              Nove áreas de dados públicos ao vivo hoje. Comece pelos leilões — o módulo mais maduro — e explore as demais na mesma assinatura.
+            <p className="muted" style={{ fontSize: 14.5, marginTop: 12, maxWidth: 480, margin: "12px auto 0" }}>
+              Nove áreas de dados públicos ao vivo, na mesma assinatura — o Raio-X consulta todas de uma vez.
             </p>
           </Reveal>
 
           <Reveal delay={0.05}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 14, justifyContent: "center", alignItems: "flex-start" }}>
-              <ModuleChip label="Leilões" active={true} meta="1.065 lotes · Receita" icon={<Gavel size={20} color="#fff" />} />
-              <ModuleChip label="Licitações & Contratos" active={true} meta="154,9 mil · PNCP" icon={<FileText size={20} color="#fff" />} />
-              <ModuleChip label="Municípios" active={true} meta="5.571 · IBGE" icon={<MapPin size={20} color="#fff" />} />
-              <ModuleChip label="Política" active={true} meta="4.594 · Câmara/Senado" icon={<Landmark size={20} color="#fff" />} />
-              <ModuleChip label="Ambiental" active={true} meta="1.500 · IBAMA" icon={<Leaf size={20} color="#fff" />} />
-              <ModuleChip label="Sanções" active={true} meta="1.592 · Transparência" icon={<ShieldAlert size={20} color="#fff" />} />
-              <ModuleChip label="Empresas (CNPJ)" active={true} meta="461 · em crescimento" icon={<Building2 size={20} color="#fff" />} />
-              <ModuleChip label="Jurídico" active={true} meta="280 · em crescimento" icon={<Scale size={20} color="#fff" />} />
-              <ModuleChip label="INPI (Marcas)" active={true} meta="29,5 mil · RPI" icon={<BadgeCheck size={20} color="#fff" />} />
+              <ModuleChip label="Leilões" meta="Receita Federal" icon={<Gavel size={20} color="#fff" />} />
+              <ModuleChip label="Licitações & Contratos" meta="+1 mi · PNCP" icon={<FileText size={20} color="#fff" />} />
+              <ModuleChip label="Empresas (CNPJ)" meta="Sócios e QSA" icon={<Building2 size={20} color="#fff" />} />
+              <ModuleChip label="Sanções" meta="CGU · CEIS/CNEP" icon={<ShieldAlert size={20} color="#fff" />} />
+              <ModuleChip label="INPI (Marcas)" meta="29,5 mil · RPI" icon={<BadgeCheck size={20} color="#fff" />} />
+              <ModuleChip label="Política" meta="Câmara/Senado" icon={<Landmark size={20} color="#fff" />} />
+              <ModuleChip label="Jurídico" meta="CNJ · DataJud" icon={<Scale size={20} color="#fff" />} />
+              <ModuleChip label="Ambiental" meta="IBAMA" icon={<Leaf size={20} color="#fff" />} />
+              <ModuleChip label="Municípios" meta="IBGE" icon={<MapPin size={20} color="#fff" />} />
             </div>
           </Reveal>
 
           {/* Sample lotes */}
-          <Reveal delay={0.1} style={{ marginTop: 44 }}>
+          <Reveal delay={0.1} style={{ marginTop: 40 }}>
             <div className="panel" style={{ overflow: "hidden" }}>
               <div
                 style={{
@@ -1958,7 +1678,7 @@ export function LandingPage({
                       }}
                     >
                       <span className="badge badge--accent" style={{ fontSize: 11, padding: "5px 12px" }}>
-                        ⭐ Mais popular
+                        Mais popular
                       </span>
                     </div>
                   )}
@@ -2031,7 +1751,6 @@ export function LandingPage({
         id="faq"
         style={{
           padding: "90px 24px",
-          background: "var(--surface)",
           borderTop: "1px solid var(--border)",
           borderBottom: "1px solid var(--border)",
         }}
@@ -2098,18 +1817,17 @@ export function LandingPage({
               className="display"
               style={{ fontSize: "clamp(30px,4vw,48px)", lineHeight: 1.05, margin: "0 0 18px" }}
             >
-              Veja os leilões da Receita<br />
+              Puxe o Raio-X do próximo<br />
               <span
                 className="clip-text"
                 style={{ backgroundImage: "linear-gradient(100deg,var(--brand-2),var(--accent-2))" }}
               >
-                com dado oficial e IA.
+                CNPJ que te interessa.
               </span>
             </h2>
             <p className="muted" style={{ fontSize: 16, marginBottom: 36, lineHeight: 1.6 }}>
-              Acesse cada lote com lance mínimo, prazo e elegibilidade direto
-              da fonte — e use o Raio-X com IA para ler o edital antes de propor.
-              7 dias grátis, sem cartão na hora do cadastro.
+              Sanções, contratos, licitações, leilões, sócios e marcas — com fonte oficial
+              e data de coleta em cada dado. 7 dias grátis, sem cartão na hora do cadastro.
             </p>
             <button
               type="button"
@@ -2118,7 +1836,7 @@ export function LandingPage({
               style={{ fontSize: 16, padding: "15px 32px" }}
             >
               <Zap size={18} fill="currentColor" aria-hidden="true" />
-              Experimentar grátis por 7 dias
+              Criar conta grátis
             </button>
             <p className="tiny muted" style={{ marginTop: 16 }}>
               Sem contrato · Cancele quando quiser · Dados de fontes oficiais
@@ -2168,7 +1886,7 @@ export function LandingPage({
               </span>
             </div>
             <p className="tiny muted" style={{ lineHeight: 1.6, margin: "0 0 10px" }}>
-              Plataforma de inteligência de dados públicos brasileiros. Decisões rastreáveis com IA.
+              Raio-X 360° de empresas brasileiras. Decisões rastreáveis com IA.
             </p>
             <p className="tiny muted" style={{ margin: 0, lineHeight: 1.6 }}>
               Olli Inteligência Digital Sistemas LTDA<br />
@@ -2183,6 +1901,7 @@ export function LandingPage({
             </p>
             <nav style={{ display: "flex", flexDirection: "column", gap: 10 }} aria-label="Links da plataforma">
               {[
+                { label: "O que você descobre", href: "#red-flags" },
                 { label: "Como funciona", href: "#como-funciona" },
                 { label: "Planos e preços", href: "#planos" },
                 { label: "Para quem é", href: "/para-quem" },

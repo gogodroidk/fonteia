@@ -320,7 +320,7 @@ export const PLANOS: Plano[] = [
     feats: [
       "Acesso às 9 áreas: leilões, licitações, empresas, municípios, política, ambiental, sanções, jurídico e INPI (marcas)",
       "Leilões da Receita Federal com Raio-X por IA (resumo, score por regra, riscos)",
-      "Busca unificada em ~170 mil registros públicos rastreáveis",
+      "Busca unificada em mais de 1 milhão de registros públicos rastreáveis",
       "Cada dado com link e data da fonte oficial — IA nunca inventa",
       "Análise de edital e documentos por IA, com evidência citada",
       "Alertas por e-mail — novos editais, contratos e proposições da sua área",

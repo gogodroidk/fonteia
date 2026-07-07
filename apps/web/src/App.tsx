@@ -1672,8 +1672,9 @@ export function App() {
 
   useEffect(() => {
     if (!loading && user && (path === "/" || path === "/entrar")) {
-      // Usuário já onboardado: se veio de um CTA de plano na landing, leva ao
-      // checkout do plano escolhido (consumo único); senão cai no painel.
+      // Usuário já onboardado: se veio de um CTA de plano OU do CNPJ digitado no
+      // Raio-X da landing, leva direto ao destino pendente (consumo único);
+      // senão cai no painel.
       //
       // Usuário NOVO (ainda não onboardado): NÃO consumimos a intenção aqui —
       // se consumíssemos, ela seria perdida antes do onboarding renderar (o
@@ -1768,9 +1769,10 @@ export function App() {
                 markOnboarded();
                 setOnboarded(true);
                 // Prioridade de destino ao sair do onboarding:
-                // 1) Intenção de compra pendente (clicou "Assinar Profissional"
-                //    na landing) → vai direto ao checkout do plano. É o usuário
-                //    de maior valor; não pode cair numa lista genérica.
+                // 1) Intenção pendente da landing: checkout do plano (clicou
+                //    "Assinar Profissional") ou Raio-X de um CNPJ digitado no
+                //    hero. É o usuário de maior valor; não pode cair numa lista
+                //    genérica.
                 // 2) Deep-link do objetivo escolhido no onboarding (ex.: Lotes).
                 // 3) Painel.
                 const pending = takePendingDestination();
