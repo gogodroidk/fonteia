@@ -410,6 +410,11 @@ function AppShell({ path, navigate }: AppShellProps) {
   // usuário comum o avatar continua sendo um atalho direto para /app/conta.
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  // Menu "mais ações" (kebab) da topbar — no mobile agrupa Tema/Ajuda/Feedback
+  // para que nenhum botão vaze da viewport. Sino e avatar permanecem sempre
+  // visíveis fora do kebab (são os itens que o usuário mais aciona).
+  const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const moreActionsRef = useRef<HTMLDivElement | null>(null);
   // Focus traps para os dois drawers mobile (menu lateral e bottom sheet "Mais"):
   // ao abrir, o foco vai pra dentro e Tab/Shift+Tab circulam só ali, sem vazar
   // pro conteúdo de fundo; ao fechar, o foco volta pra quem abriu (ACES-04).
@@ -464,6 +469,27 @@ function AppShell({ path, navigate }: AppShellProps) {
       document.removeEventListener("pointerdown", onPointerDown);
     };
   }, [accountMenuOpen]);
+
+  // Fecha o menu "mais ações" (kebab) no Escape ou clique fora — mesmo padrão
+  // do menu de conta acima.
+  useEffect(() => {
+    if (!moreActionsOpen) return;
+    function onKeyDown(e: KeyboardEvent): void {
+      if (e.key === "Escape") setMoreActionsOpen(false);
+    }
+    function onPointerDown(e: PointerEvent): void {
+      const el = moreActionsRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        setMoreActionsOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [moreActionsOpen]);
 
   const route = pathToRoute(path);
   const lotIdFromPath = getLotIdFromPath(path);
@@ -859,33 +885,140 @@ function AppShell({ path, navigate }: AppShellProps) {
                   </Suspense>
                 </div>
               </HelpHint>
-              <HelpHint id="topbar.theme">
-                <ThemeToggle />
-              </HelpHint>
-              {/* Botão Modo Ajuda */}
-              <HelpHint id="topbar.help">
+              {/* Ações secundárias (Tema, Ajuda, Feedback): visíveis inline no
+                  desktop; no mobile (<=560px) colapsam no botão "mais ações"
+                  (kebab) logo abaixo, para nenhum botão vazar da viewport. */}
+              <div className="shell-secondary-actions">
+                <HelpHint id="topbar.theme">
+                  <ThemeToggle />
+                </HelpHint>
+                {/* Botão Modo Ajuda */}
+                <HelpHint id="topbar.help">
+                  <button
+                    className="btn btn--icon btn--ghost shell-help"
+                    type="button"
+                    onClick={toggleHelp}
+                    aria-label={helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
+                    aria-pressed={helpOn}
+                    title={helpOn ? "Desligar ajuda" : "Ligar ajuda"}
+                    style={{
+                      color: helpOn ? "var(--brand-ink, #1D5FE0)" : undefined,
+                      background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : undefined,
+                      borderRadius: 9,
+                    }}
+                  >
+                    <HelpCircle size={18} aria-hidden="true" />
+                  </button>
+                </HelpHint>
+                <HelpHint id="topbar.feedback">
+                  <FeedbackButton
+                    currentPath={path}
+                    {...(user?.email ? { userEmail: user.email } : {})}
+                  />
+                </HelpHint>
+              </div>
+              {/* Botão "mais ações" (kebab): só existe no mobile via CSS
+                  (display:none no desktop). Reúne Tema/Ajuda/Feedback num
+                  dropdown ancorado à direita, mesmo padrão do menu de conta. */}
+              <div ref={moreActionsRef} className="shell-more-actions" style={{ position: "relative" }}>
                 <button
-                  className="btn btn--icon btn--ghost shell-help"
+                  className="btn btn--icon btn--ghost"
                   type="button"
-                  onClick={toggleHelp}
-                  aria-label={helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
-                  aria-pressed={helpOn}
-                  title={helpOn ? "Desligar ajuda" : "Ligar ajuda"}
-                  style={{
-                    color: helpOn ? "var(--brand-ink, #1D5FE0)" : undefined,
-                    background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : undefined,
-                    borderRadius: 9,
-                  }}
+                  onClick={() => setMoreActionsOpen((o) => !o)}
+                  aria-label="Mais ações"
+                  aria-haspopup="menu"
+                  aria-expanded={moreActionsOpen}
+                  title="Mais ações"
                 >
-                  <HelpCircle size={18} aria-hidden="true" />
+                  <MoreHorizontal size={18} aria-hidden="true" />
                 </button>
-              </HelpHint>
-              <HelpHint id="topbar.feedback">
-                <FeedbackButton
-                  currentPath={path}
-                  {...(user?.email ? { userEmail: user.email } : {})}
-                />
-              </HelpHint>
+                {moreActionsOpen && (
+                  <div
+                    role="menu"
+                    aria-label="Mais ações"
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      right: 0,
+                      zIndex: 9999,
+                      minWidth: 200,
+                      maxWidth: "calc(100vw - 16px)",
+                      background: "var(--elevated, #fff)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "var(--r-md, 12px)",
+                      boxShadow: "var(--shadow-lg, 0 18px 44px rgba(11,34,64,.16))",
+                      padding: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div
+                      role="menuitem"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 44,
+                        padding: "8px 10px",
+                        borderRadius: "var(--r-sm, 8px)",
+                        fontSize: 13.5,
+                        color: "var(--t-hi)",
+                      }}
+                    >
+                      <span>Tema</span>
+                      <ThemeToggle />
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreActionsOpen(false);
+                        toggleHelp();
+                      }}
+                      aria-pressed={helpOn}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        width: "100%",
+                        minHeight: 44,
+                        padding: "8px 10px",
+                        borderRadius: "var(--r-sm, 8px)",
+                        border: 0,
+                        background: helpOn ? "color-mix(in srgb,var(--brand) 12%,transparent)" : "transparent",
+                        color: helpOn ? "var(--brand-ink, #1D5FE0)" : "var(--t-hi)",
+                        font: "inherit",
+                        fontSize: 13.5,
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <HelpCircle size={16} aria-hidden="true" style={{ flexShrink: 0 }} />
+                      {helpOn ? "Desligar modo ajuda" : "Ligar modo ajuda"}
+                    </button>
+                    <div
+                      role="menuitem"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        width: "100%",
+                        minHeight: 44,
+                        padding: "8px 10px",
+                        borderRadius: "var(--r-sm, 8px)",
+                      }}
+                    >
+                      <FeedbackButton
+                        variant="pill"
+                        currentPath={path}
+                        {...(user?.email ? { userEmail: user.email } : {})}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
               <HelpHint id="topbar.alerts">
                 <button className="btn btn--icon btn--ghost shell-bell" type="button" onClick={() => go("/app/alertas")} title="Alertas" aria-label="Alertas" style={{ position: "relative" }}>
                   <Bell size={18} aria-hidden="true" />
@@ -1378,7 +1511,15 @@ function AppShell({ path, navigate }: AppShellProps) {
           background:var(--surface-2);border:1px solid var(--border);
         }
         .shell-search-go{flex:0 0 auto;margin-right:-6px}
-        .shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 0 auto}
+        /* .shell-actions nunca deve estourar a viewport: min-width:0 permite que
+           filhos com texto encolham/elipsem em vez de forçar scroll horizontal;
+           flex-shrink:0 no container evita que ele "suma" espremido pelo -search. */
+        .shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 1 auto;min-width:0}
+        /* Ações secundárias (Tema/Ajuda/Feedback): inline no desktop, colapsam
+           no kebab abaixo de 560px. */
+        .shell-secondary-actions{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+        /* Botão kebab "mais ações": só existe no mobile (ver media query) */
+        .shell-more-actions{display:none}
         /* Omnibox de IA na topbar: largura compacta de botão, cresce um pouco no desktop */
         .shell-omnibox{flex:0 0 auto;width:200px;max-width:34vw}
         .shell-omnibox>*{width:100%}
@@ -1500,10 +1641,12 @@ function AppShell({ path, navigate }: AppShellProps) {
           .shell-upgrade,.shell-plan-active{padding:0;width:36px;height:36px;border-radius:11px}
           /* selo de contagem do trial sai do topo no mobile (segue visível em Conta/Planos) */
           .shell-trial{display:none}
-        }
-        @media (max-width:380px){
-          /* ultra-narrow: drop the standalone bell (alerts still reachable via bottom nav) */
-          .shell-bell{display:none}
+          /* Tema/Ajuda/Feedback colapsam no botão kebab — mantém sino e avatar
+             sempre visíveis e impede que qualquer botão vaze da tela, mesmo em
+             320px. O kebab é claramente rotulado ("Mais ações") e reabre os
+             três itens num menu acessível. */
+          .shell-secondary-actions{display:none}
+          .shell-more-actions{display:inline-flex}
         }
       `}</style>
     </div>
