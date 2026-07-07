@@ -8,8 +8,14 @@
 //     &dataFinal=AAAAMMDD
 //     &codigoModalidadeContratacao={1..14}   (OBRIGATÓRIO — uma modalidade por chamada)
 //     &pagina={n}                            (1-based)
-//     &tamanhoPagina={n}                     (máx. 50)
+//     &tamanhoPagina={n}                     (máx. 50 — API responde 400 acima disso)
 //     [&uf=SP] [&codigoMunicipioIbge=...]    (filtros opcionais)
+//
+// LIMITE DE JANELA CONFIRMADO AO VIVO (2026-07-07): a API rejeita com 422
+// "Período inicial e final maior que 365 dias" quando (dataFinal - dataInicial)
+// > 365. Um backfill histórico (ex.: 2021 até hoje) PRECISA fatiar a janela em
+// pedaços <= 365 dias e iterar — ver `ingest-pncp/index.ts` (buildDateChunks)
+// para a implementação do fatiamento usada em produção.
 //
 // A resposta vem paginada num envelope { data, totalRegistros, totalPaginas,
 // numeroPagina, paginasRestantes, empty }. Cada item de `data` já traz a estrutura
@@ -65,10 +71,15 @@ export const PNCP_MODALIDADES: Readonly<Record<number, string>> = {
 };
 
 /**
- * Modalidades relevantes para licitação por padrão (as que geram disputa/edital
- * com prazo: concorrências, pregões, concurso e diálogo competitivo). Dispensa,
- * inexigibilidade, credenciamento etc. ficam de fora do default — incluí-las
- * explicitamente quando o produto quiser "contratações diretas".
+ * Subconjunto "licitação com disputa" (concorrências, pregões, concurso e
+ * diálogo competitivo — geram edital com prazo de disputa). Dispensa (8) e
+ * Inexigibilidade (9) ficam de fora deste array porque são "contratação
+ * direta", não disputa — mas ATENÇÃO: são as duas modalidades de MAIOR
+ * VOLUME no PNCP (juntas, ~1M contratações/ano — ordens de grandeza acima das
+ * modalidades com disputa). O default operacional em
+ * `supabase/functions/ingest-pncp/index.ts` (DEFAULT_MODALIDADES) inclui 8 e 9
+ * além deste conjunto; use PNCP_MODALIDADES_LICITACAO apenas quando quiser
+ * filtrar explicitamente só licitações com disputa.
  */
 export const PNCP_MODALIDADES_LICITACAO: readonly number[] = [2, 3, 4, 5, 6, 7];
 
