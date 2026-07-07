@@ -71,7 +71,7 @@ const SOURCE_ID = "pncp-contratacoes";
 
 const MAX_PAGE_SIZE = 50;
 // Pausa educada entre chamadas (ms).
-const RATE_MS = 350;
+const RATE_MS = 600; // PNCP dispara 429 sob 350ms em backfill; 600ms é o rate seguro observado ao vivo
 // Itens por chamada de RPC (evita payload gigante).
 const RPC_BATCH = 200;
 // Default: licitações com disputa (concorrências, pregões, concurso, diálogo)
@@ -298,8 +298,8 @@ function buildUrl(
 async function getJson(url: string): Promise<PncpPage> {
   const res = await fetchWithRetry(url, {
     timeoutMs: 15000,
-    retries: 3,
-    backoffMs: 800,
+    retries: 4,
+    backoffMs: 800, // backoff 0.8→6.4s: absorve 429 ocasional sem estourar o time-budget do chunk
     init: { headers: HEADERS },
   });
   if (res.status === 204) return { data: [], totalPaginas: 0, empty: true };
@@ -348,6 +348,8 @@ Deno.serve(async (req) => {
   const chunkDias = Number.isFinite(chunkDiasParam) && chunkDiasParam > 0 ? chunkDiasParam : DEFAULT_CHUNK_DAYS;
   const maxChunks = Number(url.searchParams.get("maxChunks") ?? "0"); // 0 = todos os chunks da janela
   const cursorParam = url.searchParams.get("cursor"); // AAAAMMDD: retoma a partir daqui
+  const rateMsParam = Number(url.searchParams.get("rateMs") ?? String(RATE_MS));
+  const rateMs = Number.isFinite(rateMsParam) && rateMsParam >= 0 ? rateMsParam : RATE_MS; // pausa entre páginas (calibrável p/ o rate limit do PNCP)
 
   try {
     const collectedAt = new Date().toISOString();
@@ -378,11 +380,13 @@ Deno.serve(async (req) => {
     let coletadas = 0;
     let ingested = 0;
     let chunksProcessados = 0;
+    let chunkIncompleto: DateChunk | null = null;
 
     for (const chunk of chunksToRun) {
       // Buffer por chunk (não acumula a janela inteira em memória — importante
       // em backfills de milhões de registros).
       const chunkItems: Array<Record<string, unknown>> = [];
+      const errorsBefore = errors.length;
 
       for (const modalidade of modalidades) {
         let pagina = 1;
@@ -408,9 +412,9 @@ Deno.serve(async (req) => {
           }
           pagina += 1;
           if (maxPaginas > 0 && pagina > maxPaginas) break;
-          if (pagina <= totalPaginas && RATE_MS > 0) await sleep(RATE_MS);
+          if (pagina <= totalPaginas && rateMs > 0) await sleep(rateMs);
         } while (pagina <= totalPaginas);
-        if (RATE_MS > 0) await sleep(RATE_MS);
+        if (rateMs > 0) await sleep(rateMs);
       }
 
       // Grava o chunk em lotes via a RPC antes de seguir para o próximo chunk
@@ -430,10 +434,26 @@ Deno.serve(async (req) => {
         `[ingest-pncp] chunk concluído ${chunk.dataInicial}-${chunk.dataFinal}: ` +
           `${chunkItems.length} itens coletados (acumulado: ${coletadas} coletadas, ${ingested} ingeridas)`,
       );
+
+      // Se ALGUMA página deste chunk falhou (ex.: 429 que não recuperou nos
+      // retries), o chunk está incompleto. Paramos aqui e NÃO deixamos o cursor
+      // passar dele — a próxima invocação o reprocessa do início (o upsert por
+      // numeroControlePNCP é idempotente). Evita perda silenciosa de dados nos
+      // períodos de maior volume, que é justamente onde o 429 aparece.
+      if (errors.length > errorsBefore) {
+        chunkIncompleto = chunk;
+        break;
+      }
     }
 
-    const lastChunk = chunksToRun[chunksToRun.length - 1];
-    const nextCursor = remaining > 0 && lastChunk ? lastChunk.dataFinal : null;
+    let nextCursor: string | null;
+    if (chunkIncompleto) {
+      // cursor = véspera do início do chunk incompleto → o filtro `> cursor` o reinclui
+      nextCursor = ymd(addDays(parseYmd(chunkIncompleto.dataInicial), -1));
+    } else {
+      const lastChunk = chunksToRun[chunksToRun.length - 1];
+      nextCursor = remaining > 0 && lastChunk ? lastChunk.dataFinal : null;
+    }
 
     return jsonResponse({
       ok: true,
