@@ -11,6 +11,7 @@ import {
   FileText,
   FileSearch2,
   Gavel,
+  History,
   HelpCircle,
   LayoutGrid,
   Landmark,
@@ -78,6 +79,9 @@ const DashboardPage = lazy(() =>
 );
 const LotesPage = lazy(() =>
   import("./app/lotes/page").then((m) => ({ default: m.LotesPage })),
+);
+const HistoricoPage = lazy(() =>
+  import("./app/historico/page").then((m) => ({ default: m.HistoricoPage })),
 );
 const LicitacoesPage = lazy(() =>
   import("./app/licitacoes/page").then((m) => ({ default: m.LicitacoesPage })),
@@ -229,6 +233,7 @@ const InfracaoDetailPage = lazy(() =>
 type RouteKey =
   | "painel"
   | "lotes"
+  | "historico"
   | "licitacoes"
   | "alertas"
   | "relatorios"
@@ -280,6 +285,7 @@ const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     label: "Dados públicos",
     items: [
       { path: "/app/lotes", route: "lotes", label: "Lotes", icon: Gavel },
+      { path: "/app/historico", route: "historico", label: "Histórico", icon: History },
       { path: "/app/licitacoes", route: "licitacoes", label: "Licitações", icon: Landmark },
       { path: "/app/politica", route: "politica", label: "Política", icon: Users },
       { path: "/app/municipios", route: "municipios", label: "Municípios", icon: MapPin },
@@ -314,6 +320,7 @@ const ADMIN_NAV: { path: string; route: RouteKey; label: string; icon: typeof La
 const ROUTE_TITLES: Record<RouteKey, string> = {
   painel: "Painel",
   lotes: "Lotes",
+  historico: "Histórico de preços",
   licitacoes: "Licitações",
   alertas: "Alertas",
   relatorios: "Relatórios",
@@ -346,6 +353,7 @@ function pathToRoute(path: string): RouteKey {
   if (/^\/app\/municipios\/[^/]+/.test(path)) return "municipio-detail";
   if (/^\/app\/politica\/[^/]+/.test(path)) return "deputado-detail";
   if (/^\/app\/ambiental\/[^/]+/.test(path)) return "infracao-detail";
+  if (path.startsWith("/app/historico")) return "historico";
   if (path.startsWith("/app/lotes") || path.startsWith("/app/leiloes")) return "lotes";
   if (path.startsWith("/app/licitacoes")) return "licitacoes";
   if (path.startsWith("/app/politica")) return "politica";
@@ -1233,6 +1241,7 @@ function AppShell({ path, navigate }: AppShellProps) {
               }>
                 {route === "painel" && <DashboardPage onSelectLot={handleSelectLot} onAsk={goToSearch} />}
                 {route === "lotes" && <LotesPage onSelectLot={handleSelectLot} />}
+                {route === "historico" && <HistoricoPage />}
                 {route === "licitacoes" && <LicitacoesPage />}
                 {route === "politica" && <PoliticaPage onSelectDeputado={handleSelectDeputado} />}
                 {route === "municipios" && <MunicipiosPage onSelectMunicipio={handleSelectMunicipio} />}
